@@ -171,7 +171,7 @@ function TurnStatus() {
   let state = 'ready'
   const effect = presentation.effect
   if (effect) {
-    text = effect.phase === 'reveal' ? '正在挖开…' : effect.phase === 'transition' ? '新卡片正在展开…' : effect.isOwn ? effect.kind === 'tnt' ? effect.blocked ? '盾牌挡住了 TNT' : `TNT · ${effect.amountDelta < 0 ? `损失 ${formatMoney(-effect.amountDelta)}` : '没有奖励损失'}` : effect.kind === 'totem' ? `双铁镐 · 机会 +${game?.rules.totemBonus ?? 2}` : effect.kind === 'pearl' ? '末影珍珠 · 前往下一张卡片' : effect.kind === 'spyglass' ? '望远镜 · 情报仅你可见' : effect.kind === 'shield' ? '盾牌已装备' : `${loot[effect.kind].name}${effect.amountDelta > 0 ? ` · +${formatMoney(effect.amountDelta)}` : ''}` : `${loot[effect.kind].name} · ${effect.kind === 'pearl' ? '大家一起换卡' : '有人挖开了这一格'}`
+    text = effect.phase === 'reveal' ? '正在挖开…' : effect.phase === 'transition' ? '新卡片正在展开…' : effect.isOwn ? effect.kind === 'tnt' ? effect.blocked ? '盾牌挡住了 TNT' : `TNT · ${effect.amountDelta < 0 ? `损失 ${formatMoney(-effect.amountDelta)}` : '没有奖励损失'}` : effect.kind === 'totem' ? `双铁镐 · 机会 +${game?.rules.totemBonus ?? defaultRules.totemBonus}` : effect.kind === 'pearl' ? '末影珍珠 · 前往下一张卡片' : effect.kind === 'spyglass' ? '望远镜 · 情报仅你可见' : effect.kind === 'shield' ? '盾牌已装备' : `${loot[effect.kind].name}${effect.amountDelta > 0 ? ` · +${formatMoney(effect.amountDelta)}` : ''}` : `${loot[effect.kind].name} · ${effect.kind === 'pearl' ? '大家一起换卡' : '有人挖开了这一格'}`
     state = 'effect'
   }
   else if (ended) { text = '本场已结束，结算记录见红包页'; state = 'finished' }

@@ -16,12 +16,12 @@
 
 ## Product goals
 - Goals: 两名以上玩家共享 5×5 卡片，交替挖掘，按道具改变自己的奖励和机会，可主动收手。
-- Non-goals: 首版不增加攻击其他玩家、信标、道具交易、工具升级、固定座次、图腾累计额度。
+- Non-goals: 首版不增加攻击其他玩家、信标、道具交易、工具升级、固定座次、机会道具累计额度。
 - Success signals: 打开即可看到棋盘、自己的奖励和机会；没有宣传区、侧栏或常驻规则说明；多人牌面同步；抢同格或旧卡操作不扣机会；资金、机会、结算均与判定器一致；手机能顺畅操作。
 
 ### Confirmed rules
 1. 每人初始 7 次机会，可由红包参数修改。第一次成功挖掘加入游戏。
-2. 每次成功挖掘先扣 1 次，再处理效果；效果处理完后机会为 0，立即结算。没有次数上限或图腾累计额度。
+2. 每次成功挖掘先扣 1 次，再处理效果；效果处理完后机会为 0，立即结算。没有次数上限或机会道具累计额度。
 3. 最近成功挖掘的人需要别人接棒，或等待默认 10 秒后才能再挖。A→B→A 可以立即接棒；平台自身冷却另外生效。
 4. 不合法、已打开、卡片过期、等待未结束的操作不扣机会、不改变最近成功挖掘的记录。不自动重试提交。
 5. 主动「收手结算」不消耗机会、不改变最近挖掘记录、不受游戏接棒等待限制；平台自身的提交限制仍适用。结算 0 也退出，不能重新加入。
@@ -34,7 +34,7 @@
 | emerald | 绿宝石 | 10 | 一份小奖 |
 | diamond | 钻石 | 3 | 小奖 ×5 |
 | apple | 附魔金苹果 | 1 | 待结算奖励翻倍；余额为 0 时给一份小奖 |
-| totem | 两把错位叠放的原版铁镐 | 2 | 扣除本次机会后增加 2 次；最后一次可救回，无累计额度；保留内部 kind 与判定器兼容 |
+| totem | 两把错位叠放的原版铁镐 | 2 | 扣除本次机会后增加 3 次；最后一次可救回，无累计额度；保留内部 kind 与判定器兼容 |
 | tnt | TNT | 4 | 扣除当前待结算的指定百分比，扣除金额向下取整到分 |
 | pearl | 末影珍珠 | 2 | 全体进入下一张随机卡 |
 | shield | 盾牌 | 2 | 自动抵挡下一次 TNT，最多持有一面；重复获得给小奖 |
@@ -45,7 +45,7 @@
 - `waitSeconds`: integer，默认 10，1–60。
 - `smallReward`: money，默认 10 分，至少 1 分；默认只是首版试玩基数。
 - `tntPercent`: integer，默认 25，1–100。
-- 钻石 ×5、图腾 +2、5×5 尺寸和每卡道具构成固定。总奖池、截止、标题、说明使用平台设置。
+- 钻石 ×5、双铁镐 +3、5×5 尺寸和每卡道具构成固定。总奖池、截止、标题、说明使用平台设置。
 - `check` 要求总奖池至少足够完整的一份钻石奖励；实际后续发奖仍按剩余奖池裁剪。参数为公开规则。
 
 ## Personas and jobs
@@ -138,7 +138,7 @@
 
 ### Data contract
 - Commands: `dig <cardId> <1-based cell>`；`cashout` 或 `收手`。
-- Public `view.data`: `{ version:1, cardId, cells:[{ index, kind:null|kind, by:null|string, at:null|number }], counts:{kind:remaining}, rules:{initialChances,waitSeconds,smallReward,bigMultiplier:5,totemBonus:2,tntPercent}, lastMove:null|{actorKey,name,at,cardId,index}, stats:{digs,players}, feed:[{id,actor,kind,text,at,cardId,index}] }`。
+- Public `view.data`: `{ version:1, cardId, cells:[{ index, kind:null|kind, by:null|string, at:null|number }], counts:{kind:remaining}, rules:{initialChances,waitSeconds,smallReward,bigMultiplier:5,totemBonus:3,tntPercent}, lastMove:null|{actorKey,name,at,cardId,index}, stats:{digs,players}, feed:[{id,actor,kind,text,at,cardId,index}] }`。
 - Private `player.view.data`: `{ version:1, actorKey, chances, shield, peeks:[{cardId,index,kind}], digs, status:'playing'|'settled', lastResult:null|{kind,cardId,index,amount,blocked,text} }`。
 - `index` 在数据中从 0 开始，指令中的格子从 1 开始。actorKey 使用稳定的玩家标识，仅用于匹配，不承担认证。
 - Public feed 最多 10 条；私人情报仅保留当前卡；隐藏格子的 kind 必须为 null，不能带内部牌面或随机种子。

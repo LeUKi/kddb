@@ -6,7 +6,7 @@ export const loot: Record<Kind, { name: string; short: string; color: string; co
   emerald: { name: '绿宝石', short: '小奖励', color: '#8ad6a2', count: 10, description: '获得一份小奖励' },
   diamond: { name: '钻石', short: '大奖励', color: '#8cd9e5', count: 3, description: '获得小奖励的 5 倍' },
   apple: { name: '附魔金苹果', short: '奖励翻倍', color: '#edc96d', count: 1, description: '当前待结算翻倍；余额为零时给小奖励' },
-  totem: { name: '双铁镐', short: '机会 +2', color: '#b7d477', count: 2, description: '额外增加 2 次挖掘机会，无累计限制' },
+  totem: { name: '双铁镐', short: '机会 +3', color: '#b7d477', count: 2, description: '额外增加 3 次挖掘机会，无累计限制' },
   tnt: { name: 'TNT', short: '比例扣除', color: '#ee9d88', count: 4, description: '扣除当前待结算奖励的一定比例' },
   pearl: { name: '末影珍珠', short: '全体换卡', color: '#b0a3dd', count: 2, description: '所有人一起进入下一张卡片' },
   shield: { name: '盾牌', short: '抵挡 TNT', color: '#d5b89a', count: 2, description: '自动抵挡一次 TNT；已有盾牌则给小奖励' },
@@ -46,7 +46,7 @@ export interface PrivateGame {
   lastResult: LastResult | null
 }
 
-export const defaultRules: Rules = { initialChances: 7, waitSeconds: 10, smallReward: 10, bigMultiplier: 5, totemBonus: 2, tntPercent: 25 }
+export const defaultRules: Rules = { initialChances: 7, waitSeconds: 10, smallReward: 10, bigMultiplier: 5, totemBonus: 3, tntPercent: 25 }
 export const formatMoney = (cents: number) => (cents / 100).toFixed(2)
 export const coordinate = (index: number) => `${String.fromCharCode(65 + Math.floor(index / 5))}${index % 5 + 1}`
 export const isKind = (value: unknown): value is Kind => typeof value === 'string' && kinds.includes(value as Kind)

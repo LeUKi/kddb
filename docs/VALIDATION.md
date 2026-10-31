@@ -2,6 +2,19 @@
 
 验证日期：2026-10-31。环境：macOS、Node.js v22.20.0、官方开发包的 Miniflare/workerd、Codex 内置浏览器。
 
+## 最新：双铁镐统一命名，额外机会改为 3 次
+
+判定器参数提示、玩法简介、默认红包说明、私人结果、公开动态及前端规则均统一使用“双铁镐”。实际奖励改为扣除本次挖掘机会后增加 3 次：最后一次挖到时为 1→0→3，继续游戏；20 次时挖到后剩 22 次。每卡仍有 2 个双铁镐格，无累计额度，内部 `totem` / `totemBonus` 字段保持兼容。旧日志中的道具名称仍在显示时转换，历史奖励数值保留。
+
+- 官方 `npm test` 55 / 55，随后 `npm run check` 通过并显示“可以去网站部署了”；覆盖最后机会救回、超过初始上限、跨 4 张卡获得 8 次双铁镐累计增加 24 次，以及公开和私人反馈。
+- 前端 24 / 24 测试通过，新增最后机会挖到双铁镐的回归：中央说明和飞行期间仍显示 1 次，落定后才更新为 3 次并继续游戏；TypeScript 严格检查和 Vite 生产构建通过。
+- `node scripts/verify-setup.mjs` 13 项断言通过，包含初始公开规则 `totemBonus === 3`；`node --check judge.js` 及源码差异空白检查通过，无新增依赖。
+- 判定器 SHA-256：`692f138bbf15d3c6f43ca6efda5753bb7906395b287c39b0d237acb635cfadc6`。
+
+网页已重新部署到 `hbweb-kddb.lafi.sh`，production 版本 `36e23817-67c3-4eac-8911-5695df133af9` 承接 100% 流量。正常 DNS 和完整证书校验下，首页、`index-Fq_EUgGr.js` 与 `index-CIhznglX.css` 均返回 200、对应 MIME 类型及与本地生产构建一致的 SHA-256；线上 JS 包含机会 +3 和默认规则 3。本轮没有重复录屏或重置既有试玩。
+
+静态网页部署不会替换红包站已经保存的判定器；本轮未上传判定器或创建真实红包。已存在的红包需使用新版 `judge.js` 才会按 +3 判定。下方历史测试的 +2 结果和旧代码指纹保留作对应版本的证据。
+
 ## 最新：Cloudflare Worker 正式部署
 
 用户明确授权发布网页到 `hbweb-kddb.lafi.sh`。已使用现有 Wrangler 4.147.0 部署静态 Worker `hbweb-kddb`，自定义域名已绑定到 production，版本 `054097c4-c807-492a-b163-fee14f77b53c` 承接 100% 流量。Cloudflare API 确认域名 `enabled: true`，已生成证书，`workers.dev` 和预览地址关闭。配置保存在 `page/wrangler.jsonc`，只发布 `page/frontend/dist/`，不包含本地试玩后端。

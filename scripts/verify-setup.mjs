@@ -30,6 +30,7 @@ try {
   assert.ok(view.cells.every(cell => cell.kind === null)); checks++
   assert.ok(!('deck' in view)); checks++
   assert.deepEqual(view.counts, composition); checks++
+  assert.equal(view.rules.totemBonus, 3); checks++
 
   const valid = await sandbox.check(params, { ...pool, total: 50 })
   const invalid = await sandbox.check(params, { ...pool, total: 49 })

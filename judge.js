@@ -4,7 +4,7 @@
 /** @type {import("./judge").Meta} */
 export const meta = {
   name: "矿洞夺宝",
-  description: "共享 5×5 矿洞卡，接棒挖宝、图腾续命，随时收手结算",
+  description: "共享 5×5 矿洞卡，接棒挖宝、双铁镐加机会，随时收手结算",
   page: "https://hbweb-kddb.lafi.sh/",
 };
 
@@ -13,7 +13,7 @@ export const params = [
   {
     key: "initialChances",
     label: "初始挖掘次数",
-    hint: "每人第一次挖掘时获得；不死图腾另外增加 2 次，没有累计额度",
+    hint: "每人第一次挖掘时获得；双铁镐另外增加 3 次，没有累计额度",
     type: "integer",
     default: 7,
     min: 1,
@@ -54,11 +54,11 @@ export const hongbao = {
   total: { min: 5, default: 10000 },
   deadline: { value: 1, unit: "days" },
   humanCheck: true,
-  note: "大家共享一张 5×5 矿洞卡。每次成功挖掘消耗 1 次机会，不死图腾增加 2 次，没有累计额度。其他玩家接棒或等待后可再次挖掘；随时收手结算。机会用尽、奖池占满或红包结束时结算，结算后不能重新加入。TNT 只扣本场待结算奖励。\n\n[打开矿洞夺宝](#附带网页)",
+  note: "大家共享一张 5×5 矿洞卡。每次成功挖掘消耗 1 次机会，双铁镐增加 3 次，没有累计额度。其他玩家接棒或等待后可再次挖掘；随时收手结算。机会用尽、奖池占满或红包结束时结算，结算后不能重新加入。TNT 只扣本场待结算奖励。\n\n[打开矿洞夺宝](#附带网页)",
 };
 
 /** @typedef {'emerald'|'diamond'|'apple'|'totem'|'tnt'|'pearl'|'shield'|'spyglass'} Kind */
-/** @typedef {{initialChances:number,waitSeconds:number,smallReward:number,bigMultiplier:5,totemBonus:2,tntPercent:number}} Rules */
+/** @typedef {{initialChances:number,waitSeconds:number,smallReward:number,bigMultiplier:5,totemBonus:3,tntPercent:number}} Rules */
 /** @typedef {{by:string,at:number}|null} OpenCell */
 /** @typedef {{actorKey:string,name:string,at:number,cardId:number,index:number}} LastMove */
 /** @typedef {{id:number,actor:string,kind:Kind,text:string,at:number,cardId:number,index:number}} FeedItem */
@@ -88,7 +88,7 @@ function rulesOf(values) {
     waitSeconds: Number(values.waitSeconds ?? 10),
     smallReward: Number(values.smallReward ?? 10),
     bigMultiplier: 5,
-    totemBonus: 2,
+    totemBonus: 3,
     tntPercent: Number(values.tntPercent ?? 25),
   };
 }
@@ -287,8 +287,8 @@ export function judge(submission, tools) {
       break;
     case "totem":
       miner.chances += rules.totemBonus;
-      text = `不死图腾！机会 +${rules.totemBonus}`;
-      publicText = "不死图腾增加了 2 次机会";
+      text = `双铁镐！机会 +${rules.totemBonus}`;
+      publicText = `双铁镐增加了 ${rules.totemBonus} 次机会`;
       break;
     case "tnt":
       if (miner.shield) {

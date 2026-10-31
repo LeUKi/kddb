@@ -131,7 +131,7 @@ test('platform settlement events open one result and do not reopen after dismiss
     version: 1, cardId: 1,
     cells: Array.from({ length: 25 }, (_, index) => ({ index, kind: null, by: null, at: null })),
     counts: { emerald: 10, diamond: 3, apple: 1, totem: 2, tnt: 4, pearl: 2, shield: 2, spyglass: 1 },
-    rules: { initialChances: 7, waitSeconds: 10, smallReward: 10, bigMultiplier: 5, totemBonus: 2, tntPercent: 25 },
+    rules: { initialChances: 7, waitSeconds: 10, smallReward: 10, bigMultiplier: 5, totemBonus: 3, tntPercent: 25 },
     lastMove: null, stats: { digs: 0, players: 0 }, feed: [],
   } })
   await gameStore.connect()

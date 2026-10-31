@@ -25,7 +25,7 @@ function board({ cardId = 1, digs = 0, cells = [], feed = [], lastMove = null } 
     cardId,
     cells: Array.from({ length: 25 }, (_, index) => ({ index, kind: null, by: null, at: null, ...cells.find(cell => cell.index === index) })),
     counts: { emerald: 10, diamond: 3, apple: 1, totem: 2, tnt: 4, pearl: 2, shield: 2, spyglass: 1 },
-    rules: { initialChances: 7, waitSeconds: 10, smallReward: 10, bigMultiplier: 5, totemBonus: 2, tntPercent: 25 },
+    rules: { initialChances: 7, waitSeconds: 10, smallReward: 10, bigMultiplier: 5, totemBonus: 3, tntPercent: 25 },
     lastMove,
     stats: { digs, players: digs ? 1 : 0 },
     feed,
@@ -108,6 +108,29 @@ test('the final dig waits for the enlarged showcase to land before updating its 
   assert.equal(h.get().busy, true, 'settlement UI can wait until the sequence is idle')
   assert.equal(h.finish().busy, false)
   assert.equal(h.get().phase, 'idle')
+})
+
+test('the last pickaxe gains three opportunities after the paired-pickaxe showcase lands', () => {
+  const h = harness({ own: own({ chances: 1 }) })
+  const result = move({ kind: 'totem' })
+  result.feed.text = '双铁镐增加了 3 次机会'
+  assert.equal(h.controller.begin('dig 1 1'), true)
+  h.controller.receive({
+    game: board({ digs: 1, cells: [result.cell], feed: [result.feed], lastMove: result.lastMove }),
+    own: own({ chances: 3, digs: 1, lastResult: { kind: 'totem', cardId: 1, index: 0, amount: 0, blocked: false, text: '双铁镐！机会 +3' } }),
+  })
+  assert.equal(h.get().own.chances, 1)
+  h.controller.complete('dig 1 1')
+  assert.equal(h.get().effect.chanceDelta, 2, 'one opportunity is spent before the three are awarded')
+  assert.equal(h.get().effect.text, '双铁镐！机会 +3')
+  assert.equal(h.step().phase, 'effect')
+  assert.equal(h.get().own.chances, 1)
+  assert.equal(h.step().phase, 'transfer')
+  assert.equal(h.get().own.chances, 1, 'the counter waits until the icon lands')
+  const final = h.finish()
+  assert.equal(final.own.chances, 3)
+  assert.equal(final.own.status, 'playing')
+  assert.equal(final.busy, false)
 })
 
 test('a pearl reveals the confirmed old tile before replacing the board', () => {
