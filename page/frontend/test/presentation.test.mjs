@@ -1,0 +1,388 @@
+import assert from 'node:assert/strict'
+import { after, before, test } from 'node:test'
+import { fileURLToPath } from 'node:url'
+import { createServer } from 'vite'
+
+let server
+let createPresentationController
+
+before(async () => {
+  server = await createServer({
+    root: fileURLToPath(new URL('../', import.meta.url)),
+    configFile: false,
+    server: { middlewareMode: true, watch: null },
+    appType: 'custom',
+    logLevel: 'silent',
+  })
+  ;({ createPresentationController } = await server.ssrLoadModule('/src/presentation.ts'))
+})
+
+after(async () => { await server?.close() })
+
+function board({ cardId = 1, digs = 0, cells = [], feed = [], lastMove = null } = {}) {
+  return {
+    version: 1,
+    cardId,
+    cells: Array.from({ length: 25 }, (_, index) => ({ index, kind: null, by: null, at: null, ...cells.find(cell => cell.index === index) })),
+    counts: { emerald: 10, diamond: 3, apple: 1, totem: 2, tnt: 4, pearl: 2, shield: 2, spyglass: 1 },
+    rules: { initialChances: 7, waitSeconds: 10, smallReward: 10, bigMultiplier: 5, totemBonus: 2, tntPercent: 25 },
+    lastMove,
+    stats: { digs, players: digs ? 1 : 0 },
+    feed,
+  }
+}
+
+function own(overrides = {}) {
+  return { version: 1, actorKey: 'u:1', chances: 7, shield: false, peeks: [], digs: 0, status: 'playing', lastResult: null, ...overrides }
+}
+
+function me(overrides = {}) {
+  return { signedIn: true, name: '小明', open: true, cooldownUntil: null, claim: null, registered: false, pending: '0.00', settled: false, ...overrides }
+}
+
+function move({ id = 1, actor = '小明', actorKey = 'u:1', cardId = 1, index = 0, kind = 'diamond', at = 1000 } = {}) {
+  return {
+    feed: { id, actor, kind, text: `挖到了 ${kind}`, at, cardId, index },
+    lastMove: { actorKey, name: actor, at, cardId, index },
+    cell: { index, kind, by: actor, at },
+  }
+}
+
+function harness(initial = {}) {
+  let now = 0
+  let nextHandle = 0
+  const tasks = new Map()
+  const updates = []
+  const controller = createPresentationController({
+    onChange: snapshot => updates.push(snapshot),
+    schedule: (callback, delay) => { const handle = ++nextHandle; tasks.set(handle, { callback, at: now + delay }); return handle },
+    cancel: handle => tasks.delete(handle),
+  })
+  controller.receive({ game: board(), own: own(), me: me(), ...initial })
+  function step() {
+    const next = [...tasks.entries()].sort((left, right) => left[1].at - right[1].at)[0]
+    assert.ok(next, 'an animation timer is scheduled')
+    tasks.delete(next[0])
+    now = next[1].at
+    next[1].callback()
+    return controller.getSnapshot()
+  }
+  function finish() {
+    let guard = 20
+    while (tasks.size && guard-- > 0) step()
+    assert.ok(guard > 0, 'presentation queue finishes in bounded time')
+    return controller.getSnapshot()
+  }
+  return { controller, step, finish, tasks, updates, time: () => now, get: () => controller.getSnapshot() }
+}
+
+test('the final dig waits for the enlarged showcase to land before updating its tile and money', () => {
+  const h = harness({ own: own({ chances: 1 }), me: me({ pending: '0.20' }) })
+  const result = move()
+  assert.equal(h.controller.begin('dig 1 1'), true)
+  h.controller.receive({ game: board({ digs: 1, cells: [result.cell], feed: [result.feed], lastMove: result.lastMove }) })
+  h.controller.receive({ own: own({ chances: 0, digs: 1, status: 'settled', lastResult: { kind: 'diamond', cardId: 1, index: 0, amount: 50, blocked: false, text: '钻石大奖 +0.50' } }) })
+  h.controller.receive({ me: me({ open: false, pending: '0.00', settled: true, claim: { amount: '0.70', unit: 'LDC', payment: 'paid' } }) })
+  assert.equal(h.get().game.cells[0].kind, null)
+  assert.equal(h.get().own.chances, 1)
+  assert.equal(h.get().me.settled, false)
+  h.controller.complete('dig 1 1')
+  assert.equal(h.get().phase, 'reveal')
+  assert.equal(h.get().effect.amountDelta, 50)
+  assert.equal(h.get().effect.chanceDelta, -1)
+  assert.equal(h.get().effect.isOwn, true)
+  assert.equal(h.controller.begin('cashout'), false)
+  assert.equal(h.step().phase, 'effect')
+  const showcaseStarted = h.time()
+  assert.equal(h.get().game.cells[0].kind, null, 'the board waits while the large item explains the effect')
+  assert.equal(h.get().me.pending, '0.20')
+  assert.equal(h.step().phase, 'transfer')
+  assert.ok(h.time() - showcaseStarted >= 1200, 'the explanation has a readable hold')
+  assert.equal(h.get().own.chances, 1, 'the icon is still in flight')
+  assert.equal(h.get().me.pending, '0.20')
+  assert.equal(h.get().game.cells[0].kind, null)
+  assert.equal(h.step().phase, 'resolve')
+  assert.equal(h.get().game.cells[0].kind, 'diamond')
+  assert.equal(h.get().own.chances, 0)
+  assert.equal(h.get().me.claim.amount, '0.70')
+  assert.equal(h.get().busy, true, 'settlement UI can wait until the sequence is idle')
+  assert.equal(h.finish().busy, false)
+  assert.equal(h.get().phase, 'idle')
+})
+
+test('a pearl reveals the confirmed old tile before replacing the board', () => {
+  const h = harness()
+  const result = move({ kind: 'pearl', index: 12 })
+  h.controller.begin('dig 1 13')
+  h.controller.receive({
+    game: board({ cardId: 2, digs: 1, feed: [result.feed], lastMove: result.lastMove }),
+    own: own({ chances: 6, digs: 1, lastResult: { kind: 'pearl', cardId: 1, index: 12, amount: 0, blocked: false, text: '末影珍珠！全体换卡' } }),
+    me: me(),
+  })
+  h.controller.complete('dig 1 13')
+  assert.equal(h.get().game.cardId, 1)
+  assert.equal(h.get().effect.kind, 'pearl')
+  assert.equal(h.step().game.cells[12].kind, null)
+  assert.equal(h.step().game.cardId, 1, 'money transfer still displays the old board')
+  assert.equal(h.step().game.cells[12].kind, 'pearl', 'the pearl lands on the old card first')
+  assert.equal(h.step().phase, 'transition')
+  assert.equal(h.get().game.cardId, 2)
+  assert.equal(h.get().transitionFrom.cardId, 1)
+  assert.equal(h.get().transitionFrom.cells[12].kind, 'pearl', 'old faces remain available throughout each staggered flip')
+  assert.ok(h.get().game.cells.every(cell => cell.kind === null))
+  assert.equal(h.finish().effect, null)
+  assert.equal(h.get().transitionFrom, null)
+})
+
+test('a late next-card public packet flips once without replaying a resolved private pearl', () => {
+  const h = harness()
+  const result = move({ kind: 'pearl', index: 12 })
+  h.controller.receive({ own: own({ chances: 6, digs: 1, lastResult: { kind: 'pearl', cardId: 1, index: 12, amount: 0, blocked: false, text: '末影珍珠！全体换卡' } }) })
+  h.finish()
+  assert.equal(h.get().game.cardId, 1)
+  assert.equal(h.get().game.cells[12].kind, 'pearl')
+  const updatesBeforePublic = h.updates.length
+  const publicGame = board({ cardId: 2, digs: 1, feed: [result.feed], lastMove: result.lastMove })
+  h.controller.receive({ game: publicGame })
+  assert.equal(h.get().phase, 'transition', 'the delayed board starts directly at the flip')
+  assert.equal(h.get().transitionFrom.cells[12].kind, 'pearl')
+  assert.equal(h.get().game.cardId, 2)
+  assert.equal(h.get().own.chances, 6, 'the opportunity is spent only once')
+  h.finish()
+  h.controller.receive({ game: publicGame })
+  assert.equal(h.get().phase, 'idle')
+  assert.equal(h.get().transitionFrom, null)
+  assert.ok(h.updates.slice(updatesBeforePublic).every(update => update.phase === 'transition' || update.phase === 'idle'), 'no second showcase or reward flight')
+})
+
+test('spyglass keeps the new private target hidden until its flight lands', () => {
+  const h = harness()
+  const result = move({ kind: 'spyglass', index: 7 })
+  h.controller.receive({ game: board({ digs: 1, cells: [result.cell], feed: [result.feed], lastMove: result.lastMove }) })
+  assert.equal(h.get().effect.targetIndex, null, 'a public event has no private target')
+  h.controller.receive({ own: own({ chances: 6, digs: 1, peeks: [{ cardId: 1, index: 18, kind: 'emerald' }], lastResult: { kind: 'spyglass', cardId: 1, index: 7, amount: 0, blocked: false, text: '望远镜情报' } }) })
+  assert.equal(h.get().effect.targetIndex, 18)
+  h.step()
+  assert.deepEqual(h.get().own.peeks, [])
+  h.step()
+  assert.deepEqual(h.get().own.peeks, [], 'the target tile waits throughout transfer')
+  h.step()
+  assert.equal(h.get().own.peeks[0].index, 18)
+  h.finish()
+})
+
+test('failed attempts do not reanimate a previous reward or guess hidden kinds', () => {
+  const prior = move()
+  const initial = board({ digs: 1, cells: [prior.cell], feed: [prior.feed], lastMove: prior.lastMove })
+  const miner = own({ chances: 6, digs: 1, lastResult: { kind: 'diamond', cardId: 1, index: 0, amount: 50, blocked: false, text: '钻石大奖' } })
+  const h = harness({ game: initial, own: miner, me: me({ pending: '0.50' }) })
+  assert.equal(h.get().phase, 'idle', 'initial feed history is never replayed')
+  h.controller.begin('dig 1 1')
+  h.controller.receive({ game: initial, own: miner, me: me({ pending: '0.50' }) })
+  h.controller.complete('dig 1 1')
+  assert.equal(h.get().effect, null)
+  assert.equal(h.get().me.pending, '0.50')
+  assert.equal(h.tasks.size, 0)
+  h.controller.receive({ game: board({ cardId: 2, digs: 2 }) })
+  assert.equal(h.get().game.cardId, 2)
+  assert.equal(h.get().effect, null, 'a card change without lastMove/feed evidence has no invented pearl')
+  assert.ok(h.get().game.cells.every(cell => cell.kind === null))
+})
+
+test('peer pearls use public lastMove/feed evidence and never expose private estimates', () => {
+  const h = harness()
+  const peer = move({ actor: '小红', actorKey: 'u:2', kind: 'pearl', index: 8 })
+  h.controller.receive({ game: board({ cardId: 2, digs: 1, feed: [peer.feed], lastMove: peer.lastMove }) })
+  assert.equal(h.get().phase, 'reveal')
+  assert.equal(h.get().effect.kind, 'pearl')
+  assert.equal(h.get().effect.isOwn, false)
+  assert.equal(h.get().effect.amountDelta, 0)
+  assert.equal(h.get().effect.chanceDelta, 0)
+  assert.equal(h.step().game.cells[8].kind, null)
+  assert.equal(h.step().game.cells[8].kind, null)
+  assert.equal(h.step().game.cells[8].kind, 'pearl')
+  assert.equal(h.get().game.cells.filter(cell => cell.kind !== null).length, 1)
+  assert.equal(h.finish().game.cardId, 2)
+})
+
+test('a peer with the same displayed name is never classified as the current player', () => {
+  const h = harness({ own: null })
+  const peer = move({ actor: '小明', actorKey: 'u:2' })
+  h.controller.receive({ game: board({ digs: 1, cells: [peer.cell], feed: [peer.feed], lastMove: peer.lastMove }) })
+  assert.equal(h.get().effect.isOwn, false)
+  assert.equal(h.get().effect.amountDelta, 0)
+  assert.equal(h.get().busy, false)
+})
+
+test('separate private SDK packets enrich a confirmed reveal before committing balances', () => {
+  const h = harness({ me: me({ pending: '1.00' }), own: own({ shield: true }) })
+  const blocked = move({ kind: 'tnt' })
+  h.controller.receive({ game: board({ digs: 1, cells: [blocked.cell], feed: [blocked.feed], lastMove: blocked.lastMove }) })
+  assert.equal(h.get().phase, 'reveal')
+  h.controller.receive({ own: own({ chances: 6, shield: false, digs: 1, lastResult: { kind: 'tnt', cardId: 1, index: 0, amount: 0, blocked: true, text: '盾牌挡住了 TNT' } }) })
+  h.controller.receive({ me: me({ pending: '1.00' }) })
+  assert.equal(h.get().effect.blocked, true)
+  assert.equal(h.get().effect.amountDelta, 0)
+  assert.equal(h.get().effect.chanceDelta, -1)
+  assert.equal(h.get().own.shield, true)
+  h.step()
+  assert.equal(h.get().own.shield, true)
+  h.step()
+  assert.equal(h.get().own.shield, true, 'the HUD is unchanged during flight')
+  h.step()
+  assert.equal(h.get().own.shield, false)
+  assert.equal(h.finish().own.digs, 1)
+  h.controller.receive({ own: own({ shield: true }) })
+  assert.equal(h.get().own.digs, 1, 'an older private packet cannot undo the confirmed dig')
+})
+
+test('me-first and private-first packets preserve the old HUD and board until the flight lands', () => {
+  const h = harness({ own: null })
+  const result = move()
+  const confirmedOwn = own({ chances: 6, digs: 1, lastResult: { kind: 'diamond', cardId: 1, index: 0, amount: 50, blocked: false, text: '钻石大奖 +0.50' } })
+  h.controller.receive({ me: me({ pending: '0.50' }) })
+  assert.equal(h.get().me.pending, '0.00')
+  assert.equal(h.get().phase, 'idle')
+  assert.equal(h.get().busy, true, 'a financial packet waits for proof or a coherent refresh')
+  h.controller.receive({ own: confirmedOwn })
+  assert.equal(h.get().phase, 'reveal')
+  assert.equal(h.get().effect.amountDelta, 50)
+  assert.equal(h.get().effect.chanceDelta, -1, 'the first dig uses the public initialChances baseline')
+  assert.equal(h.get().own, null)
+  assert.equal(h.get().me.pending, '0.00')
+  h.step()
+  assert.equal(h.get().game.cells[0].kind, null)
+  assert.equal(h.get().game.stats.digs, 0, 'a private result does not invent public counters')
+  assert.equal(h.get().game.cells.filter(cell => cell.kind !== null).length, 0)
+  h.controller.receive({ game: board({ digs: 1, cells: [result.cell], feed: [result.feed], lastMove: result.lastMove }) })
+  assert.equal(h.get().own, null)
+  assert.equal(h.get().me.pending, '0.00')
+  h.step()
+  assert.equal(h.get().phase, 'transfer')
+  assert.equal(h.get().own, null)
+  assert.equal(h.get().me.pending, '0.00')
+  h.step()
+  assert.equal(h.get().phase, 'resolve')
+  assert.equal(h.get().game.stats.digs, 1, 'the delayed public packet enriches the current target')
+  assert.equal(h.get().own.chances, 6)
+  assert.equal(h.get().me.pending, '0.50')
+  h.finish()
+  assert.equal(new Set(h.updates.flatMap(snapshot => snapshot.effect ? [snapshot.effect.id] : [])).size, 1)
+})
+
+test('a public packet arriving after a private-led sequence preserves its known tile without replay', () => {
+  const h = harness({ me: me({ pending: '1.00' }) })
+  const result = move({ kind: 'tnt' })
+  h.controller.receive({ own: own({ chances: 6, digs: 1, lastResult: { kind: 'tnt', cardId: 1, index: 0, amount: -25, blocked: false, text: 'TNT -0.25' } }) })
+  assert.equal(h.get().phase, 'reveal')
+  assert.equal(h.get().effect.amountDelta, -25)
+  assert.equal(h.get().own.chances, 7)
+  h.controller.receive({ me: me({ pending: '0.75' }) })
+  assert.equal(h.get().me.pending, '1.00')
+  h.finish()
+  assert.equal(h.get().game.cells[0].kind, 'tnt')
+  assert.equal(h.get().game.stats.digs, 0)
+  assert.equal(h.get().own.chances, 6)
+  assert.equal(h.get().me.pending, '0.75')
+  h.controller.receive({ game: board({ digs: 1, cells: [result.cell], feed: [result.feed], lastMove: result.lastMove }) })
+  assert.equal(h.get().game.stats.digs, 1)
+  assert.equal(h.get().game.cells[0].kind, 'tnt')
+  assert.equal(h.get().phase, 'idle')
+  assert.equal(h.tasks.size, 0)
+  assert.equal(new Set(h.updates.flatMap(snapshot => snapshot.effect ? [snapshot.effect.id] : [])).size, 1)
+})
+
+test('a coherent terminal refresh releases a staged me packet and any peer decoration', () => {
+  const h = harness({ me: me({ pending: '1.00' }) })
+  const peer = move({ actor: '小红', actorKey: 'u:2' })
+  const publicBoard = board({ digs: 1, cells: [peer.cell], feed: [peer.feed], lastMove: peer.lastMove })
+  h.controller.receive({ game: publicBoard })
+  const settledMe = me({ pending: '0.00', settled: true, open: false, claim: { amount: '1.00', unit: 'LDC', payment: 'paid' } })
+  h.controller.receive({ me: settledMe })
+  assert.equal(h.get().me.settled, false)
+  assert.equal(h.get().busy, true)
+  h.controller.receive({ game: publicBoard, own: own({ status: 'settled' }), me: settledMe })
+  assert.equal(h.get().me.settled, true)
+  assert.equal(h.get().own.status, 'settled')
+  assert.equal(h.get().phase, 'idle')
+  assert.equal(h.get().busy, false)
+  assert.equal(h.tasks.size, 0)
+})
+
+test('eleven continuous peer updates never prevent a local action from taking priority', () => {
+  const h = harness()
+  const moves = []
+  for (let index = 0; index < 11; index++) {
+    const peer = move({ id: index + 1, actor: `peer${index}`, actorKey: `u:${index + 2}`, index, kind: 'emerald', at: 1000 + index })
+    moves.push(peer)
+    h.controller.receive({ game: board({ digs: index + 1, cells: moves.map(item => item.cell), feed: moves.map(item => item.feed).reverse(), lastMove: peer.lastMove }) })
+    assert.equal(h.get().busy, false, 'peer presentation does not lock local controls')
+    assert.ok(h.get().queued <= 1)
+  }
+  assert.equal(h.controller.begin('dig 1 25'), true)
+  assert.equal(h.get().game.stats.digs, 11, 'begin flushes directly to the newest authoritative board')
+  assert.equal(h.get().game.cells.filter(cell => cell.kind !== null).length, 11)
+  assert.equal(h.get().phase, 'idle')
+  assert.equal(h.get().busy, true)
+  assert.equal(h.tasks.size, 0, 'the interrupted peer timer is canceled')
+  h.controller.complete('dig 1 25')
+  assert.equal(h.get().busy, false)
+  assert.equal(h.get().effect, null)
+})
+
+test('a mismatched old-card feed cannot fabricate a peer pearl', () => {
+  const h = harness()
+  const peer = move({ actor: '小红', actorKey: 'u:2', kind: 'pearl', index: 8 })
+  h.controller.receive({ game: board({ cardId: 2, digs: 1, feed: [{ ...peer.feed, at: 999 }], lastMove: peer.lastMove }) })
+  assert.equal(h.get().phase, 'idle')
+  assert.equal(h.get().game.cardId, 2)
+  assert.equal(h.get().effect, null)
+  assert.equal(h.tasks.size, 0)
+})
+
+test('rapid peer packets coalesce, ignore stale boards and finish in reduced motion', () => {
+  const h = harness()
+  h.controller.setReducedMotion(true)
+  const first = move({ actor: '小红', actorKey: 'u:2', index: 0, kind: 'emerald' })
+  const second = move({ id: 2, actor: '小蓝', actorKey: 'u:3', index: 1, kind: 'tnt', at: 2000 })
+  const third = move({ id: 3, actor: '小绿', actorKey: 'u:4', index: 2, kind: 'totem', at: 3000 })
+  const firstBoard = board({ digs: 1, cells: [first.cell], feed: [first.feed], lastMove: first.lastMove })
+  h.controller.receive({ game: firstBoard })
+  h.controller.receive({ game: board({ digs: 2, cells: [first.cell, second.cell], feed: [second.feed, first.feed], lastMove: second.lastMove }) })
+  h.controller.receive({ game: board({ digs: 3, cells: [first.cell, second.cell, third.cell], feed: [third.feed, second.feed, first.feed], lastMove: third.lastMove }) })
+  assert.equal(h.get().queued, 1)
+  h.controller.receive({ game: firstBoard })
+  const final = h.finish()
+  assert.equal(final.game.stats.digs, 3)
+  assert.equal(final.game.cells[1].kind, 'tnt')
+  assert.equal(final.game.cells[2].kind, 'totem')
+  assert.equal(final.busy, false)
+  assert.equal(final.queued, 0)
+  assert.ok(h.time() >= 2400 && h.time() <= 3500, `two reduced showcases retain readable explanations without a backlog: ${h.time()} ms`)
+  const effectIds = new Set(h.updates.flatMap(snapshot => snapshot.effect ? [snapshot.effect.id] : []))
+  assert.equal(effectIds.size, 2, 'the middle packet is coalesced instead of building an unbounded replay queue')
+  h.controller.receive({ game: firstBoard })
+  assert.equal(h.get().game.stats.digs, 3)
+  assert.equal(h.tasks.size, 0)
+})
+
+test('switching to reduced motion shortens the current phase and disposal cancels callbacks', () => {
+  const h = harness()
+  const peer = move({ actor: '小红', actorKey: 'u:2' })
+  h.controller.receive({ game: board({ digs: 1, cells: [peer.cell], feed: [peer.feed], lastMove: peer.lastMove }) })
+  h.controller.setReducedMotion(true)
+  assert.equal(h.tasks.size, 1)
+  h.finish()
+  assert.ok(h.time() >= 1200 && h.time() <= 1700, 'reduced motion preserves a readable explanation and removes the long movement')
+
+  const next = move({ id: 2, actor: '小红', actorKey: 'u:2', index: 1, at: 2000 })
+  h.controller.receive({ game: board({ digs: 2, cells: [peer.cell, next.cell], feed: [next.feed, peer.feed], lastMove: next.lastMove }) })
+  const staleCallback = [...h.tasks.values()][0].callback
+  const updateCount = h.updates.length
+  h.controller.dispose()
+  assert.equal(h.tasks.size, 0)
+  staleCallback()
+  h.controller.receive({ game: board() })
+  assert.equal(h.updates.length, updateCount)
+  assert.equal(h.controller.begin('dig 1 3'), false)
+})
