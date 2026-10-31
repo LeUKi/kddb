@@ -53,7 +53,7 @@ export const hongbao = {
   prompt: "打开游戏选格挖掘，或输入 cashout 收手",
   total: { min: 5, default: 10000 },
   deadline: { value: 1, unit: "days" },
-  humanCheck: true,
+  humanCheck: false,
   note: "大家共享一张 5×5 矿洞卡。每次成功挖掘消耗 1 次机会，双铁镐增加 3 次，没有累计额度。其他玩家接棒或等待后可再次挖掘；随时收手结算。机会用尽、奖池占满或红包结束时结算，结算后不能重新加入。TNT 只扣本场待结算奖励。\n\n[打开矿洞夺宝](#附带网页)",
 };
 
