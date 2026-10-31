@@ -91,7 +91,8 @@
                 "index": 0,
                 "kind": "emerald",
                 "by": "tester",
-                "at": 1793419200000
+                "at": 1793419200000,
+                "actorKey": "u:10000"
               },
               {
                 "index": 1,
@@ -2358,7 +2359,8 @@
                 "index": 24,
                 "kind": "spyglass",
                 "by": "tester",
-                "at": 1793419200000
+                "at": 1793419200000,
+                "actorKey": "u:10000"
               }
             ],
             "counts": {
@@ -2663,7 +2665,8 @@
                     "index": 24,
                     "kind": "spyglass",
                     "by": "小明",
-                    "at": 1793419200000
+                    "at": 1793419200000,
+                    "actorKey": "u:10001"
                   }
                 ],
                 "counts": {
@@ -2739,7 +2742,8 @@
                     "index": 0,
                     "kind": "emerald",
                     "by": "小红",
-                    "at": 1793419201000
+                    "at": 1793419201000,
+                    "actorKey": "u:10002"
                   },
                   {
                     "index": 1,
@@ -2883,7 +2887,8 @@
                     "index": 24,
                     "kind": "spyglass",
                     "by": "小明",
-                    "at": 1793419200000
+                    "at": 1793419200000,
+                    "actorKey": "u:10001"
                   }
                 ],
                 "counts": {
@@ -6039,8 +6044,8 @@
             "status": "settled"
           }
         },
-        "messageIncludes": "已收手，结算 0.37",
-        "announce": "收手结算，结束了本场探索",
+        "messageIncludes": "奖励已结算 0.37",
+        "announce": "领取奖励，结束了这个红包的挖掘",
         "end": false
       }
     },
@@ -8038,7 +8043,8 @@
                 "index": 24,
                 "kind": "spyglass",
                 "by": "tester",
-                "at": 1793419200000
+                "at": 1793419200000,
+                "actorKey": "u:10000"
               }
             ]
           }
@@ -9036,6 +9042,151 @@
       },
       "params": {
         "initialChances": 1
+      }
+    },
+    {
+      "name": "裸数字不猜测卡片：提示当前完整指令且不扣机会、不改牌面",
+      "now": 1793419200000,
+      "state": {
+        "version": 1,
+        "cardId": 2,
+        "deck": [
+          "emerald",
+          "emerald",
+          "emerald",
+          "emerald",
+          "emerald",
+          "emerald",
+          "emerald",
+          "emerald",
+          "emerald",
+          "emerald",
+          "diamond",
+          "diamond",
+          "diamond",
+          "apple",
+          "totem",
+          "totem",
+          "tnt",
+          "tnt",
+          "tnt",
+          "tnt",
+          "pearl",
+          "pearl",
+          "shield",
+          "shield",
+          "spyglass"
+        ],
+        "opened": [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "lastMove": null,
+        "stats": {
+          "digs": 0,
+          "players": 0
+        },
+        "feed": [],
+        "nextEventId": 1
+      },
+      "input": "8",
+      "expect": {
+        "add": 0,
+        "state": {
+          "version": 1,
+          "cardId": 2,
+          "deck": [
+            "emerald",
+            "emerald",
+            "emerald",
+            "emerald",
+            "emerald",
+            "emerald",
+            "emerald",
+            "emerald",
+            "emerald",
+            "emerald",
+            "diamond",
+            "diamond",
+            "diamond",
+            "apple",
+            "totem",
+            "totem",
+            "tnt",
+            "tnt",
+            "tnt",
+            "tnt",
+            "pearl",
+            "pearl",
+            "shield",
+            "shield",
+            "spyglass"
+          ],
+          "opened": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "lastMove": null,
+          "stats": {
+            "digs": 0,
+            "players": 0
+          },
+          "feed": [],
+          "nextEventId": 1
+        },
+        "view": null,
+        "player": {
+          "state": null,
+          "view": null
+        },
+        "messageIncludes": "dig 2 1",
+        "announce": ""
       }
     }
   ]

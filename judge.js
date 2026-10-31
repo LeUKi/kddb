@@ -4,7 +4,7 @@
 /** @type {import("./judge").Meta} */
 export const meta = {
   name: "矿洞夺宝",
-  description: "共享 5×5 矿洞卡，接棒挖宝、双铁镐加机会，随时收手结算",
+  description: "共享 5×5 矿洞卡，接棒挖宝、双铁镐加机会，自选时机领取奖励",
   page: "https://hbweb-kddb.lafi.sh/",
 };
 
@@ -50,16 +50,16 @@ export const params = [
 /** @type {import("./judge").HongbaoRules} */
 export const hongbao = {
   title: "矿洞夺宝",
-  prompt: "打开游戏选格挖掘，或输入 cashout 收手",
+  prompt: "先打开矿洞夺宝，点格子挖宝；机会用完自动结算",
   total: { min: 5, default: 10000 },
   deadline: { value: 1, unit: "days" },
   humanCheck: false,
-  note: "大家共享一张 5×5 矿洞卡。每次成功挖掘消耗 1 次机会，双铁镐增加 3 次，没有累计额度。其他玩家接棒或等待后可再次挖掘；随时收手结算。机会用尽、奖池占满或红包结束时结算，结算后不能重新加入。TNT 只扣本场待结算奖励。\n\n[打开矿洞夺宝](#附带网页)",
+  note: "[打开矿洞夺宝，点格子开始挖宝](#附带网页)\n\n大家共享一张 5×5 卡片，机会和奖励各自独立。每挖一格用 1 把镐子，双铁镐增加 3 次机会。其他玩家挖过后可接棒，否则等倒计时。右上角点「见好就收」可领取奖励并结束挖掘；机会用完也会自动结算，之后不能再挖这个红包。TNT 只扣尚未结算的奖励。",
 };
 
 /** @typedef {'emerald'|'diamond'|'apple'|'totem'|'tnt'|'pearl'|'shield'|'spyglass'} Kind */
 /** @typedef {{initialChances:number,waitSeconds:number,smallReward:number,bigMultiplier:5,totemBonus:3,tntPercent:number}} Rules */
-/** @typedef {{by:string,at:number}|null} OpenCell */
+/** @typedef {{by:string,at:number,actorKey?:string}|null} OpenCell */
 /** @typedef {{actorKey:string,name:string,at:number,cardId:number,index:number}} LastMove */
 /** @typedef {{id:number,actor:string,kind:Kind,text:string,at:number,cardId:number,index:number}} FeedItem */
 /** @typedef {{version:1,cardId:number,deck:Kind[],opened:OpenCell[],lastMove:LastMove|null,stats:{digs:number,players:number},feed:FeedItem[],nextEventId:number}} Game */
@@ -144,6 +144,9 @@ function publicView(game, rules) {
       kind: open === null ? null : game.deck[index],
       by: open?.by ?? null,
       at: open?.at ?? null,
+      // Optional for games created by an earlier judge. Never infer identity
+      // from display names; they can be duplicated or abbreviated by the UI.
+      ...(open?.actorKey ? { actorKey: open.actorKey } : {}),
     };
   });
   const opened = cells.filter((cell) => cell.kind !== null).length;
@@ -191,7 +194,7 @@ function minerOf(submission, rules, game) {
 function privateView(miner) {
   return {
     summary: miner.status === "settled"
-      ? "本场已结算，感谢探索矿洞"
+      ? "这个红包的挖掘已结束，奖励已结算"
       : `剩余挖掘 ${miner.chances} 次${miner.shield ? " · 持有盾牌" : ""}`,
     data: miner,
   };
@@ -220,14 +223,14 @@ export function judge(submission, tools) {
     return {
       settle: true,
       player: { state: miner, view: privateView(miner) },
-      message: `已收手，结算 ${tools.money.format(submission.player.pending)}，本场不能再参与`,
-      announce: "收手结算，结束了本场探索",
+      message: `奖励已结算 ${tools.money.format(submission.player.pending)}，不能再挖这个红包`,
+      announce: "领取奖励，结束了这个红包的挖掘",
     };
   }
 
   const command = /^dig ([1-9]\d*) ([1-9]\d*)$/.exec(input);
   if (!command)
-    return { message: "请在网页选格，或输入 dig 卡片编号 格子编号（1–25）；收手输入 cashout" };
+    return { message: `请先打开矿洞夺宝点格子；手动挖掘需完整输入，如 dig ${saved?.cardId ?? 1} 1（最后一个数为格子 1–25）；领取并结束输入 cashout。本次不消耗机会` };
   const cardId = Number(command[1]);
   const cell = Number(command[2]);
   if (!Number.isSafeInteger(cardId) || !Number.isInteger(cell) || cell < 1 || cell > CELL_COUNT)
@@ -256,11 +259,11 @@ export function judge(submission, tools) {
   };
   const miner = minerOf(submission, rules, game);
   if (miner.status === "settled" || miner.chances <= 0)
-    return { message: "本场已经结束，不能继续挖掘" };
+    return { message: "你已结束这个红包的挖掘，不能继续参与" };
 
   const kind = game.deck[index];
   const name = [...user.username].slice(0, 32).join("");
-  game.opened[index] = { by: name, at: now };
+  game.opened[index] = { by: name, at: now, actorKey };
   game.stats.digs += 1;
   if (miner.digs === 0) game.stats.players += 1;
   miner.chances -= 1;

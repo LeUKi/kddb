@@ -22,7 +22,7 @@ export interface Rules {
   tntPercent: number
 }
 
-export interface Cell { index: number; kind: Kind | null; by: string | null; at: number | null }
+export interface Cell { index: number; kind: Kind | null; by: string | null; at: number | null; actorKey?: string }
 export interface FeedItem { id: number; actor: string; kind: Kind; text: string; at: number; cardId: number; index: number }
 export interface PublicGame {
   version: 1
@@ -49,13 +49,21 @@ export interface PrivateGame {
 export const defaultRules: Rules = { initialChances: 7, waitSeconds: 10, smallReward: 10, bigMultiplier: 5, totemBonus: 3, tntPercent: 25 }
 export const formatMoney = (cents: number) => (cents / 100).toFixed(2)
 export const coordinate = (index: number) => `${String.fromCharCode(65 + Math.floor(index / 5))}${index % 5 + 1}`
+export function isOwnCell(cell: Cell, cardId: number, own: PrivateGame | null): boolean {
+  if (!own || cell.kind === null) return false
+  if (cell.actorKey !== undefined) return cell.actorKey === own.actorKey
+  // Older judges only persist a display name per cell. The private lastResult
+  // still proves this one dig; matching names alone cannot prove ownership.
+  const result = own.lastResult
+  return Boolean(result && result.cardId === cardId && result.index === cell.index && result.kind === cell.kind)
+}
 export const isKind = (value: unknown): value is Kind => typeof value === 'string' && kinds.includes(value as Kind)
 const object = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
 
 // The SDK payload is external data. Reject incompatible pages instead of inventing a board.
 export function readPublic(value: unknown): PublicGame | null {
   if (!object(value) || value.version !== 1 || !Number.isInteger(value.cardId) || !Array.isArray(value.cells) || value.cells.length !== 25) return null
-  if (!value.cells.every((cell, index) => object(cell) && cell.index === index && (cell.kind === null || isKind(cell.kind)) && (cell.by === null || typeof cell.by === 'string') && (cell.at === null || typeof cell.at === 'number'))) return null
+  if (!value.cells.every((cell, index) => object(cell) && cell.index === index && (cell.kind === null || isKind(cell.kind)) && (cell.by === null || typeof cell.by === 'string') && (cell.at === null || typeof cell.at === 'number') && (cell.actorKey === undefined || typeof cell.actorKey === 'string') && (cell.kind !== null || cell.actorKey === undefined))) return null
   if (!object(value.counts) || !kinds.every(kind => typeof (value.counts as Record<string, unknown>)[kind] === 'number')) return null
   if (!object(value.rules) || !Object.keys(defaultRules).every(key => typeof (value.rules as Record<string, unknown>)[key] === 'number')) return null
   if (!object(value.stats) || typeof value.stats.digs !== 'number' || typeof value.stats.players !== 'number' || !Array.isArray(value.feed)) return null

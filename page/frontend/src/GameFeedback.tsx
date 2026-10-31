@@ -38,7 +38,7 @@ function feedbackCopy(effect: PresentationEffect): FeedbackCopy {
       // The confirmed chance delta includes the one pickaxe spent to dig.
       const bonus = text.match(/机会\s*\+\s*(\d+)/)?.[1]
         ?? (effect.chanceDelta > 0 ? String(effect.chanceDelta + 1) : null)
-      return { value: bonus ? `+${bonus} 次机会` : undefined, tone: 'gain', detail: bonus ? `额外获得 ${bonus} 次挖掘机会` : loot.totem.description }
+      return { value: bonus ? `+${bonus} 次机会` : undefined, tone: 'gain', detail: bonus ? `本次用掉 1 把，再获得 ${bonus} 把镐子` : loot.totem.description }
     }
     case 'tnt': {
       if (effect.blocked) return { value: '盾牌抵挡', tone: 'protected', detail: '盾牌挡住了 TNT，奖励保留，盾牌已消耗' }
@@ -76,7 +76,7 @@ function targetSelector(effect: PresentationEffect) {
   if (effect.kind === 'shield') return '[data-hud-target="shield"]'
   if (effect.kind === 'spyglass') {
     const target = effect.targetIndex
-    return target !== null && target !== undefined ? `[data-cell-index="${target}"]` : '[data-private-hint]'
+    return target !== null && target !== undefined ? `[data-card-id="${effect.cardId}"][data-cell-index="${target}"]` : `[data-card-id="${effect.cardId}"][data-private-hint]`
   }
   return null
 }
@@ -92,7 +92,7 @@ function RewardShowcase({ effect, reduced }: { effect: PresentationEffect; reduc
     const measure = () => {
       const origin = art.current?.getBoundingClientRect()
       if (!origin) return
-      const source = document.querySelector(`[data-cell-index="${effect.index}"]`)?.getBoundingClientRect()
+      const source = document.querySelector(`[data-card-id="${effect.cardId}"][data-cell-index="${effect.index}"]`)?.getBoundingClientRect()
       const selector = targetSelector(effect)
       const targetElement = (selector ? document.querySelector(selector) : null)
         ?? (effect.isOwn && effect.kind === 'shield' && !effect.amountDelta ? document.querySelector('.board-heading') : null)
@@ -146,6 +146,6 @@ function RewardShowcase({ effect, reduced }: { effect: PresentationEffect; reduc
 /** This sequence presents confirmed results; it never changes gameplay or money. */
 export function BoardFeedback({ effect }: { effect: PresentationEffect | null }) {
   const reduced = Boolean(useReducedMotion())
-  const visible = effect?.phase === 'effect' || effect?.phase === 'transfer'
+  const visible = effect?.isOwn && (effect.phase === 'effect' || effect.phase === 'transfer')
   return createPortal(<div className="reward-showcase-layer" aria-live="polite" aria-atomic="true"><AnimatePresence>{visible && effect && <RewardShowcase key={effect.id} effect={effect} reduced={reduced}/>}</AnimatePresence></div>, document.body)
 }

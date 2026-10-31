@@ -15,6 +15,7 @@ export interface PresentationEffect {
   cardId: number
   index: number
   kind: Kind
+  actor: string | null
   isOwn: boolean
   amountDelta: number
   chanceDelta: number
@@ -135,22 +136,26 @@ export function createPresentationController(options: PresentationOptions) {
   function later(phase: ActivePhase) {
     clearTimer()
     const generation = timerGeneration
+    const duration = !active?.effect.isOwn && phase === 'resolve'
+      ? reducedMotion ? 100 : 300
+      : (reducedMotion ? reducedDurations : presentationDurations)[phase]
     timerActive = true
     timer = schedule(() => {
       if (disposed || generation !== timerGeneration) return
       timerActive = false
       advance()
-    }, (reducedMotion ? reducedDurations : presentationDurations)[phase])
+    }, duration)
   }
 
-  function effectDetails(before: PresentationValues, target: PresentationValues, cardId: number, index: number, kind: Kind, feed?: FeedItem) {
+  function effectDetails(before: PresentationValues, target: PresentationValues, cardId: number, index: number, kind: Kind, feed?: FeedItem, cell?: Cell) {
     const result = newOwnResult(before, target, cardId, index, kind)
     const move = target.game?.lastMove
     const matchesMove = move?.cardId === cardId && move.index === index
-    const isOwn = !!result || !!(matchesMove && target.own && move.actorKey === target.own.actorKey)
+    const isOwn = !!result || !!(target.own && (cell?.actorKey === target.own.actorKey || (matchesMove && move.actorKey === target.own.actorKey)))
     const previousChances = before.own?.chances ?? before.game?.rules.initialChances
     const newPeek = result?.kind === 'spyglass' ? target.own?.peeks.find(peek => peek.cardId === cardId && !before.own?.peeks.some(previous => previous.cardId === cardId && previous.index === peek.index)) : null
     return {
+      actor: cell?.by ?? feed?.actor ?? (matchesMove ? move.name : null),
       isOwn,
       amountDelta: result?.amount ?? 0,
       chanceDelta: result && previousChances !== undefined ? (target.own?.chances ?? previousChances) - previousChances : 0,
@@ -160,8 +165,33 @@ export function createPresentationController(options: PresentationOptions) {
     }
   }
 
-  function beginSequence(before: PresentationValues, target: PresentationValues, cell: Cell, feed?: FeedItem, resolved = false) {
-    if (!before.game || cell.kind === null) return
+  function landedValues(sequence: Sequence): PresentationValues {
+    if (sequence.target.game?.cardId === sequence.before.game?.cardId) return { ...sequence.target }
+    const old = sequence.before.game
+    if (!old) return { ...sequence.target }
+    const revealed = sequence.effect.cardId === old.cardId ? [sequence.cell] : []
+    const last = sequence.target.game ? publicReveal(old, sequence.target.game)?.cell : null
+    if (last && !revealed.some(cell => cell.index === last.index)) revealed.push(last)
+    const counts = { ...old.counts }
+    for (const cell of revealed) {
+      if (cell.kind !== null && old.cells[cell.index]?.kind === null) counts[cell.kind] = Math.max(0, counts[cell.kind] - 1)
+    }
+    return {
+      ...sequence.before,
+      own: sequence.target.own,
+      me: sequence.target.me,
+      game: {
+        ...old,
+        cells: old.cells.map(cell => revealed.find(confirmed => confirmed.index === cell.index) ?? cell),
+        counts,
+        feed: sequence.target.game?.feed ?? old.feed,
+      },
+    }
+  }
+
+  function beginSequence(before: PresentationValues, target: PresentationValues, cell: Cell, feed?: FeedItem, resolved = false, cardId = before.game?.cardId) {
+    if (!before.game || cardId === undefined || cell.kind === null) return
+    const details = effectDetails(before, target, cardId, cell.index, cell.kind, feed, cell)
     active = {
       before,
       target: { ...target },
@@ -169,14 +199,16 @@ export function createPresentationController(options: PresentationOptions) {
       flipFrom: resolved ? before.game : null,
       effect: {
         id: nextId++,
-        cardId: before.game.cardId,
+        cardId,
         index: cell.index,
         kind: cell.kind,
-        ...effectDetails(before, target, before.game.cardId, cell.index, cell.kind, feed),
-        phase: resolved ? 'transition' : 'reveal',
+        ...details,
+        phase: resolved ? 'transition' : details.isOwn ? 'reveal' : 'resolve',
       },
     }
-    displayed = { ...(resolved ? target : before) }
+    // Other players' confirmed reveals belong on the board immediately. Only
+    // the current player's reward needs the large explanation and HUD flight.
+    displayed = resolved ? { ...target } : details.isOwn ? { ...before } : landedValues(active)
     publish()
     later(active.effect.phase)
   }
@@ -204,7 +236,7 @@ export function createPresentationController(options: PresentationOptions) {
     if (knownKind !== null && knownKind !== feed.kind) return null
     // A private result may have finished before this public board arrived.
     // Keep the confirmed old faces and flip, without replaying its reward.
-    return { cell: { index: move.index, kind: feed.kind, by: move.name, at: move.at }, feed, resolved: knownKind !== null }
+    return { cell: { index: move.index, kind: feed.kind, by: move.name, at: move.at, actorKey: move.actorKey }, feed, resolved: knownKind !== null }
   }
 
   function drive() {
@@ -213,18 +245,22 @@ export function createPresentationController(options: PresentationOptions) {
       const result = latest.own?.lastResult
       const proven = result && newOwnResult(displayed, latest, result.cardId, result.index)
       const oldCell = proven?.cardId === displayed.game.cardId ? displayed.game.cells[proven.index] : null
-      if (proven && oldCell && (oldCell.kind === null || (displayed.own && oldCell.kind === proven.kind))) {
+      if (proven && (!oldCell || oldCell.kind === null || oldCell.kind === proven.kind)) {
         const feed = latest.game ? feedFor(latest.game, proven.cardId, proven.index) : undefined
         const publicCell = latest.game?.cardId === proven.cardId ? latest.game.cells[proven.index] : null
         const move = latest.game?.lastMove
         const cell: Cell = publicCell?.kind === proven.kind ? publicCell : {
           index: proven.index,
           kind: proven.kind,
+          actorKey: latest.own?.actorKey,
           by: feed?.actor ?? (latest.me?.signedIn ? latest.me.name : null),
           at: feed?.at ?? (move?.cardId === proven.cardId && move.index === proven.index ? move.at : null),
         }
         rememberCell(proven.cardId, cell)
-        beginSequence(displayed, currentValues(), cell, feed)
+        // A private packet can arrive after peers have already changed cards.
+        // Explain its real reward without inserting an old result into the new
+        // card, or replaying that card's completed transition.
+        beginSequence(displayed, currentValues(), cell, feed, false, proven.cardId)
         return
       }
     }
@@ -253,17 +289,7 @@ export function createPresentationController(options: PresentationOptions) {
     } else if (phase === 'transfer') {
       // Rewards, remaining chances, shields, peeks and settlement status all
       // land after the showcase finishes its flight, before any card flip.
-      displayed = { ...displayed, own: sequence.target.own, me: sequence.target.me }
-      if (sequence.target.game?.cardId === sequence.before.game?.cardId) displayed.game = sequence.target.game
-      else if (sequence.before.game) {
-        const old = sequence.before.game
-        displayed.game = {
-          ...old,
-          cells: old.cells.map(cell => cell.index === sequence.cell.index ? sequence.cell : cell),
-          counts: { ...old.counts, [sequence.effect.kind]: Math.max(0, old.counts[sequence.effect.kind] - 1) },
-          feed: sequence.target.game?.feed ?? old.feed,
-        }
-      }
+      displayed = landedValues(sequence)
       sequence.effect.phase = 'resolve'
     } else if (phase === 'resolve' && sequence.target.game?.cardId !== sequence.before.game?.cardId) {
       sequence.flipFrom = displayed.game
@@ -344,11 +370,23 @@ export function createPresentationController(options: PresentationOptions) {
       // only with the private result for this exact confirmed move.
       const result = newOwnResult(active.before, latest, active.effect.cardId, active.effect.index, active.effect.kind)
       if (result) {
+        const wasOwn = active.effect.isOwn
         active.target.own = latest.own
         active.target.me = latest.me
         const game = latest.game
         if (game && (game.cardId > active.effect.cardId || (game.cardId === active.effect.cardId && game.cells[active.effect.index]?.kind === active.effect.kind))) active.target.game = currentValues().game
-        Object.assign(active.effect, effectDetails(active.before, active.target, active.effect.cardId, active.effect.index, active.effect.kind))
+        Object.assign(active.effect, effectDetails(active.before, active.target, active.effect.cardId, active.effect.index, active.effect.kind, undefined, active.cell))
+        if (!wasOwn) {
+          // Identity can be unknown until the first private packet. Promote its
+          // confirmed reward to the full own sequence rather than letting the
+          // short peer resolve silently consume its only feedback.
+          const before = { ...displayed, own: active.before.own, me: active.before.me }
+          const sequence = active
+          clearTimer()
+          active = null
+          beginSequence(before, sequence.target, sequence.cell, undefined, false, sequence.effect.cardId)
+          return
+        }
         if (active.effect.phase === 'resolve' || active.effect.phase === 'transition') displayed = { ...displayed, own: active.target.own, me: active.target.me }
         if (active.effect.phase === 'resolve' && active.target.game?.cardId === active.before.game?.cardId) displayed.game = active.target.game
         if (active.effect.phase === 'transition') displayed.game = active.target.game
@@ -385,10 +423,21 @@ export function createPresentationController(options: PresentationOptions) {
       const cell = game?.cardId === cardId ? game.cells[index] : null
       // A local lastResult also proves a pearl when its old public board has
       // already been replaced. Do not infer any other still-hidden cell.
-      const revealed: Cell = cell?.kind === result.kind ? cell : { index, kind: result.kind, by: feed?.actor ?? (latest.me?.signedIn ? latest.me.name : null), at: feed?.at ?? null }
+      const revealed: Cell = cell?.kind === result.kind ? cell : { index, kind: result.kind, actorKey: latest.own?.actorKey, by: feed?.actor ?? (latest.me?.signedIn ? latest.me.name : null), at: feed?.at ?? null }
       rememberCell(cardId, revealed)
       beginSequence(before, currentValues(), revealed, feed)
       return
+    }
+    // A confirmed public actor key can precede the private SDK response. Keep
+    // this submitted own move on its full path; names alone never prove it.
+    if (command && before.game?.cardId === cardId && before.game.cells[index]?.kind === null && latest.game && latest.own) {
+      const reveal = latest.game.cardId === cardId
+        ? { cell: latest.game.cells[index], feed: feedFor(latest.game, cardId, index) }
+        : publicReveal(before.game, latest.game)
+      if (reveal?.cell.index === index && reveal.cell.kind !== null && effectDetails(before, latest, cardId, index, reveal.cell.kind, reveal.feed, reveal.cell).isOwn) {
+        beginSequence(before, currentValues(), reveal.cell, reveal.feed)
+        return
+      }
     }
     // Denied, invalid, stale-card and cashout commands have no tile animation.
     // Refreshing a failed attempt must never re-use its previous lastResult.
