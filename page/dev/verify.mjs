@@ -36,6 +36,12 @@ await reset();
 let a = await snapshot(A);
 let b = await snapshot(B);
 equal(data(a), data(b), "两名玩家最初共享同一公开牌面");
+const initialCellCount = data(a).cells.length;
+checked([25, 36, 49].includes(initialCellCount), "共享卡片使用受支持的规格");
+if (data(a).version === 2) {
+  equal(data(a).size ** 2, initialCellCount, "公开尺寸与格子数量一致");
+  equal(data(a).composition.pearl, 1, "新版每卡恰好一个末影珍珠");
+}
 checked(data(a).rules.initialChances >= 3, "验证 A→B→A 需要至少 3 次初始机会");
 checked(data(a).rules.waitSeconds > 0, "验证等待规则需要正数 waitSeconds");
 checked(Number.isSafeInteger(a.now), "模拟时钟使用整数毫秒");
@@ -91,7 +97,7 @@ equal(afterExit.result.reason, "already_claimed", "结算玩家不能重新参�
 // Reset reproduces setup's sealed-seed layout. Find both a pearl and the spyglass.
 let foundSpyglass = false;
 let foundPearl = false;
-for (let index = 0; index < 25; index += 1) {
+for (let index = 0; index < initialCellCount; index += 1) {
   await reset();
   a = await snapshot(A);
   const oldCardId = data(a).cardId;
@@ -120,7 +126,7 @@ for (let index = 0; index < 25; index += 1) {
   }
   if (foundSpyglass && foundPearl) break;
 }
-checked(foundSpyglass, "初始牌面的 25 格包含一个可触发的望远镜");
+checked(foundSpyglass, `初始牌面的 ${initialCellCount} 格包含可触发的望远镜`);
 checked(foundPearl, "初始牌面包含可触发的末影珍珠");
 
 await reset();

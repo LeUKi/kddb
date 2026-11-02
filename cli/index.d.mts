@@ -54,6 +54,20 @@ export function testCommand(
   options: CommandOptions,
 ): Promise<{ exitCode: number }>;
 
+/**
+ * npm run check's reminders of what a 红包 from this judge would start with
+ * that its sender would not want by default (人机验证 on; a 附带网页 not
+ * opening by itself, or its button not on the note's first line).
+ */
+export function defaultsReminders(declared: {
+  meta: { page?: string } | null;
+  hongbao: {
+    humanCheck?: boolean;
+    pageAutoOpen?: boolean;
+    note?: string;
+  } | null;
+}): string[];
+
 export function checkCommand(options: CommandOptions): Promise<{
   exitCode: number;
   fingerprint: string;
@@ -101,7 +115,7 @@ export function replayCommand(
 /** npm run page's viewer who has not signed in. */
 export const GUEST: string;
 
-/** npm run page: the 假红包页 for the kit at `root` (judge.js, simulate.json, page/). */
+/** npm run page: the simulator for the kit at `root` (judge.js, simulate.json, page/). */
 export function startPage(options: {
   root: string;
   /** The 红包 page's; the page's is the next one (0: any two). */
@@ -114,11 +128,24 @@ export function startPage(options: {
   hostUrl: string;
   pageUrl: string;
   network: string[] | null;
+  /** --play: simulate.json's submissions, judged in order. */
+  play(say?: Print): Promise<void>;
   close(): Promise<void>;
 }>;
 export function pageCommand(
   options: CommandOptions,
 ): Promise<{ exitCode: number }>;
+/**
+ * npm run page --shot: the simulator in a browser no one sees, three shots
+ * into `out` and what went wrong in the page; not 0 when something did.
+ */
+export function shotCommand(options: {
+  root: string;
+  out: string;
+  play: boolean;
+  live: boolean;
+  print: Print;
+}): Promise<{ exitCode: number }>;
 
 export type SimulationPlan = {
   /** simulate.json's now (ms), or the tests' default. */

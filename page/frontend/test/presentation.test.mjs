@@ -32,6 +32,11 @@ function board({ cardId = 1, digs = 0, cells = [], feed = [], lastMove = null } 
   }
 }
 
+function sizedBoard(size, options = {}) {
+  const legacy = board(options)
+  return { ...legacy, version: 2, size, cells: Array.from({ length: size ** 2 }, (_, index) => ({ index, kind: null, by: null, at: null, ...options.cells?.find(cell => cell.index === index) })), rules: { ...legacy.rules, version: 2, difficulty: 'hard', boardSpec: 'random', compositionVariation: 'slight' } }
+}
+
 function own(overrides = {}) {
   return { version: 1, actorKey: 'u:1', chances: 7, shield: false, peeks: [], digs: 0, status: 'playing', lastResult: null, ...overrides }
 }
@@ -621,4 +626,62 @@ test('an old private reward stays off the current card while another peer change
   assert.equal(h.finish().game.cardId, 3)
   assert.ok(h.get().game.cells.every(cell => cell.kind === null))
   assert.equal(h.get().me.pending, '0.50')
+})
+
+test('a 7 by 7 pearl keeps its old G7 tile and full old grid before a 5 by 5 transition', () => {
+  const h = harness({ game: sizedBoard(7), own: own({ version: 2 }) })
+  const pearl = move({ kind: 'pearl', index: 48 })
+  pearl.feed.size = 7
+  pearl.lastMove.size = 7
+  h.controller.begin('dig 1 49')
+  h.controller.receive({ game: sizedBoard(5, { cardId: 2, digs: 1, feed: [pearl.feed], lastMove: pearl.lastMove }), own: own({ version: 2, digs: 1, chances: 6, lastResult: { kind: 'pearl', cardId: 1, index: 48, size: 7, amount: 0, blocked: false, text: '全体换卡' } }) })
+  h.controller.complete('dig 1 49')
+  assert.equal(h.get().effect.size, 7)
+  assert.equal(h.get().game.size, 7)
+  assert.equal(h.get().game.cells.length, 49)
+  h.step()
+  h.step()
+  h.step()
+  assert.equal(h.get().phase, 'resolve')
+  assert.equal(h.get().game.cells[48].kind, 'pearl')
+  h.step()
+  assert.equal(h.get().phase, 'transition')
+  assert.equal(h.get().transitionFrom.size, 7)
+  assert.equal(h.get().transitionFrom.cells.length, 49)
+  assert.equal(h.get().transitionFrom.cells[48].kind, 'pearl')
+  assert.equal(h.get().game.size, 5)
+  assert.equal(h.get().game.cells.length, 25)
+  assert.equal(h.finish().own.chances, 6)
+})
+
+test('a late private G7 result cannot insert an out-of-range tile into a newer smaller card', () => {
+  const h = harness({ game: sizedBoard(5, { cardId: 2, digs: 2 }), own: own({ version: 2 }) })
+  h.controller.receive({ own: own({ version: 2, digs: 1, chances: 6, lastResult: { kind: 'diamond', cardId: 1, index: 48, size: 7, amount: 50, blocked: false, text: '钻石 +0.50' } }), me: me({ pending: '0.50' }) })
+  assert.equal(h.get().phase, 'reveal')
+  assert.equal(h.get().effect.cardId, 1)
+  assert.equal(h.get().effect.size, 7)
+  assert.equal(h.get().effect.index, 48)
+  const final = h.finish()
+  assert.equal(final.game.size, 5)
+  assert.equal(final.game.cells.length, 25)
+  assert.ok(final.game.cells.every(cell => cell.kind === null))
+  assert.equal(final.me.pending, '0.50')
+  assert.equal(final.own.chances, 6)
+})
+
+test('a six-column remote full-card change preserves both layouts without a central reward', () => {
+  const earlier = Array.from({ length: 35 }, (_, index) => ({ index, kind: 'emerald', by: '其他玩家', actorKey: 'u:2', at: index }))
+  const h = harness({ game: sizedBoard(6, { digs: 35, cells: earlier }), own: own({ version: 2 }) })
+  const last = move({ id: 36, actor: '其他玩家', actorKey: 'u:2', kind: 'spyglass', index: 35, at: 36000 })
+  last.feed.size = 6
+  last.lastMove.size = 6
+  h.controller.receive({ game: sizedBoard(7, { cardId: 2, digs: 36, feed: [last.feed], lastMove: last.lastMove }) })
+  assert.equal(h.get().effect.size, 6)
+  assert.equal(h.get().game.size, 6)
+  assert.equal(h.get().game.cells[35].kind, 'spyglass')
+  h.step()
+  assert.equal(h.get().transitionFrom.cells.length, 36)
+  assert.equal(h.get().game.cells.length, 49)
+  h.finish()
+  assert.ok(h.updates.every(update => !['effect', 'transfer'].includes(update.phase)))
 })

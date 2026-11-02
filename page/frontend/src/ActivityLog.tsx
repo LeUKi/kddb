@@ -7,15 +7,15 @@ import './activity-log.css'
 const clock = new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
 
 /** Display only the judge's persisted public events; private outcomes stay private. */
-export function ActivityLog({ feed }: { feed: PublicGame['feed'] }) {
+export function ActivityLog({ feed, actorKey }: { feed: PublicGame['feed']; actorKey?: string }) {
   const reduced = useReducedMotion()
   const entries = feed.slice(0, 10)
 
-  return <section className="activity-log" aria-labelledby="activity-log-title" data-testid="activity-log">
-    <header className="activity-log-heading">
+  return <details className="activity-log" aria-labelledby="activity-log-title" data-testid="activity-log">
+    <summary className="activity-log-heading">
       <h2 id="activity-log-title">挖掘动态</h2>
-      {entries.length > 0 && <span>最近 {entries.length} 条</span>}
-    </header>
+      <span>{entries.length > 0 ? `最近 ${entries.length} 条` : '暂无记录'}<span className="activity-toggle" aria-hidden="true" /></span>
+    </summary>
     {entries.length === 0
       ? <p className="activity-log-empty">还没有挖掘记录</p>
       : <ol className="activity-log-list" aria-label="最近挖掘记录" tabIndex={0}>
@@ -38,9 +38,9 @@ export function ActivityLog({ feed }: { feed: PublicGame['feed'] }) {
             >
               <div className="activity-log-icon"><ItemIcon kind={entry.kind} size={28} /></div>
               <div className="activity-log-content">
-                <p><strong>{entry.actor}</strong> <span>{text}</span></p>
+                <p><strong className={actorKey && entry.actorKey === actorKey ? 'is-mine' : ''}>{entry.actor}</strong> <span>{text}</span></p>
                 <div className="activity-log-meta">
-                  <span>第 {entry.cardId} 张 · {coordinate(entry.index)}</span>
+                  <span>第 {entry.cardId} 张 · {coordinate(entry.index, entry.size)}</span>
                   {validDate && <time dateTime={date.toISOString()} title={date.toLocaleString('zh-CN')}>{clock.format(date)}</time>}
                 </div>
               </div>
@@ -48,5 +48,5 @@ export function ActivityLog({ feed }: { feed: PublicGame['feed'] }) {
           })}
         </AnimatePresence>
       </ol>}
-  </section>
+  </details>
 }

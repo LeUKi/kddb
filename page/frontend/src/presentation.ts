@@ -1,6 +1,6 @@
 import type { HbMe } from '../../hb'
-import { isKind } from './game'
-import type { Cell, FeedItem, Kind, LastResult, PrivateGame, PublicGame } from './game'
+import { boardSize, isKind } from './game'
+import type { BoardSize, Cell, FeedItem, Kind, LastResult, PrivateGame, PublicGame } from './game'
 
 export type PresentationPhase = 'idle' | 'reveal' | 'effect' | 'transfer' | 'resolve' | 'transition'
 
@@ -13,6 +13,7 @@ export interface PresentationValues {
 export interface PresentationEffect {
   id: number
   cardId: number
+  size: BoardSize
   index: number
   kind: Kind
   actor: string | null
@@ -155,6 +156,7 @@ export function createPresentationController(options: PresentationOptions) {
     const previousChances = before.own?.chances ?? before.game?.rules.initialChances
     const newPeek = result?.kind === 'spyglass' ? target.own?.peeks.find(peek => peek.cardId === cardId && !before.own?.peeks.some(previous => previous.cardId === cardId && previous.index === peek.index)) : null
     return {
+      size: result?.size ?? feed?.size ?? (matchesMove ? move.size : undefined) ?? (before.game?.cardId === cardId ? boardSize(before.game) : target.game?.cardId === cardId ? boardSize(target.game) : 5),
       actor: cell?.by ?? feed?.actor ?? (matchesMove ? move.name : null),
       isOwn,
       amountDelta: result?.amount ?? 0,

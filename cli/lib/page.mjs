@@ -1,4 +1,4 @@
-// npm run page (docs/judge-page-design.md §11.10): the 假红包页, a 红包 page
+// npm run page (docs/judge-page-design.md §11.10): the simulator, a 红包 page
 // on this computer to build a 附带网页 against. Two servers: the 红包 page
 // itself (cli/page/host.html and the SDK it serves) on 127.0.0.1, and the
 // page's folder on localhost — another site, as online — where
@@ -7,12 +7,13 @@
 // setup() first, then state, each person's pending and the pool carried
 // forward.
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { createServer } from "node:http";
-import { extname, join, resolve, sep } from "node:path";
+import { extname, join, relative, resolve, sep } from "node:path";
 import {
   checkSource,
   defaultCount,
+  endScenario,
   judgeNext,
   LIMITS,
   setupSeed,
@@ -30,7 +31,7 @@ import { failureText, say, yuan } from "./words.mjs";
 
 const HOUR = 3_600_000;
 const DAY = 86_400_000;
-/** What a page writes; served from the 假红包页 here. */
+/** What a page writes; served from the simulator here. */
 const SITE_SDK = "https://hb.lafi.sh/sdk/v1.js";
 const DEFAULT_PEOPLE = ["小明", "小红", "小刚"];
 /** The viewer who has not signed in. */
@@ -59,9 +60,16 @@ const TYPES = {
 const iso = (ms) => new Date(ms).toISOString();
 const characters = (text) => [...text].length;
 
-/** `[folder]`, `--port 8730`, `--cooldown 3`, `--live`. */
+/** `[folder]`, `--port 8730`, `--cooldown 3`, `--live`, `--shot`, `--play`. */
 function readArgs(args) {
-  const options = { folder: null, port: 8730, cooldown: 0, live: false };
+  const options = {
+    folder: null,
+    port: 8730,
+    cooldown: 0,
+    live: false,
+    shot: false,
+    play: false,
+  };
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     const [name, inline] = arg.split("=", 2);
@@ -81,6 +89,8 @@ function readArgs(args) {
       if (!Number.isFinite(options.cooldown) || options.cooldown < 0)
         throw new KitError("--cooldown 要是秒数");
     } else if (arg === "--live") options.live = true;
+    else if (arg === "--shot") options.shot = true;
+    else if (arg === "--play") options.play = true;
     else if (!arg.startsWith("--")) options.folder = arg;
   }
   return options;
@@ -204,8 +214,17 @@ async function openGame({ sandbox, plan, params, hostUrl, cooldown }) {
     judged: 0,
     /** Who submitted last when (this computer's clock). */
     last: new Map(),
-    /** The red packet's clock: simulate.json's now, moving on. */
-    clock: () => plan.now + (Date.now() - started),
+    /** 快进到截止 moves the clock on by this much. */
+    skipped: 0,
+    /**
+     * How far the red packet's clock is from this computer's: simulate.json's
+     * now, moving on. The page and the simulator share this computer's
+     * clock, so hb.now() is Date.now() and this, as the site's is
+     * calibrated to its server.
+     */
+    offset: () => plan.now - started + game.skipped,
+    /** The red packet's clock now. */
+    clock: () => Date.now() + game.offset(),
   };
 
   const ended = () => scenario.ended || game.clock() >= plan.hongbao.endsAt;
@@ -239,7 +258,33 @@ async function openGame({ sandbox, plan, params, hostUrl, cooldown }) {
     // Newest first, as the 红包 page shows them.
     announcements: [...game.announcements].reverse().slice(0, 20),
     paid: yuan(scenario.paid),
+    /** The red packet's clock now (simulate.json's now, moving on). */
+    now: game.clock(),
+    /** And how far it is from this computer's, for hb.now(). */
+    clock: game.offset(),
+    /** How it ended: judge (its code), empty (the pool taken), deadline. */
+    endedBy: scenario.ended
+      ? (scenario.endedBy ?? null)
+      : ended()
+        ? "deadline"
+        : null,
+    /** Everyone settled so far, in the order they were. */
+    settled: [...scenario.people.values()]
+      .filter((person) => person.settled !== null)
+      .map((person) => ({
+        name: person.user.username,
+        amount: yuan(person.settled),
+      })),
   });
+
+  /** 快进到截止: the clock to the deadline, everyone left settled then. */
+  game.end = () => {
+    game.skipped += Math.max(0, plan.hongbao.endsAt - game.clock());
+    if (scenario.ended) return [];
+    return endScenario(scenario, "deadline", plan.hongbao.endsAt).map(
+      (person) => `${person.username} ${yuan(person.amount)}`,
+    );
+  };
 
   game.submit = async (who, input) => {
     if (who === GUEST)
@@ -345,8 +390,16 @@ async function openGame({ sandbox, plan, params, hostUrl, cooldown }) {
     const person = [...scenario.people.values()].find(
       (item) => item.user.username === who,
     );
-    if (!person) return { pending: null, settled: null, myView: null };
+    // Counted on this computer's clock, given on the red packet's (hb.now()).
+    const last = game.last.get(who);
+    const cooldownUntil =
+      cooldown > 0 && last !== undefined && last + cooldown * 1000 > Date.now()
+        ? last + cooldown * 1000 + game.offset()
+        : null;
+    if (!person)
+      return { pending: null, settled: null, myView: null, cooldownUntil };
     return {
+      cooldownUntil,
       pending: yuan(person.pending),
       settled: person.settled === null ? null : yuan(person.settled),
       myView: person.view
@@ -401,11 +454,12 @@ async function servePage(folder, sdkUrl, request, response) {
     .end(body);
 }
 
-const json = (response, value, status = 200) =>
+const json = (response, value, status = 200, headers = {}) =>
   response
     .writeHead(status, {
       "content-type": "application/json; charset=utf-8",
       "cache-control": "no-store",
+      ...headers,
     })
     .end(JSON.stringify(value));
 
@@ -457,6 +511,7 @@ export async function startPage({
   const params = await paramsOf(plan.params, plan.hongbao, sandbox);
   if ("problem" in params) await fail(params.problem);
 
+  const signer = await localSigner();
   const [host, sdk] = await Promise.all([
     readFile(new URL("../page/host.html", import.meta.url), "utf8"),
     readFile(new URL("../page/sdk-v1.js", import.meta.url), "utf8"),
@@ -493,6 +548,15 @@ export async function startPage({
                 people: [...plan.people, GUEST],
                 guest: GUEST,
                 cooldown,
+                // The 红包 as its sender starts it from this judge.
+                hongbao: {
+                  author: "红包作者",
+                  prompt: sandbox.declarations.hongbao?.prompt ?? "",
+                  note: sandbox.declarations.hongbao?.note ?? "",
+                  pageAutoOpen:
+                    sandbox.declarations.hongbao?.pageAutoOpen === true,
+                  total: yuan(plan.hongbao.total),
+                },
               }).replaceAll("<", "\\u003c"),
             ),
           );
@@ -520,6 +584,51 @@ export async function startPage({
         print(answer.line);
         for (const line of answer.logs ?? []) print(`    ${line}`);
         return json(response, { ...answer, state: game.state() });
+      }
+      // 认人 (docs/page-identity-design.md §4): signed with this run's own
+      // key, iss this fake page's address; a server under development
+      // checks it against these keys, and only the site's once live.
+      if (
+        request.method === "GET" &&
+        url.pathname === "/api/page-identity/keys"
+      )
+        return json(response, { keys: [signer.publicKey] }, 200, {
+          "access-control-allow-origin": "*",
+        });
+      if (request.method === "POST" && url.pathname === "/api/identity") {
+        const { who, nonce } = await bodyOf(request);
+        if (typeof who !== "string" || who === GUEST)
+          return json(response, { error: "没登录" }, 400);
+        const index = plan.people.indexOf(who);
+        const user = {
+          id: String(FIRST_PERSON + (index < 0 ? plan.people.length : index)),
+          username: who,
+          name: who,
+          level: TEST_DEFAULTS.user.level,
+        };
+        const identity = await signer.sign({
+          iss: hostUrl,
+          aud: pageOrigin,
+          user,
+          hongbao: TEST_HONGBAO_ID,
+          nonce: typeof nonce === "string" ? nonce : undefined,
+        });
+        print(`${who} 的身份令牌签给了网页（10 分钟）`);
+        // The token's iat and exp stay this computer's, as a server checks
+        // them; expiresAt is on the red packet's clock, like hb.now().
+        return json(response, {
+          ...identity,
+          expiresAt: iso(Date.parse(identity.expiresAt) + game.offset()),
+        });
+      }
+      if (request.method === "POST" && url.pathname === "/api/end") {
+        const settled = game.end();
+        print(
+          settled.length > 0
+            ? `快进到截止：还没结算的人一起结算：${settled.join("、")}`
+            : "快进到截止",
+        );
+        return json(response, { settled, state: game.state() });
       }
       if (request.method === "POST" && url.pathname === "/api/reset") {
         await reopen();
@@ -564,6 +673,13 @@ export async function startPage({
     hostUrl,
     pageUrl: pageOrigin,
     network: sandbox.network.list ?? null,
+    /** --play: simulate.json's submissions, judged in order. */
+    play: async (say = print) => {
+      for (const { who, input } of plan.submissions ?? []) {
+        const answer = await game.submit(who, input);
+        say(`  ${answer.line}`);
+      }
+    },
     close: async () => {
       hostServer.closeAllConnections();
       pageServer.closeAllConnections();
@@ -585,8 +701,16 @@ export async function pageCommand({
 }) {
   const options = readArgs(args);
   const root = options.folder ? resolve(cwd, options.folder) : dir;
+  if (options.shot)
+    return shotCommand({
+      root,
+      out: join(cwd, "shots"),
+      play: options.play,
+      live: options.live,
+      print,
+    });
   const page = await startPage({ root, ...options, print });
-  print(`假红包页：${page.hostUrl}`);
+  print(`模拟器：${page.hostUrl}`);
   print(
     `网页：${options.folder ? `${options.folder.replace(/\/$/, "")}/` : ""}page/index.html（从 ${page.pageUrl} 打开）`,
   );
@@ -605,4 +729,209 @@ export async function pageCommand({
   });
   await page.close();
   return { exitCode: 0 };
+}
+
+const base64Url = (bytes) =>
+  Buffer.from(bytes)
+    .toString("base64")
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replaceAll("=", "");
+
+/**
+ * 认人 on the fake page: a P-256 key made for this run, signing tokens as
+ * the site does (ES256 JWT, ten minutes); its public half is published at
+ * /api/page-identity/keys on the fake page.
+ */
+async function localSigner() {
+  const { privateKey, publicKey } = await crypto.subtle.generateKey(
+    { name: "ECDSA", namedCurve: "P-256" },
+    true,
+    ["sign", "verify"],
+  );
+  const kid = `local-${crypto.randomUUID().slice(0, 8)}`;
+  const { x, y } = await crypto.subtle.exportKey("jwk", publicKey);
+  const part = (value) =>
+    base64Url(new TextEncoder().encode(JSON.stringify(value)));
+  return {
+    publicKey: { kty: "EC", crv: "P-256", x, y, kid, alg: "ES256", use: "sig" },
+    async sign({ iss, aud, user, hongbao, nonce }) {
+      const issuedAt = Math.floor(Date.now() / 1000);
+      const expires = issuedAt + 600;
+      const signing = `${part({ alg: "ES256", typ: "JWT", kid })}.${part({
+        iss,
+        aud,
+        sub: user.id,
+        username: user.username,
+        name: user.name,
+        level: user.level,
+        hongbao,
+        iat: issuedAt,
+        exp: expires,
+        jti: crypto.randomUUID(),
+        ...(nonce ? { nonce } : {}),
+      })}`;
+      const signature = await crypto.subtle.sign(
+        { name: "ECDSA", hash: "SHA-256" },
+        privateKey,
+        new TextEncoder().encode(signing),
+      );
+      return {
+        token: `${signing}.${base64Url(new Uint8Array(signature))}`,
+        expiresAt: new Date(expires * 1000).toISOString(),
+        user,
+      };
+    },
+  };
+}
+
+/**
+ * A browser to take the shots with (docs/kit-simulator-design.md §4): this
+ * machine's Chrome, then Edge, then a Chromium Playwright downloaded; the
+ * driver is the kit's playwright-core (the site's repository has it
+ * through @playwright/test).
+ */
+async function browserOf() {
+  let chromium;
+  for (const name of ["playwright-core", "@playwright/test"])
+    try {
+      ({ chromium } = await import(name));
+      break;
+    } catch {
+      // The next one.
+    }
+  if (!chromium)
+    throw new KitError(
+      "没有 playwright-core：在开发包目录里运行 npm install（只装驱动，不带浏览器）",
+    );
+  for (const channel of ["chrome", "msedge", undefined])
+    try {
+      return await chromium.launch(channel ? { channel } : {});
+    } catch {
+      // The next one.
+    }
+  throw new KitError(
+    "没找到浏览器：装 Chrome 或 Edge，或者运行 npx playwright install chromium（约 150 MB）",
+  );
+}
+
+/**
+ * npm run page --shot: the simulator in a browser no one sees, three
+ * shots (wide with the page open, the phone with its sheet down, and
+ * up), and what went wrong in the page: its errors, requests that failed,
+ * whether it reached the SDK. Not 0 when something did.
+ */
+export async function shotCommand({ root, out, play, live, print }) {
+  const page = await startPage({ root, port: 0, live, print: () => {} });
+  let browser;
+  try {
+    if (play) {
+      print("先按 simulate.json 提交：");
+      await page.play(print);
+    }
+    browser = await browserOf();
+    const problems = [];
+    const notes = [];
+    const pageOrigin = page.pageUrl;
+    const watch = (tab) => {
+      tab.on("console", (message) => {
+        if (message.type() !== "error") return;
+        const at = message.location();
+        if (!at.url?.startsWith(pageOrigin)) return;
+        problems.push(
+          `网页报错：${message.text()}（${at.url.slice(pageOrigin.length) || "/"}${at.lineNumber ? ` 第 ${at.lineNumber + 1} 行` : ""}）`,
+        );
+      });
+      tab.on("pageerror", (error) =>
+        problems.push(`网页里没接住的异常：${error.message}`),
+      );
+      tab.on("requestfailed", (request) => {
+        if (request.url().startsWith(pageOrigin))
+          problems.push(
+            `加载失败：${request.method()} ${request.url()}（${request.failure()?.errorText ?? "失败"}）`,
+          );
+      });
+      tab.on("response", (response) => {
+        if (response.url().startsWith(pageOrigin) && response.status() >= 400)
+          problems.push(
+            `加载失败：${response.request().method()} ${response.url()}（${response.status()}）`,
+          );
+      });
+    };
+    await mkdir(out, { recursive: true });
+    const shots = [
+      {
+        file: "wide.png",
+        what: "宽屏，网页窗口打开",
+        size: { width: 1440, height: 900 },
+        query: "layout=wide&open=1&accept=1",
+        part: null,
+        connects: true,
+      },
+      {
+        file: "phone.png",
+        what: "手机，抽屉露一条",
+        size: { width: 600, height: 1040 },
+        query: "layout=phone&open=0&accept=1",
+        part: ".phone-screen",
+        connects: false,
+      },
+      {
+        file: "phone-open.png",
+        what: "手机，抽屉拉起",
+        size: { width: 600, height: 1040 },
+        query: "layout=phone&open=1&accept=1",
+        part: ".phone-screen",
+        connects: true,
+      },
+    ];
+    let connected = true;
+    for (const shot of shots) {
+      const tab = await browser.newPage({ viewport: shot.size });
+      watch(tab);
+      await tab.goto(`${page.hostUrl}/?${shot.query}`);
+      await tab.waitForFunction(() => window.__sim?.built === true, null, {
+        timeout: 15_000,
+      });
+      if (shot.connects) {
+        const said = await tab
+          .waitForFunction(
+            () => Object.keys(window.__sim.connected).length > 0,
+            null,
+            { timeout: 8_000 },
+          )
+          .then(
+            () => true,
+            () => false,
+          );
+        connected &&= said;
+      }
+      // Fonts, images and the page's first drawing.
+      await tab.waitForTimeout(1_000);
+      const path = join(out, shot.file);
+      if (shot.part) await tab.locator(shot.part).screenshot({ path });
+      else await tab.screenshot({ path });
+      notes.push(`  ${relative(process.cwd(), path)}  ${shot.what}`);
+      await tab.close();
+    }
+    print("截图：");
+    for (const line of notes) print(line);
+    print(
+      connected
+        ? "✓ 网页接上了红包站的 SDK"
+        : "提醒：网页没有接上红包站的 SDK（hb.ready() 没回来）。不用 SDK 的网页可以不管",
+    );
+    const unique = [...new Set(problems)];
+    if (unique.length === 0) print("✓ 网页没有报错，请求都加载成功");
+    else for (const problem of unique) print(`✗ ${problem}`);
+    print(
+      unique.length === 0
+        ? "没有发现问题：看看三张图，宽屏和手机都对就行"
+        : `发现 ${unique.length} 个问题`,
+    );
+    return { exitCode: unique.length === 0 ? 0 : 1 };
+  } finally {
+    await browser?.close();
+    await page.close();
+  }
 }

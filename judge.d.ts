@@ -278,8 +278,17 @@ export type ParamDeclaration = ParamBase &
     | { type: "switch"; default?: boolean }
     | {
         type: "choice";
-        /** 2–20 个 */
-        options: { value: string; label: string }[];
+        /**
+         * 2–20 个。选项联动：`set` 是选了这一项时改成的别的参数的值（写法同
+         * `default`，金额是整数分），发红包的人之后还能改；`hint` 是选了这一项时
+         * 下拉框下面的说明（最多 60 个字），代替这个参数自己的 `hint`。
+         */
+        options: {
+          value: string;
+          label: string;
+          hint?: string;
+          set?: Record<string, unknown>;
+        }[];
         default?: string;
       }
     | {
@@ -317,13 +326,22 @@ export interface HongbaoRules {
   deadline?: { value: number; unit: "minutes" | "hours" | "days" };
   /** 领取提示的默认值，最多 40 个字 */
   prompt?: string;
-  /** 建议打开领取前人机验证（发红包的人能关） */
+  /**
+   * 建议打开领取前人机验证（发红包的人能关）。默认别写：只有红包作者要求，或者
+   * 玩法很容易被脚本刷时才写；有些网络和浏览器加载不出验证，这些人领不了。
+   */
   humanCheck?: boolean;
+  /**
+   * 建议打开红包页时自动打开附带网页（发红包的人能关）：带网页的玩法都写上。
+   * 有附带网页（`meta.page` 或发红包的人自己填的）才起作用。
+   */
+  pageAutoOpen?: boolean;
   /** 红包标题的默认值，最多 100 个字 */
   title?: string;
   /**
    * 说明的默认值，最多 2000 个字。写法同发红包时的说明：一个回车就换行，
-   * `[文字](#附带网页)` 是打开附带网页的按钮（没有网页时只剩文字）。
+   * `[文字](#附带网页)` 是打开附带网页的按钮（没有网页时只剩文字）。带网页的
+   * 第一行就放这个按钮：说明长了会折叠，放在后面要点“展开”才看得到。
    */
   note?: string;
 }

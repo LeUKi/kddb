@@ -262,7 +262,8 @@
               "name": "tester",
               "at": 1793419200000,
               "cardId": 1,
-              "index": 0
+              "index": 0,
+              "size": 5
             },
             "stats": {
               "digs": 1,
@@ -276,7 +277,9 @@
                 "text": "挖到了绿宝石",
                 "at": 1793419200000,
                 "cardId": 1,
-                "index": 0
+                "index": 0,
+                "size": 5,
+                "actorKey": "u:10000"
               }
             ]
           }
@@ -315,7 +318,8 @@
             "name": "tester",
             "at": 1793419200000,
             "cardId": 1,
-            "index": 0
+            "index": 0,
+            "size": 5
           }
         },
         "announce": "A1：挖到了绿宝石",
@@ -2386,7 +2390,8 @@
               "name": "tester",
               "at": 1793419200000,
               "cardId": 1,
-              "index": 24
+              "index": 24,
+              "size": 5
             },
             "stats": {
               "digs": 1,
@@ -2400,7 +2405,9 @@
                 "text": "通过望远镜获得了一条私有情报",
                 "at": 1793419200000,
                 "cardId": 1,
-                "index": 24
+                "index": 24,
+                "size": 5,
+                "actorKey": "u:10000"
               }
             ]
           }
@@ -2692,7 +2699,8 @@
                   "name": "小明",
                   "at": 1793419200000,
                   "cardId": 1,
-                  "index": 24
+                  "index": 24,
+                  "size": 5
                 },
                 "stats": {
                   "digs": 1,
@@ -2706,7 +2714,9 @@
                     "text": "通过望远镜获得了一条私有情报",
                     "at": 1793419200000,
                     "cardId": 1,
-                    "index": 24
+                    "index": 24,
+                    "size": 5,
+                    "actorKey": "u:10001"
                   }
                 ]
               }
@@ -2914,7 +2924,8 @@
                   "name": "小红",
                   "at": 1793419201000,
                   "cardId": 1,
-                  "index": 0
+                  "index": 0,
+                  "size": 5
                 },
                 "stats": {
                   "digs": 2,
@@ -2928,7 +2939,9 @@
                     "text": "挖到了绿宝石",
                     "at": 1793419201000,
                     "cardId": 1,
-                    "index": 0
+                    "index": 0,
+                    "size": 5,
+                    "actorKey": "u:10002"
                   },
                   {
                     "id": 1,
@@ -2937,7 +2950,9 @@
                     "text": "通过望远镜获得了一条私有情报",
                     "at": 1793419200000,
                     "cardId": 1,
-                    "index": 24
+                    "index": 24,
+                    "size": 5,
+                    "actorKey": "u:10001"
                   }
                 ]
               }
@@ -7002,7 +7017,8 @@
               },
               "lastMove": {
                 "cardId": 1,
-                "index": 14
+                "index": 14,
+                "size": 5
               },
               "nextEventId": 2
             }
@@ -7040,7 +7056,8 @@
               },
               "lastMove": {
                 "cardId": 1,
-                "index": 15
+                "index": 15,
+                "size": 5
               },
               "nextEventId": 3
             }
@@ -7078,7 +7095,8 @@
               },
               "lastMove": {
                 "cardId": 1,
-                "index": 20
+                "index": 20,
+                "size": 5
               },
               "nextEventId": 4
             }
@@ -7116,7 +7134,8 @@
               },
               "lastMove": {
                 "cardId": 2,
-                "index": 3
+                "index": 3,
+                "size": 5
               },
               "nextEventId": 5
             }
@@ -7154,7 +7173,8 @@
               },
               "lastMove": {
                 "cardId": 2,
-                "index": 23
+                "index": 23,
+                "size": 5
               },
               "nextEventId": 6
             }
@@ -7192,7 +7212,8 @@
               },
               "lastMove": {
                 "cardId": 2,
-                "index": 1
+                "index": 1,
+                "size": 5
               },
               "nextEventId": 7
             }
@@ -7230,7 +7251,8 @@
               },
               "lastMove": {
                 "cardId": 3,
-                "index": 1
+                "index": 1,
+                "size": 5
               },
               "nextEventId": 8
             }
@@ -7268,7 +7290,8 @@
               },
               "lastMove": {
                 "cardId": 3,
-                "index": 4
+                "index": 4,
+                "size": 5
               },
               "nextEventId": 9
             }
@@ -7306,7 +7329,8 @@
               },
               "lastMove": {
                 "cardId": 3,
-                "index": 7
+                "index": 7,
+                "size": 5
               },
               "nextEventId": 10
             }
@@ -7344,7 +7368,8 @@
               },
               "lastMove": {
                 "cardId": 4,
-                "index": 4
+                "index": 4,
+                "size": 5
               },
               "nextEventId": 11
             }
@@ -7382,7 +7407,8 @@
               },
               "lastMove": {
                 "cardId": 4,
-                "index": 17
+                "index": 17,
+                "size": 5
               },
               "nextEventId": 12,
               "feed": [
@@ -7393,7 +7419,9 @@
                   "text": "双铁镐增加了 3 次机会",
                   "at": 1793419800000,
                   "cardId": 4,
-                  "index": 17
+                  "index": 17,
+                  "size": 5,
+                  "actorKey": "u:10001"
                 },
                 {
                   "id": 10,
@@ -7402,7 +7430,9 @@
                   "text": "双铁镐增加了 3 次机会",
                   "at": 1793419740000,
                   "cardId": 4,
-                  "index": 4
+                  "index": 4,
+                  "size": 5,
+                  "actorKey": "u:10001"
                 },
                 {
                   "id": 9,
@@ -7411,7 +7441,9 @@
                   "text": "末影珍珠把大家传送到了下一张卡",
                   "at": 1793419680000,
                   "cardId": 3,
-                  "index": 7
+                  "index": 7,
+                  "size": 5,
+                  "actorKey": "u:10001"
                 },
                 {
                   "id": 8,
@@ -7420,7 +7452,9 @@
                   "text": "双铁镐增加了 3 次机会",
                   "at": 1793419620000,
                   "cardId": 3,
-                  "index": 4
+                  "index": 4,
+                  "size": 5,
+                  "actorKey": "u:10001"
                 },
                 {
                   "id": 7,
@@ -7429,7 +7463,9 @@
                   "text": "双铁镐增加了 3 次机会",
                   "at": 1793419560000,
                   "cardId": 3,
-                  "index": 1
+                  "index": 1,
+                  "size": 5,
+                  "actorKey": "u:10001"
                 },
                 {
                   "id": 6,
@@ -7438,7 +7474,9 @@
                   "text": "末影珍珠把大家传送到了下一张卡",
                   "at": 1793419500000,
                   "cardId": 2,
-                  "index": 1
+                  "index": 1,
+                  "size": 5,
+                  "actorKey": "u:10001"
                 },
                 {
                   "id": 5,
@@ -7447,7 +7485,9 @@
                   "text": "双铁镐增加了 3 次机会",
                   "at": 1793419440000,
                   "cardId": 2,
-                  "index": 23
+                  "index": 23,
+                  "size": 5,
+                  "actorKey": "u:10001"
                 },
                 {
                   "id": 4,
@@ -7456,7 +7496,9 @@
                   "text": "双铁镐增加了 3 次机会",
                   "at": 1793419380000,
                   "cardId": 2,
-                  "index": 3
+                  "index": 3,
+                  "size": 5,
+                  "actorKey": "u:10001"
                 },
                 {
                   "id": 3,
@@ -7465,7 +7507,9 @@
                   "text": "末影珍珠把大家传送到了下一张卡",
                   "at": 1793419320000,
                   "cardId": 1,
-                  "index": 20
+                  "index": 20,
+                  "size": 5,
+                  "actorKey": "u:10001"
                 },
                 {
                   "id": 2,
@@ -7474,7 +7518,9 @@
                   "text": "双铁镐增加了 3 次机会",
                   "at": 1793419260000,
                   "cardId": 1,
-                  "index": 15
+                  "index": 15,
+                  "size": 5,
+                  "actorKey": "u:10001"
                 }
               ]
             },
@@ -7488,7 +7534,9 @@
                     "text": "双铁镐增加了 3 次机会",
                     "at": 1793419800000,
                     "cardId": 4,
-                    "index": 17
+                    "index": 17,
+                    "size": 5,
+                    "actorKey": "u:10001"
                   },
                   {
                     "id": 10,
@@ -7497,7 +7545,9 @@
                     "text": "双铁镐增加了 3 次机会",
                     "at": 1793419740000,
                     "cardId": 4,
-                    "index": 4
+                    "index": 4,
+                    "size": 5,
+                    "actorKey": "u:10001"
                   },
                   {
                     "id": 9,
@@ -7506,7 +7556,9 @@
                     "text": "末影珍珠把大家传送到了下一张卡",
                     "at": 1793419680000,
                     "cardId": 3,
-                    "index": 7
+                    "index": 7,
+                    "size": 5,
+                    "actorKey": "u:10001"
                   },
                   {
                     "id": 8,
@@ -7515,7 +7567,9 @@
                     "text": "双铁镐增加了 3 次机会",
                     "at": 1793419620000,
                     "cardId": 3,
-                    "index": 4
+                    "index": 4,
+                    "size": 5,
+                    "actorKey": "u:10001"
                   },
                   {
                     "id": 7,
@@ -7524,7 +7578,9 @@
                     "text": "双铁镐增加了 3 次机会",
                     "at": 1793419560000,
                     "cardId": 3,
-                    "index": 1
+                    "index": 1,
+                    "size": 5,
+                    "actorKey": "u:10001"
                   },
                   {
                     "id": 6,
@@ -7533,7 +7589,9 @@
                     "text": "末影珍珠把大家传送到了下一张卡",
                     "at": 1793419500000,
                     "cardId": 2,
-                    "index": 1
+                    "index": 1,
+                    "size": 5,
+                    "actorKey": "u:10001"
                   },
                   {
                     "id": 5,
@@ -7542,7 +7600,9 @@
                     "text": "双铁镐增加了 3 次机会",
                     "at": 1793419440000,
                     "cardId": 2,
-                    "index": 23
+                    "index": 23,
+                    "size": 5,
+                    "actorKey": "u:10001"
                   },
                   {
                     "id": 4,
@@ -7551,7 +7611,9 @@
                     "text": "双铁镐增加了 3 次机会",
                     "at": 1793419380000,
                     "cardId": 2,
-                    "index": 3
+                    "index": 3,
+                    "size": 5,
+                    "actorKey": "u:10001"
                   },
                   {
                     "id": 3,
@@ -7560,7 +7622,9 @@
                     "text": "末影珍珠把大家传送到了下一张卡",
                     "at": 1793419320000,
                     "cardId": 1,
-                    "index": 20
+                    "index": 20,
+                    "size": 5,
+                    "actorKey": "u:10001"
                   },
                   {
                     "id": 2,
@@ -7569,7 +7633,9 @@
                     "text": "双铁镐增加了 3 次机会",
                     "at": 1793419260000,
                     "cardId": 1,
-                    "index": 15
+                    "index": 15,
+                    "size": 5,
+                    "actorKey": "u:10001"
                   }
                 ]
               }
@@ -9188,6 +9254,1550 @@
         "messageIncludes": "dig 2 1",
         "announce": ""
       }
+    },
+    {
+      "name": "v2 6×6：最后一格按实际坐标和规格挖掘，事件保存原规格",
+      "now": 1793419200000,
+      "state": {
+        "version": 2,
+        "size": 6,
+        "composition": {
+          "emerald": 14,
+          "diamond": 4,
+          "apple": 2,
+          "totem": 3,
+          "tnt": 6,
+          "pearl": 1,
+          "shield": 3,
+          "spyglass": 3
+        },
+        "rules": {
+          "initialChances": 7,
+          "waitSeconds": 10,
+          "smallReward": 10,
+          "bigMultiplier": 5,
+          "totemBonus": 3,
+          "tntPercent": 25,
+          "version": 2,
+          "difficulty": "hard",
+          "boardSpec": "6",
+          "compositionVariation": "fixed"
+        },
+        "cardId": 1,
+        "deck": [ "spyglass", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "diamond", "diamond", "diamond", "diamond", "apple", "apple", "totem", "totem", "totem", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "pearl", "shield", "shield", "shield", "spyglass", "spyglass", "emerald" ],
+        "opened": [ null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null ],
+        "lastMove": null,
+        "stats": {
+          "digs": 0,
+          "players": 0
+        },
+        "feed": [],
+        "nextEventId": 1
+      },
+      "input": "dig 1 36",
+      "expect": {
+        "add": 10,
+        "pending": 10,
+        "settled": null,
+        "playerIncludes": {
+          "state": {
+            "version": 2,
+            "chances": 6,
+            "lastResult": {
+              "cardId": 1,
+              "index": 35,
+              "size": 6,
+              "kind": "emerald"
+            }
+          }
+        },
+        "stateIncludes": {
+          "version": 2,
+          "size": 6,
+          "composition": {
+            "emerald": 14,
+            "diamond": 4,
+            "apple": 2,
+            "totem": 3,
+            "tnt": 6,
+            "pearl": 1,
+            "shield": 3,
+            "spyglass": 3
+          },
+          "lastMove": {
+            "size": 6,
+            "cardId": 1,
+            "index": 35
+          }
+        },
+        "viewIncludes": {
+          "data": {
+            "version": 2,
+            "size": 6,
+            "composition": {
+              "emerald": 14,
+              "diamond": 4,
+              "apple": 2,
+              "totem": 3,
+              "tnt": 6,
+              "pearl": 1,
+              "shield": 3,
+              "spyglass": 3
+            },
+            "rules": {
+              "initialChances": 7,
+              "waitSeconds": 10,
+              "smallReward": 10,
+              "bigMultiplier": 5,
+              "totemBonus": 3,
+              "tntPercent": 25,
+              "version": 2,
+              "difficulty": "hard",
+              "boardSpec": "6",
+              "compositionVariation": "fixed"
+            }
+          }
+        },
+        "announce": "F6：挖到了绿宝石"
+      }
+    },
+    {
+      "name": "v2 7×7：最后一格按实际坐标和规格挖掘，事件保存原规格",
+      "now": 1793419200000,
+      "state": {
+        "version": 2,
+        "size": 7,
+        "composition": {
+          "emerald": 20,
+          "diamond": 6,
+          "apple": 2,
+          "totem": 4,
+          "tnt": 8,
+          "pearl": 1,
+          "shield": 4,
+          "spyglass": 4
+        },
+        "rules": {
+          "initialChances": 7,
+          "waitSeconds": 10,
+          "smallReward": 10,
+          "bigMultiplier": 5,
+          "totemBonus": 3,
+          "tntPercent": 25,
+          "version": 2,
+          "difficulty": "hard",
+          "boardSpec": "7",
+          "compositionVariation": "fixed"
+        },
+        "cardId": 1,
+        "deck": [ "spyglass", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "diamond", "diamond", "diamond", "diamond", "diamond", "diamond", "apple", "apple", "totem", "totem", "totem", "totem", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "pearl", "shield", "shield", "shield", "shield", "spyglass", "spyglass", "spyglass", "emerald" ],
+        "opened": [ null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null ],
+        "lastMove": null,
+        "stats": {
+          "digs": 0,
+          "players": 0
+        },
+        "feed": [],
+        "nextEventId": 1
+      },
+      "input": "dig 1 49",
+      "expect": {
+        "add": 10,
+        "pending": 10,
+        "settled": null,
+        "playerIncludes": {
+          "state": {
+            "version": 2,
+            "chances": 6,
+            "lastResult": {
+              "cardId": 1,
+              "index": 48,
+              "size": 7,
+              "kind": "emerald"
+            }
+          }
+        },
+        "stateIncludes": {
+          "version": 2,
+          "size": 7,
+          "composition": {
+            "emerald": 20,
+            "diamond": 6,
+            "apple": 2,
+            "totem": 4,
+            "tnt": 8,
+            "pearl": 1,
+            "shield": 4,
+            "spyglass": 4
+          },
+          "lastMove": {
+            "size": 7,
+            "cardId": 1,
+            "index": 48
+          }
+        },
+        "viewIncludes": {
+          "data": {
+            "version": 2,
+            "size": 7,
+            "composition": {
+              "emerald": 20,
+              "diamond": 6,
+              "apple": 2,
+              "totem": 4,
+              "tnt": 8,
+              "pearl": 1,
+              "shield": 4,
+              "spyglass": 4
+            },
+            "rules": {
+              "initialChances": 7,
+              "waitSeconds": 10,
+              "smallReward": 10,
+              "bigMultiplier": 5,
+              "totemBonus": 3,
+              "tntPercent": 25,
+              "version": 2,
+              "difficulty": "hard",
+              "boardSpec": "7",
+              "compositionVariation": "fixed"
+            }
+          }
+        },
+        "announce": "G7：挖到了绿宝石"
+      }
+    },
+    {
+      "name": "v2 5×5：超过本卡范围的编号拒绝且不建个人状态",
+      "now": 1793419200000,
+      "state": {
+        "version": 2,
+        "size": 5,
+        "composition": {
+          "emerald": 11,
+          "diamond": 3,
+          "apple": 1,
+          "totem": 2,
+          "tnt": 4,
+          "pearl": 1,
+          "shield": 2,
+          "spyglass": 1
+        },
+        "rules": {
+          "initialChances": 7,
+          "waitSeconds": 10,
+          "smallReward": 10,
+          "bigMultiplier": 5,
+          "totemBonus": 3,
+          "tntPercent": 25,
+          "version": 2,
+          "difficulty": "hard",
+          "boardSpec": "5",
+          "compositionVariation": "fixed"
+        },
+        "cardId": 1,
+        "deck": [ "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "diamond", "diamond", "diamond", "apple", "totem", "totem", "tnt", "tnt", "tnt", "tnt", "pearl", "shield", "shield", "spyglass" ],
+        "opened": [ null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null ],
+        "lastMove": null,
+        "stats": {
+          "digs": 0,
+          "players": 0
+        },
+        "feed": [],
+        "nextEventId": 1
+      },
+      "input": "dig 1 26",
+      "expect": {
+        "add": 0,
+        "pending": 0,
+        "state": {
+          "version": 2,
+          "size": 5,
+          "composition": {
+            "emerald": 11,
+            "diamond": 3,
+            "apple": 1,
+            "totem": 2,
+            "tnt": 4,
+            "pearl": 1,
+            "shield": 2,
+            "spyglass": 1
+          },
+          "rules": {
+            "initialChances": 7,
+            "waitSeconds": 10,
+            "smallReward": 10,
+            "bigMultiplier": 5,
+            "totemBonus": 3,
+            "tntPercent": 25,
+            "version": 2,
+            "difficulty": "hard",
+            "boardSpec": "5",
+            "compositionVariation": "fixed"
+          },
+          "cardId": 1,
+          "deck": [ "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "diamond", "diamond", "diamond", "apple", "totem", "totem", "tnt", "tnt", "tnt", "tnt", "pearl", "shield", "shield", "spyglass" ],
+          "opened": [ null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null ],
+          "lastMove": null,
+          "stats": {
+            "digs": 0,
+            "players": 0
+          },
+          "feed": [],
+          "nextEventId": 1
+        },
+        "player": {
+          "state": null,
+          "view": null
+        },
+        "view": null,
+        "announce": "",
+        "messageIncludes": "1–25"
+      }
+    },
+    {
+      "name": "v2 6×6：超过本卡范围的编号拒绝且不建个人状态",
+      "now": 1793419200000,
+      "state": {
+        "version": 2,
+        "size": 6,
+        "composition": {
+          "emerald": 14,
+          "diamond": 4,
+          "apple": 2,
+          "totem": 3,
+          "tnt": 6,
+          "pearl": 1,
+          "shield": 3,
+          "spyglass": 3
+        },
+        "rules": {
+          "initialChances": 7,
+          "waitSeconds": 10,
+          "smallReward": 10,
+          "bigMultiplier": 5,
+          "totemBonus": 3,
+          "tntPercent": 25,
+          "version": 2,
+          "difficulty": "hard",
+          "boardSpec": "6",
+          "compositionVariation": "fixed"
+        },
+        "cardId": 1,
+        "deck": [ "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "diamond", "diamond", "diamond", "diamond", "apple", "apple", "totem", "totem", "totem", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "pearl", "shield", "shield", "shield", "spyglass", "spyglass", "spyglass" ],
+        "opened": [ null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null ],
+        "lastMove": null,
+        "stats": {
+          "digs": 0,
+          "players": 0
+        },
+        "feed": [],
+        "nextEventId": 1
+      },
+      "input": "dig 1 37",
+      "expect": {
+        "add": 0,
+        "pending": 0,
+        "state": {
+          "version": 2,
+          "size": 6,
+          "composition": {
+            "emerald": 14,
+            "diamond": 4,
+            "apple": 2,
+            "totem": 3,
+            "tnt": 6,
+            "pearl": 1,
+            "shield": 3,
+            "spyglass": 3
+          },
+          "rules": {
+            "initialChances": 7,
+            "waitSeconds": 10,
+            "smallReward": 10,
+            "bigMultiplier": 5,
+            "totemBonus": 3,
+            "tntPercent": 25,
+            "version": 2,
+            "difficulty": "hard",
+            "boardSpec": "6",
+            "compositionVariation": "fixed"
+          },
+          "cardId": 1,
+          "deck": [ "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "diamond", "diamond", "diamond", "diamond", "apple", "apple", "totem", "totem", "totem", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "pearl", "shield", "shield", "shield", "spyglass", "spyglass", "spyglass" ],
+          "opened": [ null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null ],
+          "lastMove": null,
+          "stats": {
+            "digs": 0,
+            "players": 0
+          },
+          "feed": [],
+          "nextEventId": 1
+        },
+        "player": {
+          "state": null,
+          "view": null
+        },
+        "view": null,
+        "announce": "",
+        "messageIncludes": "1–36"
+      }
+    },
+    {
+      "name": "v2 7×7：超过本卡范围的编号拒绝且不建个人状态",
+      "now": 1793419200000,
+      "state": {
+        "version": 2,
+        "size": 7,
+        "composition": {
+          "emerald": 20,
+          "diamond": 6,
+          "apple": 2,
+          "totem": 4,
+          "tnt": 8,
+          "pearl": 1,
+          "shield": 4,
+          "spyglass": 4
+        },
+        "rules": {
+          "initialChances": 7,
+          "waitSeconds": 10,
+          "smallReward": 10,
+          "bigMultiplier": 5,
+          "totemBonus": 3,
+          "tntPercent": 25,
+          "version": 2,
+          "difficulty": "hard",
+          "boardSpec": "7",
+          "compositionVariation": "fixed"
+        },
+        "cardId": 1,
+        "deck": [ "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "diamond", "diamond", "diamond", "diamond", "diamond", "diamond", "apple", "apple", "totem", "totem", "totem", "totem", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "pearl", "shield", "shield", "shield", "shield", "spyglass", "spyglass", "spyglass", "spyglass" ],
+        "opened": [ null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null ],
+        "lastMove": null,
+        "stats": {
+          "digs": 0,
+          "players": 0
+        },
+        "feed": [],
+        "nextEventId": 1
+      },
+      "input": "dig 1 50",
+      "expect": {
+        "add": 0,
+        "pending": 0,
+        "state": {
+          "version": 2,
+          "size": 7,
+          "composition": {
+            "emerald": 20,
+            "diamond": 6,
+            "apple": 2,
+            "totem": 4,
+            "tnt": 8,
+            "pearl": 1,
+            "shield": 4,
+            "spyglass": 4
+          },
+          "rules": {
+            "initialChances": 7,
+            "waitSeconds": 10,
+            "smallReward": 10,
+            "bigMultiplier": 5,
+            "totemBonus": 3,
+            "tntPercent": 25,
+            "version": 2,
+            "difficulty": "hard",
+            "boardSpec": "7",
+            "compositionVariation": "fixed"
+          },
+          "cardId": 1,
+          "deck": [ "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "diamond", "diamond", "diamond", "diamond", "diamond", "diamond", "apple", "apple", "totem", "totem", "totem", "totem", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "pearl", "shield", "shield", "shield", "shield", "spyglass", "spyglass", "spyglass", "spyglass" ],
+          "opened": [ null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null ],
+          "lastMove": null,
+          "stats": {
+            "digs": 0,
+            "players": 0
+          },
+          "feed": [],
+          "nextEventId": 1
+        },
+        "player": {
+          "state": null,
+          "view": null
+        },
+        "view": null,
+        "announce": "",
+        "messageIncludes": "1–49"
+      }
+    },
+    {
+      "name": "v2 七列抢格失败：G7 保持坐标、机会和接棒记录",
+      "now": 1793419200000,
+      "state": {
+        "version": 2,
+        "size": 7,
+        "composition": {
+          "emerald": 20,
+          "diamond": 6,
+          "apple": 2,
+          "totem": 4,
+          "tnt": 8,
+          "pearl": 1,
+          "shield": 4,
+          "spyglass": 4
+        },
+        "rules": {
+          "initialChances": 7,
+          "waitSeconds": 10,
+          "smallReward": 10,
+          "bigMultiplier": 5,
+          "totemBonus": 3,
+          "tntPercent": 25,
+          "version": 2,
+          "difficulty": "hard",
+          "boardSpec": "7",
+          "compositionVariation": "fixed"
+        },
+        "cardId": 1,
+        "deck": [ "spyglass", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "diamond", "diamond", "diamond", "diamond", "diamond", "diamond", "apple", "apple", "totem", "totem", "totem", "totem", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "pearl", "shield", "shield", "shield", "shield", "spyglass", "spyglass", "spyglass", "emerald" ],
+        "opened": [ null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, { "by": "历史玩家", "actorKey": "u:999", "at": 1793419199999 } ],
+        "lastMove": {
+          "name": "历史玩家",
+          "actorKey": "u:999",
+          "at": 1793419199999,
+          "cardId": 1,
+          "index": 48,
+          "size": 7
+        },
+        "stats": {
+          "digs": 1,
+          "players": 1
+        },
+        "feed": [],
+        "nextEventId": 1
+      },
+      "input": "dig 1 49",
+      "expect": {
+        "add": 0,
+        "state": {
+          "version": 2,
+          "size": 7,
+          "composition": {
+            "emerald": 20,
+            "diamond": 6,
+            "apple": 2,
+            "totem": 4,
+            "tnt": 8,
+            "pearl": 1,
+            "shield": 4,
+            "spyglass": 4
+          },
+          "rules": {
+            "initialChances": 7,
+            "waitSeconds": 10,
+            "smallReward": 10,
+            "bigMultiplier": 5,
+            "totemBonus": 3,
+            "tntPercent": 25,
+            "version": 2,
+            "difficulty": "hard",
+            "boardSpec": "7",
+            "compositionVariation": "fixed"
+          },
+          "cardId": 1,
+          "deck": [ "spyglass", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "diamond", "diamond", "diamond", "diamond", "diamond", "diamond", "apple", "apple", "totem", "totem", "totem", "totem", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "pearl", "shield", "shield", "shield", "shield", "spyglass", "spyglass", "spyglass", "emerald" ],
+          "opened": [ null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, { "by": "历史玩家", "actorKey": "u:999", "at": 1793419199999 } ],
+          "lastMove": {
+            "name": "历史玩家",
+            "actorKey": "u:999",
+            "at": 1793419199999,
+            "cardId": 1,
+            "index": 48,
+            "size": 7
+          },
+          "stats": {
+            "digs": 1,
+            "players": 1
+          },
+          "feed": [],
+          "nextEventId": 1
+        },
+        "player": {
+          "state": null,
+          "view": null
+        },
+        "announce": "",
+        "messageIncludes": "G7 已被挖开"
+      }
+    },
+    {
+      "name": "v2 旧七列卡的高编号指令：先拒绝旧卡，不改投到当前五列卡",
+      "now": 1793419200000,
+      "state": {
+        "version": 2,
+        "size": 5,
+        "composition": {
+          "emerald": 11,
+          "diamond": 3,
+          "apple": 1,
+          "totem": 2,
+          "tnt": 4,
+          "pearl": 1,
+          "shield": 2,
+          "spyglass": 1
+        },
+        "rules": {
+          "initialChances": 7,
+          "waitSeconds": 10,
+          "smallReward": 10,
+          "bigMultiplier": 5,
+          "totemBonus": 3,
+          "tntPercent": 25,
+          "version": 2,
+          "difficulty": "hard",
+          "boardSpec": "5",
+          "compositionVariation": "fixed"
+        },
+        "cardId": 2,
+        "deck": [ "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "diamond", "diamond", "diamond", "apple", "totem", "totem", "tnt", "tnt", "tnt", "tnt", "pearl", "shield", "shield", "spyglass" ],
+        "opened": [ null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null ],
+        "lastMove": null,
+        "stats": {
+          "digs": 0,
+          "players": 0
+        },
+        "feed": [],
+        "nextEventId": 1
+      },
+      "input": "dig 1 49",
+      "expect": {
+        "add": 0,
+        "state": {
+          "version": 2,
+          "size": 5,
+          "composition": {
+            "emerald": 11,
+            "diamond": 3,
+            "apple": 1,
+            "totem": 2,
+            "tnt": 4,
+            "pearl": 1,
+            "shield": 2,
+            "spyglass": 1
+          },
+          "rules": {
+            "initialChances": 7,
+            "waitSeconds": 10,
+            "smallReward": 10,
+            "bigMultiplier": 5,
+            "totemBonus": 3,
+            "tntPercent": 25,
+            "version": 2,
+            "difficulty": "hard",
+            "boardSpec": "5",
+            "compositionVariation": "fixed"
+          },
+          "cardId": 2,
+          "deck": [ "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "diamond", "diamond", "diamond", "apple", "totem", "totem", "tnt", "tnt", "tnt", "tnt", "pearl", "shield", "shield", "spyglass" ],
+          "opened": [ null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null ],
+          "lastMove": null,
+          "stats": {
+            "digs": 0,
+            "players": 0
+          },
+          "feed": [],
+          "nextEventId": 1
+        },
+        "player": {
+          "state": null,
+          "view": null
+        },
+        "announce": "",
+        "messageIncludes": "卡片已经更换"
+      }
+    },
+    {
+      "name": "v2 生效规则存档：外部参数换成地狱和小卡仍按原卡百分之十五扣款",
+      "now": 1793419200000,
+      "state": {
+        "version": 2,
+        "size": 7,
+        "composition": {
+          "emerald": 22,
+          "diamond": 6,
+          "apple": 2,
+          "totem": 4,
+          "tnt": 6,
+          "pearl": 1,
+          "shield": 4,
+          "spyglass": 4
+        },
+        "rules": {
+          "initialChances": 9,
+          "waitSeconds": 60,
+          "smallReward": 17,
+          "bigMultiplier": 5,
+          "totemBonus": 3,
+          "tntPercent": 15,
+          "version": 2,
+          "difficulty": "easy",
+          "boardSpec": "7",
+          "compositionVariation": "fixed"
+        },
+        "cardId": 1,
+        "deck": [ "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "diamond", "diamond", "diamond", "diamond", "diamond", "diamond", "apple", "apple", "totem", "totem", "totem", "totem", "spyglass", "tnt", "tnt", "tnt", "tnt", "tnt", "pearl", "shield", "shield", "shield", "shield", "spyglass", "spyglass", "spyglass", "tnt" ],
+        "opened": [ null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null ],
+        "lastMove": null,
+        "stats": {
+          "digs": 0,
+          "players": 0
+        },
+        "feed": [],
+        "nextEventId": 1
+      },
+      "params": {
+        "difficulty": "hell",
+        "boardSpec": "5",
+        "initialChances": 1,
+        "smallReward": 200,
+        "waitSeconds": 1,
+        "tntPercent": 100,
+        "compositionVariation": "slight"
+      },
+      "players": {
+        "tester": {
+          "pending": 101,
+          "state": {
+            "version": 2,
+            "actorKey": "u:10000",
+            "chances": 4,
+            "shield": false,
+            "peeks": [],
+            "digs": 1,
+            "status": "playing",
+            "lastResult": null
+          }
+        }
+      },
+      "input": "dig 1 49",
+      "expect": {
+        "add": -15,
+        "pending": 86,
+        "settled": null,
+        "stateIncludes": {
+          "version": 2,
+          "size": 7,
+          "rules": {
+            "initialChances": 9,
+            "waitSeconds": 60,
+            "smallReward": 17,
+            "bigMultiplier": 5,
+            "totemBonus": 3,
+            "tntPercent": 15,
+            "version": 2,
+            "difficulty": "easy",
+            "boardSpec": "7",
+            "compositionVariation": "fixed"
+          },
+          "composition": {
+            "emerald": 22,
+            "diamond": 6,
+            "apple": 2,
+            "totem": 4,
+            "tnt": 6,
+            "pearl": 1,
+            "shield": 4,
+            "spyglass": 4
+          }
+        },
+        "playerIncludes": {
+          "state": {
+            "chances": 3,
+            "lastResult": {
+              "kind": "tnt",
+              "amount": -15,
+              "size": 7
+            }
+          }
+        },
+        "viewIncludes": {
+          "data": {
+            "rules": {
+              "initialChances": 9,
+              "waitSeconds": 60,
+              "smallReward": 17,
+              "bigMultiplier": 5,
+              "totemBonus": 3,
+              "tntPercent": 15,
+              "version": 2,
+              "difficulty": "easy",
+              "boardSpec": "7",
+              "compositionVariation": "fixed"
+            }
+          }
+        },
+        "messageIncludes": "15%"
+      }
+    },
+    {
+      "name": "v2 存档等待规则：改传一秒不能绕过本卡六十秒等待",
+      "now": 1793419200000,
+      "state": {
+        "version": 2,
+        "size": 6,
+        "composition": {
+          "emerald": 14,
+          "diamond": 4,
+          "apple": 2,
+          "totem": 3,
+          "tnt": 6,
+          "pearl": 1,
+          "shield": 3,
+          "spyglass": 3
+        },
+        "rules": {
+          "initialChances": 7,
+          "waitSeconds": 60,
+          "smallReward": 10,
+          "bigMultiplier": 5,
+          "totemBonus": 3,
+          "tntPercent": 25,
+          "version": 2,
+          "difficulty": "hard",
+          "boardSpec": "6",
+          "compositionVariation": "fixed"
+        },
+        "cardId": 1,
+        "deck": [ "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "diamond", "diamond", "diamond", "diamond", "apple", "apple", "totem", "totem", "totem", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "pearl", "shield", "shield", "shield", "spyglass", "spyglass", "spyglass" ],
+        "opened": [ null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null ],
+        "lastMove": {
+          "actorKey": "u:10000",
+          "name": "tester",
+          "at": 1793419140001,
+          "cardId": 1,
+          "index": 1,
+          "size": 6
+        },
+        "stats": {
+          "digs": 0,
+          "players": 0
+        },
+        "feed": [],
+        "nextEventId": 1
+      },
+      "params": {
+        "waitSeconds": 1
+      },
+      "input": "dig 1 1",
+      "expect": {
+        "add": 0,
+        "state": {
+          "version": 2,
+          "size": 6,
+          "composition": {
+            "emerald": 14,
+            "diamond": 4,
+            "apple": 2,
+            "totem": 3,
+            "tnt": 6,
+            "pearl": 1,
+            "shield": 3,
+            "spyglass": 3
+          },
+          "rules": {
+            "initialChances": 7,
+            "waitSeconds": 60,
+            "smallReward": 10,
+            "bigMultiplier": 5,
+            "totemBonus": 3,
+            "tntPercent": 25,
+            "version": 2,
+            "difficulty": "hard",
+            "boardSpec": "6",
+            "compositionVariation": "fixed"
+          },
+          "cardId": 1,
+          "deck": [ "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "diamond", "diamond", "diamond", "diamond", "apple", "apple", "totem", "totem", "totem", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "pearl", "shield", "shield", "shield", "spyglass", "spyglass", "spyglass" ],
+          "opened": [ null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null ],
+          "lastMove": {
+            "actorKey": "u:10000",
+            "name": "tester",
+            "at": 1793419140001,
+            "cardId": 1,
+            "index": 1,
+            "size": 6
+          },
+          "stats": {
+            "digs": 0,
+            "players": 0
+          },
+          "feed": [],
+          "nextEventId": 1
+        },
+        "player": {
+          "state": null,
+          "view": null
+        },
+        "messageIncludes": "1 秒后再挖",
+        "announce": ""
+      }
+    },
+    {
+      "name": "v2 原生选档后手改：地狱保留六次与百分之四十，固定六列仍用十二个TNT",
+      "now": 1793419200000,
+      "params": {
+        "difficulty": "hell",
+        "boardSpec": "6",
+        "initialChances": 6,
+        "tntPercent": 40,
+        "compositionVariation": "fixed"
+      },
+      "input": "dig 1 1",
+      "expect": {
+        "stateIncludes": {
+          "version": 2,
+          "size": 6,
+          "composition": {
+            "emerald": 8,
+            "diamond": 4,
+            "apple": 2,
+            "totem": 3,
+            "tnt": 12,
+            "pearl": 1,
+            "shield": 3,
+            "spyglass": 3
+          },
+          "rules": {
+            "initialChances": 6,
+            "waitSeconds": 10,
+            "smallReward": 10,
+            "bigMultiplier": 5,
+            "totemBonus": 3,
+            "tntPercent": 40,
+            "version": 2,
+            "difficulty": "hell",
+            "boardSpec": "6",
+            "compositionVariation": "fixed"
+          }
+        },
+        "viewIncludes": {
+          "data": {
+            "rules": {
+              "initialChances": 6,
+              "waitSeconds": 10,
+              "smallReward": 10,
+              "bigMultiplier": 5,
+              "totemBonus": 3,
+              "tntPercent": 40,
+              "version": 2,
+              "difficulty": "hell",
+              "boardSpec": "6",
+              "compositionVariation": "fixed"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "v2 测试直传难度：后端不重跑表单set覆盖数字字段的声明默认值",
+      "now": 1793419200000,
+      "params": {
+        "difficulty": "hell",
+        "boardSpec": "7"
+      },
+      "input": "dig 1 1",
+      "expect": {
+        "stateIncludes": {
+          "version": 2,
+          "size": 7,
+          "rules": {
+            "initialChances": 7,
+            "waitSeconds": 10,
+            "smallReward": 10,
+            "bigMultiplier": 5,
+            "totemBonus": 3,
+            "tntPercent": 25,
+            "version": 2,
+            "difficulty": "hell",
+            "boardSpec": "7",
+            "compositionVariation": "slight"
+          }
+        },
+        "viewIncludes": {
+          "data": {
+            "rules": {
+              "initialChances": 7,
+              "waitSeconds": 10,
+              "smallReward": 10,
+              "bigMultiplier": 5,
+              "totemBonus": 3,
+              "tntPercent": 25,
+              "version": 2,
+              "difficulty": "hell",
+              "boardSpec": "7",
+              "compositionVariation": "slight"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "v2 每卡随机和浮动只生成一次：同毫秒三次接棒保持牌序、规格与构成",
+      "now": 1793419200000,
+      "state": {
+        "version": 2,
+        "size": 7,
+        "composition": {
+          "emerald": 20,
+          "diamond": 7,
+          "apple": 2,
+          "totem": 3,
+          "tnt": 9,
+          "pearl": 1,
+          "shield": 3,
+          "spyglass": 4
+        },
+        "rules": {
+          "initialChances": 7,
+          "waitSeconds": 10,
+          "smallReward": 10,
+          "bigMultiplier": 5,
+          "totemBonus": 3,
+          "tntPercent": 25,
+          "version": 2,
+          "difficulty": "hard",
+          "boardSpec": "random",
+          "compositionVariation": "slight"
+        },
+        "cardId": 1,
+        "deck": [ "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "diamond", "diamond", "diamond", "diamond", "diamond", "diamond", "diamond", "apple", "apple", "totem", "totem", "totem", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "pearl", "shield", "shield", "shield", "spyglass", "spyglass", "spyglass", "spyglass" ],
+        "opened": [ null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null ],
+        "lastMove": null,
+        "stats": {
+          "digs": 0,
+          "players": 0
+        },
+        "feed": [],
+        "nextEventId": 1
+      },
+      "params": {
+        "boardSpec": "5",
+        "compositionVariation": "fixed"
+      },
+      "steps": [
+        {
+          "who": "小明",
+          "at": 1793419200000,
+          "input": "dig 1 1",
+          "expect": {
+            "add": 10,
+            "stateIncludes": {
+              "version": 2,
+              "size": 7,
+              "composition": {
+                "emerald": 20,
+                "diamond": 7,
+                "apple": 2,
+                "totem": 3,
+                "tnt": 9,
+                "pearl": 1,
+                "shield": 3,
+                "spyglass": 4
+              },
+              "deck": [ "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "diamond", "diamond", "diamond", "diamond", "diamond", "diamond", "diamond", "apple", "apple", "totem", "totem", "totem", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "pearl", "shield", "shield", "shield", "spyglass", "spyglass", "spyglass", "spyglass" ],
+              "rules": {
+                "initialChances": 7,
+                "waitSeconds": 10,
+                "smallReward": 10,
+                "bigMultiplier": 5,
+                "totemBonus": 3,
+                "tntPercent": 25,
+                "version": 2,
+                "difficulty": "hard",
+                "boardSpec": "random",
+                "compositionVariation": "slight"
+              },
+              "stats": {
+                "digs": 1,
+                "players": 1
+              }
+            },
+            "playerIncludes": {
+              "state": {
+                "chances": 6
+              }
+            },
+            "viewIncludes": {
+              "data": {
+                "size": 7,
+                "composition": {
+                  "emerald": 20,
+                  "diamond": 7,
+                  "apple": 2,
+                  "totem": 3,
+                  "tnt": 9,
+                  "pearl": 1,
+                  "shield": 3,
+                  "spyglass": 4
+                }
+              }
+            }
+          }
+        },
+        {
+          "who": "小红",
+          "at": 1793419200000,
+          "input": "dig 1 2",
+          "expect": {
+            "add": 10,
+            "stateIncludes": {
+              "version": 2,
+              "size": 7,
+              "composition": {
+                "emerald": 20,
+                "diamond": 7,
+                "apple": 2,
+                "totem": 3,
+                "tnt": 9,
+                "pearl": 1,
+                "shield": 3,
+                "spyglass": 4
+              },
+              "deck": [ "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "diamond", "diamond", "diamond", "diamond", "diamond", "diamond", "diamond", "apple", "apple", "totem", "totem", "totem", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "pearl", "shield", "shield", "shield", "spyglass", "spyglass", "spyglass", "spyglass" ],
+              "rules": {
+                "initialChances": 7,
+                "waitSeconds": 10,
+                "smallReward": 10,
+                "bigMultiplier": 5,
+                "totemBonus": 3,
+                "tntPercent": 25,
+                "version": 2,
+                "difficulty": "hard",
+                "boardSpec": "random",
+                "compositionVariation": "slight"
+              },
+              "stats": {
+                "digs": 2,
+                "players": 2
+              }
+            },
+            "playerIncludes": {
+              "state": {
+                "chances": 6
+              }
+            },
+            "viewIncludes": {
+              "data": {
+                "size": 7,
+                "composition": {
+                  "emerald": 20,
+                  "diamond": 7,
+                  "apple": 2,
+                  "totem": 3,
+                  "tnt": 9,
+                  "pearl": 1,
+                  "shield": 3,
+                  "spyglass": 4
+                }
+              }
+            }
+          }
+        },
+        {
+          "who": "小明",
+          "at": 1793419200000,
+          "input": "dig 1 3",
+          "expect": {
+            "add": 10,
+            "stateIncludes": {
+              "version": 2,
+              "size": 7,
+              "composition": {
+                "emerald": 20,
+                "diamond": 7,
+                "apple": 2,
+                "totem": 3,
+                "tnt": 9,
+                "pearl": 1,
+                "shield": 3,
+                "spyglass": 4
+              },
+              "deck": [ "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "diamond", "diamond", "diamond", "diamond", "diamond", "diamond", "diamond", "apple", "apple", "totem", "totem", "totem", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "pearl", "shield", "shield", "shield", "spyglass", "spyglass", "spyglass", "spyglass" ],
+              "rules": {
+                "initialChances": 7,
+                "waitSeconds": 10,
+                "smallReward": 10,
+                "bigMultiplier": 5,
+                "totemBonus": 3,
+                "tntPercent": 25,
+                "version": 2,
+                "difficulty": "hard",
+                "boardSpec": "random",
+                "compositionVariation": "slight"
+              },
+              "stats": {
+                "digs": 3,
+                "players": 2
+              }
+            },
+            "playerIncludes": {
+              "state": {
+                "chances": 5
+              }
+            },
+            "viewIncludes": {
+              "data": {
+                "size": 7,
+                "composition": {
+                  "emerald": 20,
+                  "diamond": 7,
+                  "apple": 2,
+                  "totem": 3,
+                  "tnt": 9,
+                  "pearl": 1,
+                  "shield": 3,
+                  "spyglass": 4
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "v2 七列换五列：仅一颗珍珠、旧事件保留七列，旧卡与新卡越界都不扣机会",
+      "now": 1793419200000,
+      "seed": "0000000000000000000000000000000000000000000000000000000000000002",
+      "state": {
+        "version": 2,
+        "size": 7,
+        "composition": {
+          "emerald": 20,
+          "diamond": 6,
+          "apple": 2,
+          "totem": 4,
+          "tnt": 8,
+          "pearl": 1,
+          "shield": 4,
+          "spyglass": 4
+        },
+        "rules": {
+          "initialChances": 7,
+          "waitSeconds": 10,
+          "smallReward": 10,
+          "bigMultiplier": 5,
+          "totemBonus": 3,
+          "tntPercent": 25,
+          "version": 2,
+          "difficulty": "hard",
+          "boardSpec": "random",
+          "compositionVariation": "fixed"
+        },
+        "cardId": 1,
+        "deck": [ "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "diamond", "diamond", "diamond", "diamond", "diamond", "diamond", "apple", "apple", "totem", "totem", "totem", "totem", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "tnt", "spyglass", "shield", "shield", "shield", "shield", "spyglass", "spyglass", "spyglass", "pearl" ],
+        "opened": [ null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null ],
+        "lastMove": null,
+        "stats": {
+          "digs": 1,
+          "players": 1
+        },
+        "feed": [],
+        "nextEventId": 1
+      },
+      "players": {
+        "小明": {
+          "pending": 37,
+          "state": {
+            "version": 2,
+            "actorKey": "u:10001",
+            "chances": 5,
+            "shield": true,
+            "peeks": [
+              {
+                "cardId": 1,
+                "index": 1,
+                "kind": "emerald"
+              }
+            ],
+            "digs": 1,
+            "status": "playing",
+            "lastResult": null
+          }
+        }
+      },
+      "steps": [
+        {
+          "who": "小明",
+          "at": 1793419200000,
+          "input": "dig 1 49",
+          "expect": {
+            "add": 0,
+            "pending": 37,
+            "settled": null,
+            "stateIncludes": {
+              "cardId": 2,
+              "size": 5,
+              "composition": {
+                "emerald": 11,
+                "diamond": 3,
+                "apple": 1,
+                "totem": 2,
+                "tnt": 4,
+                "pearl": 1,
+                "shield": 2,
+                "spyglass": 1
+              },
+              "lastMove": {
+                "actorKey": "u:10001",
+                "name": "小明",
+                "at": 1793419200000,
+                "cardId": 1,
+                "index": 48,
+                "size": 7
+              },
+              "feed": [
+                {
+                  "id": 1,
+                  "actor": "小明",
+                  "actorKey": "u:10001",
+                  "kind": "pearl",
+                  "text": "末影珍珠把大家传送到了下一张卡",
+                  "at": 1793419200000,
+                  "cardId": 1,
+                  "index": 48,
+                  "size": 7
+                }
+              ],
+              "rules": {
+                "initialChances": 7,
+                "waitSeconds": 10,
+                "smallReward": 10,
+                "bigMultiplier": 5,
+                "totemBonus": 3,
+                "tntPercent": 25,
+                "version": 2,
+                "difficulty": "hard",
+                "boardSpec": "random",
+                "compositionVariation": "fixed"
+              },
+              "version": 2,
+              "opened": [ null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null ]
+            },
+            "playerIncludes": {
+              "state": {
+                "chances": 4,
+                "shield": true,
+                "peeks": [],
+                "lastResult": {
+                  "kind": "pearl",
+                  "size": 7,
+                  "cardId": 1,
+                  "index": 48
+                }
+              }
+            },
+            "viewIncludes": {
+              "data": {
+                "cardId": 2,
+                "size": 5,
+                "composition": {
+                  "emerald": 11,
+                  "diamond": 3,
+                  "apple": 1,
+                  "totem": 2,
+                  "tnt": 4,
+                  "pearl": 1,
+                  "shield": 2,
+                  "spyglass": 1
+                },
+                "lastMove": {
+                  "actorKey": "u:10001",
+                  "name": "小明",
+                  "at": 1793419200000,
+                  "cardId": 1,
+                  "index": 48,
+                  "size": 7
+                },
+                "feed": [
+                  {
+                    "id": 1,
+                    "actor": "小明",
+                    "actorKey": "u:10001",
+                    "kind": "pearl",
+                    "text": "末影珍珠把大家传送到了下一张卡",
+                    "at": 1793419200000,
+                    "cardId": 1,
+                    "index": 48,
+                    "size": 7
+                  }
+                ],
+                "rules": {
+                  "initialChances": 7,
+                  "waitSeconds": 10,
+                  "smallReward": 10,
+                  "bigMultiplier": 5,
+                  "totemBonus": 3,
+                  "tntPercent": 25,
+                  "version": 2,
+                  "difficulty": "hard",
+                  "boardSpec": "random",
+                  "compositionVariation": "fixed"
+                },
+                "counts": {
+                  "emerald": 11,
+                  "diamond": 3,
+                  "apple": 1,
+                  "totem": 2,
+                  "tnt": 4,
+                  "pearl": 1,
+                  "shield": 2,
+                  "spyglass": 1
+                }
+              }
+            },
+            "announce": "G7：末影珍珠把大家传送到了下一张卡"
+          }
+        },
+        {
+          "who": "小红",
+          "at": 1793419200001,
+          "input": "dig 1 49",
+          "expect": {
+            "add": 0,
+            "pending": 0,
+            "stateIncludes": {
+              "cardId": 2,
+              "size": 5,
+              "composition": {
+                "emerald": 11,
+                "diamond": 3,
+                "apple": 1,
+                "totem": 2,
+                "tnt": 4,
+                "pearl": 1,
+                "shield": 2,
+                "spyglass": 1
+              },
+              "lastMove": {
+                "actorKey": "u:10001",
+                "name": "小明",
+                "at": 1793419200000,
+                "cardId": 1,
+                "index": 48,
+                "size": 7
+              },
+              "feed": [
+                {
+                  "id": 1,
+                  "actor": "小明",
+                  "actorKey": "u:10001",
+                  "kind": "pearl",
+                  "text": "末影珍珠把大家传送到了下一张卡",
+                  "at": 1793419200000,
+                  "cardId": 1,
+                  "index": 48,
+                  "size": 7
+                }
+              ],
+              "rules": {
+                "initialChances": 7,
+                "waitSeconds": 10,
+                "smallReward": 10,
+                "bigMultiplier": 5,
+                "totemBonus": 3,
+                "tntPercent": 25,
+                "version": 2,
+                "difficulty": "hard",
+                "boardSpec": "random",
+                "compositionVariation": "fixed"
+              }
+            },
+            "player": {
+              "state": null,
+              "view": null
+            },
+            "announce": "",
+            "messageIncludes": "卡片已经更换",
+            "people": {
+              "小明": {
+                "pending": 37,
+                "stateIncludes": {
+                  "chances": 4,
+                  "shield": true
+                }
+              }
+            }
+          }
+        },
+        {
+          "who": "小明",
+          "at": 1793419200002,
+          "input": "dig 2 26",
+          "expect": {
+            "add": 0,
+            "pending": 37,
+            "stateIncludes": {
+              "cardId": 2,
+              "size": 5,
+              "composition": {
+                "emerald": 11,
+                "diamond": 3,
+                "apple": 1,
+                "totem": 2,
+                "tnt": 4,
+                "pearl": 1,
+                "shield": 2,
+                "spyglass": 1
+              },
+              "lastMove": {
+                "actorKey": "u:10001",
+                "name": "小明",
+                "at": 1793419200000,
+                "cardId": 1,
+                "index": 48,
+                "size": 7
+              },
+              "feed": [
+                {
+                  "id": 1,
+                  "actor": "小明",
+                  "actorKey": "u:10001",
+                  "kind": "pearl",
+                  "text": "末影珍珠把大家传送到了下一张卡",
+                  "at": 1793419200000,
+                  "cardId": 1,
+                  "index": 48,
+                  "size": 7
+                }
+              ],
+              "rules": {
+                "initialChances": 7,
+                "waitSeconds": 10,
+                "smallReward": 10,
+                "bigMultiplier": 5,
+                "totemBonus": 3,
+                "tntPercent": 25,
+                "version": 2,
+                "difficulty": "hard",
+                "boardSpec": "random",
+                "compositionVariation": "fixed"
+              }
+            },
+            "playerIncludes": {
+              "state": {
+                "chances": 4,
+                "shield": true,
+                "lastResult": {
+                  "size": 7
+                }
+              }
+            },
+            "announce": "",
+            "messageIncludes": "1–25"
+          }
+        }
+      ]
     }
   ]
 }

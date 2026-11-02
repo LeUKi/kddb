@@ -1,11 +1,11 @@
 # Design
 
 ## Source of truth
-- Status: Active
-- Last refreshed: 2026-10-31
+- Status: Active（v2 紧凑布局与作者参数已实现，验证记录见 docs/VALIDATION.md）
+- Last refreshed: 2026-11-01
 - Primary product surfaces: 矿洞夺宝，lafish 红包站代码协议第五版的多人附带网页；单一游戏页面、规则弹窗、本地多人联调页。
 - Evidence reviewed: 用户提供的真实判定记录（只保留匿名统计）、Xbox 游戏无障碍指南 103/109/115/117、Portal 作者的教学关卡复盘；依据和局限见 `docs/UX_RESEARCH.md`。同时遵循官方 `AGENTS.md`、`judge.d.ts`、`page/hb.d.ts`、`examples/scratch-card/`、`cli/lib/page.mjs`。
-- Official kit source: https://github.com/LeUKi/hb/tree/68ef3d2b1597219f6eb91db4625e995cd670b7ce/kit 。开发包运行时保持原样。
+- Official kit source: https://github.com/LeUKi/hb/tree/ed192c1fd98de2cea12cb6e8ce3710b21ea647dd/kit 。开发包运行时、CLI、类型与该固定上游一致，包含官方模拟器时钟修复；同步记录见 `docs/KIT_REFRESH.md`。
 - Existing design evidence: `artifacts/desktop-cave.jpg`、`artifacts/mobile-cave.png` 和已实现的游戏页。最新用户要求：原版双铁镐表示额外机会、逐把展示机会、道具数量与问号合并、可恢复的底部日志、中央放大道具演出、单页规则弹窗、对角线翻卡，以及收敛背景。
 - Design guidance: Anthropic `frontend-design` 的单一视觉重点、克制文案和截图自评；https://github.com/anthropics/skills/blob/main/skills/frontend-design/SKILL.md 。
 
@@ -15,9 +15,9 @@
 - Avoid: 隐藏次数额度、复杂背包系统、付费入口、未经确认的自动提交、把模拟奖励展示为真实到账。
 
 ## Product goals
-- Goals: 两名以上玩家共享 5×5 卡片，交替挖掘，按道具改变自己的奖励和机会，可主动领取奖励并结束挖掘。首次操作前能理解机会耗尽会结束参与。
+- Goals: 两名以上玩家共享 5×5／6×6／7×7 卡片，默认每卡随机规格，交替挖掘，按道具改变自己的奖励和机会，可主动领取奖励并结束挖掘。首次操作前能理解机会耗尽会结束参与。
 - Non-goals: 首版不增加攻击其他玩家、信标、道具交易、工具升级、固定座次、机会道具累计额度。
-- Success signals: 打开即可看到棋盘、自己的奖励和机会；没有宣传区、侧栏或常驻规则说明；多人牌面同步；抢同格或旧卡操作不扣机会；资金、机会、结算均与判定器一致；手机能顺畅操作。
+- Success signals: 打开即可看到棋盘、自己的奖励和机会；没有宣传区或常驻规则长文；桌面紧凑侧栏只承载个人操作；多人牌面同步；抢同格或旧卡操作不扣机会；资金、机会、结算均与判定器一致；手机能顺畅操作。
 
 ### Confirmed rules
 1. 每人初始 7 次机会，可由红包参数修改。第一次成功挖掘加入游戏。
@@ -25,27 +25,32 @@
 3. 最近成功挖掘的人需要别人接棒，或等待默认 10 秒后才能再挖。A→B→A 可以立即接棒；平台自身冷却另外生效。
 4. 不合法、已打开、卡片过期、等待未结束的操作不扣机会、不改变最近成功挖掘的记录。不自动重试提交。
 5. 主动点「见好就收」领取奖励不消耗机会、不改变最近挖掘记录、不受游戏接棒等待限制；平台自身的提交限制仍适用。领取前确认将放弃剩余机会，结算 0 也退出，不能重新加入这个红包。
-6. 机会、奖励和盾牌跨卡保留。末影珍珠立即换卡；全部 25 格打开也自动换卡，不另扣次数。
+6. 机会、奖励和盾牌跨卡保留。末影珍珠立即换卡；本卡全部格子打开也自动换卡，不另扣次数。v2 每卡恰好 1 颗珍珠；旧版卡片及后续换卡继续原来的 25 格与 2 颗珍珠。
 7. 所有金额用整数分计算。正收益最多占用剩余可分配奖池，扣款最低到 0。平台奖池占满或截止时全员结算。
 8. 未打开的位置内容只存在服务端 state；公开剩余种类数量，不公开位置。望远镜情报只发本人。
 
-| kind | Minecraft 物品 | 每卡数量 | 效果 |
+下表数量为困难 5×5 的固定基准；完整三规格、三难度及浮动规则见文末 v2 契约。
+
+| kind | Minecraft 物品 | 基准数量 | 效果 |
 | --- | --- | ---: | --- |
-| emerald | 绿宝石 | 10 | 一份小奖 |
+| emerald | 绿宝石 | 11 | 一份小奖 |
 | diamond | 钻石 | 3 | 小奖 ×5 |
 | apple | 附魔金苹果 | 1 | 待结算奖励翻倍；余额为 0 时给一份小奖 |
 | totem | 两把错位叠放的原版铁镐 | 2 | 扣除本次机会后增加 3 次；最后一次可救回，无累计额度；保留内部 kind 与判定器兼容 |
 | tnt | TNT | 4 | 扣除当前待结算的指定百分比，扣除金额向下取整到分 |
-| pearl | 末影珍珠 | 2 | 全体进入下一张随机卡 |
+| pearl | 末影珍珠 | 1 | 全体进入下一张卡；按固定或每卡随机规格发牌 |
 | shield | 盾牌 | 2 | 自动抵挡下一次 TNT，最多持有一面；重复获得给小奖 |
 | spyglass | 望远镜 | 1 | 私下查看一个尚未公开、自己尚未获知的格子；没有新格子可看时给小奖 |
 
 ### Hongbao parameters
+- `difficulty`: choice，简单／困难／地狱，默认困难；原生 set 回填初始机会、TNT 比例和配比。
+- `boardSpec`: choice，5／6／7／random，默认 random；每张新卡等概率抽取规格并存档。
 - `initialChances`: integer，默认 7，1–20。
 - `waitSeconds`: integer，默认 10，1–60。
 - `smallReward`: money，默认 10 分，至少 1 分；默认只是首版试玩基数。
 - `tntPercent`: integer，默认 25，1–100。
-- 钻石 ×5、双铁镐 +3、5×5 尺寸和每卡道具构成固定。总奖池、截止、标题、说明使用平台设置。
+- `compositionVariation`: choice，fixed／slight，默认 slight；仅钻石、双铁镐、TNT、盾牌各独立 ±1，绿宝石补齐。每张卡实际构成生成后固定。
+- 钻石 ×5、双铁镐 +3、每卡 1 颗珍珠固定。总奖池、截止、标题、说明使用平台设置。七个原生字段按文末约定平铺，无自绘作者表单。
 - `check` 要求总奖池至少足够完整的一份钻石奖励；实际后续发奖仍按剩余奖池裁剪。参数为公开规则。
 
 ## Personas and jobs
@@ -56,8 +61,8 @@
 ## Information architecture
 - Primary navigation: 只有一个游戏页面；规则在原页弹窗中打开和关闭。
 - Core routes/screens: `#/` 展示奖励、机会资源区、剩余道具入口、棋盘、状态和最近挖掘；规则、演示、领取确认和结算都用原页弹窗。
-- Content hierarchy: 顶部同一行的可领取奖励与右侧次要「见好就收」操作（不保留品牌标题行）→ 单一机会资源区（标签、次数、逐把原版铁镐、结束条件）→ 标明「本卡剩余」的道具数量与玩法入口 → 只标卡片编号的 5×5 卡片 → 当前操作状态 → 最近 10 条挖掘。不再在棋盘下放大号退出按钮。
-- 桌面与手机采用同一单列布局。新增的数量和日志只展示真实游戏信息，不恢复宣传区、背包容器、参与人数装饰或重复奖池。
+- Content hierarchy: 个人奖励、领取与机会为一组；棋盘区依次为本卡剩余道具与“怎么玩”、卡片编号和规格、固定外框的网格。手机个人资源在上、状态在棋盘后；桌面个人资源与状态在右栏。最近 10 条挖掘默认折叠在主区域下方。
+- 当前实现桌面紧凑双列、手机单列，详见文末契约。新增的数量和日志只展示真实游戏信息，不恢复宣传区、背包容器、参与人数装饰或重复奖池；动态记录默认折叠。
 
 ## Design principles
 - 服务端结果优先：网页展示实际判定结果，不自行决定奖励和秘密牌面。
@@ -89,8 +94,8 @@
 
 ```
 
-- Brief review: 拒绝继续用仪表盘双栏和缩小文字来容纳功能；移除通用宣传标题、卡片嵌套、状态点、重复坐标和按钮箭头。Minecraft 特征集中在矿石、物品和石槽，避免给安静的周边再加装饰。
-- Verification: 实际检查 360px/390px 手机和桌面截图，主界面无小于 14px 的可见文字，25 格可操作，帮助可返回，收手确认和多人接棒继续可用。
+- Brief review: 避免仪表盘式堆叠与靠缩小文字容纳功能；桌面可用紧凑操作侧栏，但不增加装饰指标。移除通用宣传标题、卡片嵌套、状态点、重复坐标和按钮箭头。Minecraft 特征集中在矿石、物品和石槽，避免给安静的周边再加装饰。
+- Verification: 检查 320／360／390／800／1060px 与三种规格共 15 个组合，网格作者名按 13／12／11px 适配，其他操作文字保持可读。帮助、领取取消、首次练习、接棒与跨规格换卡均做实际浏览器核验，详见 docs/VALIDATION.md。
 
 ## Visual language
 - Color: 深灰蓝背景 `#13191f` 与低对比岩壁；石面使用原版纹理；暖白文字 `#f5e7cf` 和柔和琥珀强调。背景不与前景争夺颜色和轮廓。
@@ -115,7 +120,7 @@
 
 ## Responsive behavior
 - Supported breakpoints/devices: 360px 及以上手机、平板和桌面浏览器。
-- Layout adaptations: 所有宽度单列，格子保持 5×5；手机缩减留白，保留可读字号，避免整页横向滚动。
+- Layout adaptations: 支持固定/随机 5×5、6×6、7×7，桌面紧凑双列，窄屏单列。同一视口卡片外框保持一致；手机缩减留白，保留可读字号，避免整页横向滚动。
 - Touch/hover differences: 手指短距离刮动或点按可提交，键盘等价；长距离滚动不会意外挖掘。
 
 ### Practice flow
@@ -149,12 +154,13 @@
 
 ### Data contract
 - Commands: `dig <cardId> <1-based cell>`；`cashout` 或 `收手`。
-- Public `view.data`: `{ version:1, cardId, cells:[{ index, kind:null|kind, by:null|string, at:null|number, actorKey?:string }], counts:{kind:remaining}, rules:{initialChances,waitSeconds,smallReward,bigMultiplier:5,totemBonus:3,tntPercent}, lastMove:null|{actorKey,name,at,cardId,index}, stats:{digs,players}, feed:[{id,actor,kind,text,at,cardId,index}] }`。
-- Private `player.view.data`: `{ version:1, actorKey, chances, shield, peeks:[{cardId,index,kind}], digs, status:'playing'|'settled', lastResult:null|{kind,cardId,index,amount,blocked,text} }`。
+- Public `view.data`: `{ version:2, cardId, size:5|6|7, composition:{kind:initialCount}, cells:[{ index, kind:null|kind, by:null|string, at:null|number, actorKey?:string }], counts:{kind:remaining}, rules:{version:2,difficulty,boardSpec,compositionVariation,initialChances,waitSeconds,smallReward,bigMultiplier:5,totemBonus:3,tntPercent}, lastMove:null|{actorKey,name,at,cardId,index,size}, stats:{digs,players}, feed:[{id,actor,actorKey,kind,text,at,cardId,index,size}] }`。v1 旧视图继续接受，规格固定解释为 5。
+- Private `player.view.data`: `{ version:1|2, actorKey, chances, shield, peeks:[{cardId,index,kind}], digs, status:'playing'|'settled', lastResult:null|{kind,cardId,index,size?,amount,blocked,text} }`。事件的 size 是操作发生时的卡片规格，不能改用新卡规格解释旧事件。
 - `index` 在数据中从 0 开始，指令中的格子从 1 开始。actorKey 使用稳定的玩家标识，仅用于匹配，不承担认证。
 - Public feed 最多 10 条；私人情报仅保留当前卡；隐藏格子的 kind 必须为 null，不能带内部牌面或随机种子。
 
 ## Open questions
+- [x] v2 作者参数与紧凑布局已实现，完整规格见 `docs/AUTHORING_V2.md`。七项原生平铺字段与官方选项联动已接入；难度预设仍待真实玩家体验校准，不承诺人均收益。
 - [x] 用户已授权将网页发布至 Cloudflare Workers；正式地址 https://hbweb-kddb.lafi.sh/，Worker 为 `hbweb-kddb`，判定器 `meta.page` 已配置。只发布 `page/frontend/dist/`；身份、判定与结算继续由红包站提供。
 - [ ] 默认小奖 0.10 和卡组比例属于首版试玩值，按实际参与人数与奖池消耗再调。
 - [x] 已完成桌面、390px/360px 窄屏实际渲染检查及双人浏览器联调；截图见 artifacts/，触屏真机仍待复核。
@@ -175,7 +181,7 @@
 | effect | 260–1760ms | 中央大图标、道具名称与效果说明；其他玩家不显示其私有奖励 |
 | transfer | 1760–2460ms | 图标飞向奖励、机会、盾牌或侦察目标；无需联动则自然淡出，底部尚不更新 |
 | resolve | 2460–2840ms | 飞行落定后更新真实数值、机会铁镐、格子、情报、盾牌与日志 |
-| transition | 按需追加1160ms | 25 格原地绕 Y 轴翻转，按行号加列号 stagger，从左上向右下推进 |
+| transition | 按需追加1160ms | 同规格逐格绕 Y 轴翻转，跨规格保留旧新完整网格分层翻入；各自按行列推进，最后一格在时间窗口内结束 |
 | settle | 全序列后 | 完成最后一击后展开宝箱与结算金额；后端在确认时已经禁止后续操作 |
 
 - Multiplayer: 中央放大与飞行仅用于本人已确认结果。普通远端操作直接在对应格子短暂亮起，约300ms，不经过中央 effect/transfer；珍珠先显示发起者与旧卡最后一格，再翻卡。本人演出期间远端只合并最新快照，不排队补播。所有已开格显示作者短名，点开可看完整名字；本人依据 actorKey 标“你”，旧数据仅用私有 lastResult 提供有限兼容，禁止用同名猜身份。初次进入不重播历史。旧卡拒绝恢复最新牌面，不补造本地成功。
@@ -183,6 +189,22 @@
 - Hard non-goals: 不恢复绿色仪表盘；不把石面做成软糖；不把原创图标称为原版；不添加永久漂浮、闪烁或全屏强光。
 - Checks: 原始PNG和SHA-1来源、确认前无泄露、珍珠旧卡演出、末击结算、同格失败、多人快速更新、移动端完整棋盘/按钮、减少动态偏好、所有动作结束归位。
 
-### Implementation brief
+### Historical v1 implementation brief
 
 使用现有 React/TanStack Router/Jotai/Motion 实现单页多人 5×5 矿洞红包。保留所有金钱与机会规则，判定器只澄清入口和结果文案。先实现移除品牌行后的顶部金额与右侧「见好就收」、绑定的机会资源区和持续末次提醒，再实现不调用 SDK、布局与主界面一致的原地练习与明确结束原因。道具使用原版 Minecraft 本地素材，剩几次就排几把铁镐，不使用会暗示固定上限的百分比条。保留安静矿洞、底部持久日志和「裂纹 → 中央效果说明 → 飞行 → HUD/牌面 → 按需翻卡 → 结算」顺序。验证演示不产生真实提交，领取确认能取消，末次和额外机会表达准确，弹窗原因不从过期快照推断。完成桌面及320/360/390宽度、减少动态、真实判定及恢复路径检查，再发布静态 Worker。改进理解度需要新玩家回访验证，不能用构建通过或截图代替。
+
+## v2 compact play and author controls (2026-11-01, Active)
+
+本节是最新实施契约，对上文历史 5×5 描述的尺寸与四项参数有优先级。v2 已实现并在本地验证；现有线上网页与红包站保存的判定器需要分别更新才能启用。完整规范与平台边界见 `docs/AUTHORING_V2.md`。
+
+- **紧凑布局**：桌面约 440px 正方形卡片 + 220px 个人操作栏，主体约 684px；不填满桌面、不增加品牌标题或指标卡。活动记录默认折叠。手机恢复奖励/机会在上、棋盘在下、活动最后的单列。同一视口下所有规格外框一致；默认外框由前端适配，不暴露给红包作者。
+- **首次引导为保留项**：复用 `GamePage` 的浏览器首次条件与 `GuideDemo` 的无 SDK 本地练习，可跳过、可从“怎么玩”重新进入。练习明确标记示例，不消耗真实机会；奖励与 TNT 示范从有效规则读取。不能因为页面变紧凑而省略领取退出与机会耗尽的教学。
+- **七项原生参数**：按难度、卡片规格、绿宝石奖励、初始机会、TNT 扣除比例、连续挖掘等待、道具配比的顺序平铺。难度为简单／困难／地狱，用户已确认默认困难。使用官方新版 `options[].set`：选档回填初始机会、TNT 比例、配比，数字框显示实际值；简单固定、困难和地狱小幅浮动，套用后可继续手改，再选档会重置这三个字段。加载已有草稿保留保存值。移除旧稿的留空继承与“跟随难度”选项，现有四项保留 key。
+- **地狱配置**：初始 4 次、TNT 扣当前待结算的 75%，5/6/7 规格 TNT 基准为 8/12/17，小幅浮动后各 ±1；其他奖励倍率和道具效果保持一致。简单为 9 次／15%、困难为 7 次／25%，其余基准见完整规范；按这些值实现，实际体验仍需玩家校准。
+- **默认情报配置**：5/6/7 规格的望远镜为 1/3/4，较上轮提案增加大棋盘情报，从绿宝石让出位置；困难难度的绿宝石基准为 11/14/20。其数量不再额外开放一项作者参数。
+- **生成契约**：卡片规格默认“每卡随机”，每张新卡从 5×5／6×6／7×7 中等概率抽一种，同卡所有玩家共享相同规格；作者仍可选固定规格，切换难度不重置规格。换卡物固定 1；规格、实际道具构成和牌序每卡一次生成后存档。浮动仅四类各 ±1，绿宝石补齐总数。当前卡剩余数量取真实牌面；旧卡命令不转投新卡，不扣机会；跨规格换卡分别持有旧、新坐标与尺寸。
+- **身份与适配**：本人 actorKey 金色强调，其他玩家名字调暗但保持对比；不调暗道具。窄屏大棋盘名字可降至 11px、单行截断，完整信息可访问；主界面操作文字仍保持原先可读性目标。7×7 最窄屏需要真机误触验证。
+- **预算表达**：选项 hint 随档位切换，check 保留钻石预算护栏；作者手改后的最终有效规则与确定的收益/扣除示例放在游戏自己的“怎么玩”和首次练习。预计人均、覆盖人数和时长需单独带假设的模拟，不以奖池除基数冒充结果。
+- **表单边界**：2026-11-01 最新仓库 `823a8d9` 和线上文档已支持 choice 选项的 `set` 与 `hint`，可以回填和切换说明；尚无分组、条件隐藏和通用计算摘要。默认困难的 set 与目标 default 必须一致。`paramValues` 不执行 set，直接写测试参数时应提供最终数值；具体响应式排版沿用主站组件。
+- **兼容边界**：v2 仅用于新红包；旧卡 25 格与两个换卡物按旧事实完成，不中途改规则。规则、卡片与视图需版本化，保存旧作者显式参数。
+- **视觉与核验**：沿用现有原版 ItemIcon、低对比洞壁、本人演出优先与减少动态偏好。正式判定器 69 个用例、101 步通过；setup 863 项与正式生成函数 729 种构成通过；前端 63 项、15 种布局、三种引导宽度、真实判定器双人跨规格换卡与结算均通过。生产作者表单的登录后操作、真实付款与触摸真机仍不在本地证据范围内。

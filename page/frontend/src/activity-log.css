@@ -1,6 +1,6 @@
 .activity-log {
-  margin-top: 30px;
-  padding-top: 20px;
+  margin-top: 20px;
+  padding-top: 8px;
   border-top: 1px solid #b4b3a322;
 }
 .activity-log-heading {
@@ -8,8 +8,15 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 12px;
+  min-height: 44px;
+  padding: 8px 0;
+  cursor: pointer;
+  list-style: none;
 }
+.activity-log-heading::-webkit-details-marker { display: none; }
+.activity-log-heading > span { display: flex; align-items: center; gap: 10px; }
+.activity-toggle::after { content: '+'; font-size: 20px; color: var(--ink); }
+.activity-log[open] .activity-toggle::after { content: '−'; }
 .activity-log-heading h2 {
   color: var(--ink);
   font-size: 16px;
@@ -62,7 +69,8 @@
   line-height: 1.65;
   overflow-wrap: anywhere;
 }
-.activity-log-content strong { color: var(--ink); font-weight: 550; }
+.activity-log-content strong { color: #b3b9bc; font-weight: 550; }
+.activity-log-content strong.is-mine { color: #f3cc8f; }
 .activity-log-meta {
   display: flex;
   align-items: baseline;

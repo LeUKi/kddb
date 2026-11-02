@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { useAtomValue, useSetAtom } from 'jotai'
 import { AnimatePresence, animate, motion, useMotionValue, useTransform } from 'motion/react'
 import { useReducedMotion } from './useReducedMotion'
@@ -9,8 +9,8 @@ import { BoardFeedback, StoneBreak } from './GameFeedback'
 import { ActivityLog } from './ActivityLog'
 import { GuideDemo } from './GuideDemo'
 import type { PresentationEffect } from './presentation'
-import { coordinate, defaultRules, formatMoney, isOwnCell, kinds, loot } from './game'
-import type { Cell, Kind, PrivateGame, PublicGame } from './game'
+import { boardSize, cardComposition, coordinate, defaultRules, formatMoney, isOwnCell, kinds, loot, rulesLabel } from './game'
+import type { BoardSize, Cell, Kind, PrivateGame, PublicGame } from './game'
 import {
   checkingResultAtom, confirmSubmission, connect, connectionAtom, connectionErrorAtom, disconnect,
   hongbaoAtom, meAtom, nowAtom, pendingActionAtom, privateAtom, publicAtom,
@@ -85,11 +85,17 @@ export function GamePage() {
   if (!game || status.connection !== 'ready') return <ConnectionState />
   return <div className="game-page">
     <RecoveryBanner />
+    <div className="play-layout">
+    <div className="personal-panel">
     <PlayerSummary />
+    <TurnStatus />
+    </div>
+    <div className="board-panel">
     <LootDashboard game={game} onOpen={() => setHelp('rules')} />
     <MineBoard />
-    <TurnStatus />
-    <ActivityLog feed={game.feed} />
+    </div>
+    </div>
+    <ActivityLog feed={game.feed} actorKey={status.own?.actorKey} />
     <Dialog open={help !== null} onDismiss={help === 'demo' ? finishGuide : () => setHelp(null)} labelledBy="rules-title" className={`rules-dialog ${lastHelp.current === 'demo' ? 'demo-dialog' : ''}`}><AnimatePresence mode="wait" initial={false}><motion.div key={lastHelp.current} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: .16 }}>{lastHelp.current === 'demo' ? <GuideDemo active={help === 'demo'} rules={game.rules} unit={status.packet?.unit ?? 'LDC'} finishLabel={status.own?.digs || status.settled || status.ended ? '返回游戏' : '开始挖宝'} onFinish={finishGuide} /> : <RulesContent game={game} onClose={() => setHelp(null)} onDemo={() => setHelp('demo')} />}</motion.div></AnimatePresence></Dialog>
   </div>
 }
@@ -114,32 +120,50 @@ function MineBoard() {
   const own = presentation.game ? presentation.own : null
   const effect = presentation.effect
   const reducedMotion = useReducedMotion()
-  const [inspected, setInspected] = useState<{ cell: Cell; cardId: number } | null>(null)
+  const [inspected, setInspected] = useState<{ cell: Cell; cardId: number; size: BoardSize } | null>(null)
   const [inspectOpen, setInspectOpen] = useState(false)
   const flipping = presentation.phase === 'transition' && presentation.transitionFrom !== null
   if (!game) return null
+  const size = boardSize(game)
+  const previous = presentation.transitionFrom
+  const crossSize = Boolean(flipping && previous && boardSize(previous) !== size)
   return <section className="mine-panel" aria-labelledby="board-title">
-    <div className="board-heading"><h2 id="board-title"><span data-testid="card-number">第 {game.cardId} 张卡片</span></h2><span className="shield-slot" data-hud-target="shield">{own?.shield && <motion.span className="equipped-shield" data-testid="my-shield" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><ItemIcon kind="shield" size={22} />已装备盾牌</motion.span>}</span></div>
+    <div className="board-heading"><h2 id="board-title"><span data-testid="card-number">第 {game.cardId} 张卡片</span><span className="board-size" data-testid="board-size">{size} × {size}</span></h2><span className="shield-slot" data-hud-target="shield">{own?.shield && <motion.span className="equipped-shield" data-testid="my-shield" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><ItemIcon kind="shield" size={22} />已装备盾牌</motion.span>}</span></div>
     <motion.div className={`board-surround ${effect ? `resolving-${effect.kind}` : ''}`} data-animation-phase={presentation.phase} animate={effect?.isOwn && effect.kind === 'tnt' && effect.phase === 'resolve' && !effect.blocked && !reducedMotion ? { x: [0, -5, 4, -2, 1, 0], y: [0, 1, -1, 0] } : { x: 0, y: 0 }} transition={{ duration: .36 }}>
-      <div className="mine-grid" data-testid="mine-grid" aria-busy={flipping}>
+      {crossSize && previous ? <CrossSizeCard before={previous} after={game} own={own} reduced={Boolean(reducedMotion)} /> : <div className="mine-grid" style={gridStyle(size)} data-board-size={size} data-testid="mine-grid" aria-label={`${size} 行 ${size} 列共享卡片`} aria-busy={flipping}>
         {game.cells.map(cell => {
-          if (flipping) return <FlippingCell key={cell.index} before={presentation.transitionFrom!.cells[cell.index]} after={cell} beforeId={presentation.transitionFrom!.cardId} cardId={game.cardId} own={own} reduced={Boolean(reducedMotion)} />
+          if (flipping && previous) return <FlippingCell key={cell.index} before={previous.cells[cell.index]} after={cell} beforeId={previous.cardId} cardId={game.cardId} size={size} own={own} reduced={Boolean(reducedMotion)} />
           const peek = own?.peeks.find(peek => peek.cardId === game.cardId && peek.index === cell.index && cell.kind === null)
           const available = canDig && authoritative?.cardId === game.cardId && authoritative.cells[cell.index]?.kind === null
-          return <MineCell key={cell.index} cell={cell} peek={peek?.kind} cardId={game.cardId} own={own} canDig={available} isPending={pending === `dig ${game.cardId} ${cell.index + 1}`} onInspect={() => { setInspected({ cell, cardId: game.cardId }); setInspectOpen(true) }} activeEffect={effect?.cardId === game.cardId && effect.index === cell.index ? effect : null} />
+          return <MineCell key={`${game.cardId}:${cell.index}`} cell={cell} peek={peek?.kind} cardId={game.cardId} size={size} own={own} canDig={available} isPending={pending === `dig ${game.cardId} ${cell.index + 1}`} onInspect={() => { setInspected({ cell, cardId: game.cardId, size }); setInspectOpen(true) }} activeEffect={effect?.cardId === game.cardId && effect.index === cell.index ? effect : null} />
         })}
-      </div>
+      </div>}
       <BoardFeedback effect={effect} />
     </motion.div>
-    <Dialog open={inspectOpen} onDismiss={() => setInspectOpen(false)} labelledBy="cell-detail-title"><div className="dialog-icon">{inspected?.cell.kind && <ItemIcon kind={inspected.cell.kind} size={64} />}</div><h2 id="cell-detail-title">{inspected?.cell.kind ? loot[inspected.cell.kind].name : '挖掘记录'}</h2><p className="cell-detail-author"><strong>{inspected?.cell.by ?? '玩家'}</strong> 挖开了<br />第 {inspected?.cardId} 张卡片 · {coordinate(inspected?.cell.index ?? 0)}</p>{inspected?.cell.kind && <p>{loot[inspected.cell.kind].description}</p>}<button className="primary-button" onClick={() => setInspectOpen(false)}>返回卡片</button></Dialog>
+    <Dialog open={inspectOpen} onDismiss={() => setInspectOpen(false)} labelledBy="cell-detail-title"><div className="dialog-icon">{inspected?.cell.kind && <ItemIcon kind={inspected.cell.kind} size={64} />}</div><h2 id="cell-detail-title">{inspected?.cell.kind ? loot[inspected.cell.kind].name : '挖掘记录'}</h2><p className="cell-detail-author"><strong>{inspected?.cell.by ?? '玩家'}</strong> 挖开了<br />第 {inspected?.cardId} 张卡片 · {coordinate(inspected?.cell.index ?? 0, inspected?.size)}</p>{inspected?.cell.kind && <p>{loot[inspected.cell.kind].description}</p>}<button className="primary-button" onClick={() => setInspectOpen(false)}>返回卡片</button></Dialog>
   </section>
 }
 
-function FlippingCell({ before, after, beforeId, cardId, own, reduced }: { before: Cell; after: Cell; beforeId: number; cardId: number; own: PrivateGame | null; reduced: boolean }) {
-  const delay = (Math.floor(after.index / 5) + after.index % 5) * .075
+function gridStyle(size: BoardSize): CSSProperties {
+  return { '--board-size': size } as CSSProperties
+}
+
+// Keep the final diagonal inside the presentation controller's transition window.
+const flipDelay = (index: number, size: BoardSize) => (Math.floor(index / size) + index % size) * .6 / (2 * (size - 1))
+
+function FlippingCell({ before, after, beforeId, cardId, size, own, reduced }: { before: Cell; after: Cell; beforeId: number; cardId: number; size: BoardSize; own: PrivateGame | null; reduced: boolean }) {
+  const delay = flipDelay(after.index, size)
   const face = (cell: Cell, side: string) => <div className={`mine-cell card-flip-face ${side} ${cell.kind ? `revealed kind-${cell.kind}` : 'covered'}`}><CellArtwork cell={cell} isMine={isOwnCell(cell, side === 'flip-front' ? beforeId : cardId, own)} /></div>
   return <div className="card-flip-slot" data-testid={`flip-cell-${after.index}`} data-flip-delay={reduced ? 0 : delay} aria-hidden="true">
     {reduced ? <motion.div className="card-flip-inner" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: .1 }}>{face(after, 'flip-static')}</motion.div> : <motion.div className="card-flip-inner" initial={{ rotateY: 0 }} animate={{ rotateY: 180 }} transition={{ delay, duration: .54, ease: [.45, 0, .2, 1] }}>{face(before, 'flip-front')}{face(after, 'flip-back')}</motion.div>}
+  </div>
+}
+
+function CrossSizeCard({ before, after, own, reduced }: { before: PublicGame; after: PublicGame; own: PrivateGame | null; reduced: boolean }) {
+  return <div className="card-size-transition" aria-busy="true" aria-label={`正在从 ${boardSize(before)} × ${boardSize(before)} 换为 ${boardSize(after)} × ${boardSize(after)}`} data-testid="cross-size-transition">
+    {[before, after].map((card, side) => <div key={card.cardId} className={`mine-grid card-size-layer ${side ? 'incoming-grid' : 'outgoing-grid'}`} style={gridStyle(boardSize(card))} data-board-size={boardSize(card)} data-transition-card={card.cardId} data-testid={side ? 'mine-grid' : 'previous-mine-grid'} aria-hidden="true">
+      {card.cells.map(cell => <motion.div key={cell.index} className={`mine-cell ${cell.kind ? `revealed kind-${cell.kind}` : 'covered'}`} initial={side ? { opacity: 0, rotateY: reduced ? 0 : -90 } : { opacity: 1, rotateY: 0 }} animate={side ? { opacity: 1, rotateY: 0 } : { opacity: 0, rotateY: reduced ? 0 : 90 }} transition={{ duration: reduced ? .1 : .3, delay: reduced ? 0 : flipDelay(cell.index, boardSize(card)) + (side ? .24 : 0), ease: [.45, 0, .2, 1] }}><CellArtwork cell={cell} isMine={isOwnCell(cell, card.cardId, own)} /></motion.div>)}
+    </div>)}
   </div>
 }
 
@@ -149,14 +173,14 @@ function CellArtwork({ cell, isMine = false, peek, fresh = false }: { cell: Cell
   return kind ? <motion.div className="cell-reveal" initial={fresh ? { opacity: 0, scale: reduced ? 1 : .82 } : false} animate={{ opacity: 1, scale: 1 }} transition={{ duration: .32, ease: [.22, 1, .36, 1] }}><ItemIcon kind={kind} size={43} /><span className={`cell-author ${isMine ? 'is-mine' : ''}`}>{isMine ? '你' : cell.by ?? '玩家'}</span></motion.div> : <><span className="stone-cover" aria-hidden="true" />{peek && <><span className="peek-badge" aria-hidden="true"><ItemIcon kind="spyglass" size={16} /></span><ItemIcon kind={peek} size={39} className="peek-item" /></>}</>
 }
 
-function MineCell({ cell, peek, cardId, own, canDig, isPending, onInspect, activeEffect }: { cell: Cell; peek?: Kind; cardId: number; own: PrivateGame | null; canDig: boolean; isPending: boolean; onInspect: () => void; activeEffect: PresentationEffect | null }) {
+function MineCell({ cell, peek, cardId, size, own, canDig, isPending, onInspect, activeEffect }: { cell: Cell; peek?: Kind; cardId: number; size: BoardSize; own: PrivateGame | null; canDig: boolean; isPending: boolean; onInspect: () => void; activeEffect: PresentationEffect | null }) {
   const reducedMotion = useReducedMotion()
   const [trail, setTrail] = useState<string[]>([])
   const pointer = useRef<{ x: number; y: number; handled: boolean; cancelled: boolean; touch: boolean } | null>(null)
   const kind = cell.kind
   const isMine = isOwnCell(cell, cardId, own)
   const perform = () => { if (canDig && !kind) void submit(`dig ${cardId} ${cell.index + 1}`) }
-  const label = kind ? `${coordinate(cell.index)}，${loot[kind].name}，${isMine ? '你' : cell.by ?? '玩家'}已挖开，查看记录` : `${coordinate(cell.index)}，未挖掘${peek ? `，望远镜情报：${loot[peek].name}，仅你可见` : ''}`
+  const label = kind ? `${coordinate(cell.index, size)}，${loot[kind].name}，${isMine ? `你${cell.by ? `（${cell.by}）` : ''}` : cell.by ?? '玩家'}已挖开，查看记录` : `${coordinate(cell.index, size)}，未挖掘${peek ? `，望远镜情报：${loot[peek].name}，仅你可见` : ''}`
   const fresh = activeEffect?.phase === 'resolve'
   return <motion.button type="button" className={`mine-cell ${kind ? `revealed kind-${kind}` : 'covered'} ${isMine ? 'my-cell' : ''} ${peek ? 'has-peek' : ''} ${isPending ? 'is-pending' : ''} ${activeEffect ? 'is-resolving' : ''}`} disabled={!canDig && kind === null} aria-label={label} title={label} data-card-id={cardId} data-cell-index={cell.index} data-kind={kind ?? 'hidden'} data-private-hint={peek ?? undefined} data-testid={`cell-${cell.index}`} initial={false} whileHover={!reducedMotion && canDig && !kind ? { y: -2 } : undefined} whileTap={!reducedMotion && canDig && !kind ? { y: 2, scale: .96 } : undefined} transition={{ duration: .12 }}
     onClick={event => { if (kind) onInspect(); else if (event.detail === 0 || !pointer.current?.handled && !pointer.current?.cancelled) perform(); pointer.current = null; setTrail([]) }}
@@ -203,14 +227,14 @@ function TurnStatus() {
   else if (unconfirmed) { text = '确认上一笔结果后即可继续'; state = 'waiting' }
   else if (!me?.signedIn) { text = '登录后即可参与挖掘'; state = 'waiting' }
   else if (!me.open) { text = me.why === 'not_in_scope' ? '你不在这个红包的领取范围内' : me.why === 'paused' ? '这个红包暂时暂停' : '请在红包页查看参与条件'; state = 'waiting' }
-  else if (pending) { text = pending === 'cashout' ? '正在结算…' : '正在挖开…'; state = 'waiting' }
+  else if (pending) { text = pending === 'cashout' ? '正在提交领取，等待确认…' : '正在提交，等待判定…'; state = 'waiting' }
   else if (platformSeconds > 0) { text = `操作冷却中，${platformSeconds} 秒后可提交`; state = 'waiting' }
   else if (gameSeconds > 0) { text = `等别人接棒，或 ${gameSeconds} 秒后继续`; state = 'waiting' }
-  else if (own?.chances === 1) text = '继续挖掘，或在右上角见好就收'
+  else if (own?.chances === 1) text = '继续挖掘，或见好就收'
   else if (own?.peeks.some(peek => peek.cardId === game?.cardId && game.cells[peek.index]?.kind === null)) text = '虚线格子是你看见的情报，可以选择挖它'
   else if (own?.digs === 1) text = '继续挖有风险，也可以见好就收'
   else if (game?.lastMove) text = game.lastMove.actorKey === own?.actorKey ? '可以继续挖掘了' : `${game.lastMove.name} 挖过了，轮到你了`
-  return <div className={`turn-status ${state}`} role="status" data-testid="turn-status"><AnimatePresence mode="wait" initial={false}><motion.p key={text} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: .08 }}>{text}</motion.p></AnimatePresence></div>
+  return <div className={`turn-status ${state}`} role="status" data-testid="turn-status"><p>{text}</p></div>
 }
 
 function PlayerSummary() {
@@ -263,26 +287,32 @@ function CashoutControl() {
 function RulesContent({ game, onClose, onDemo }: { game: PublicGame; onClose: () => void; onDemo: () => void }) {
   const packet = useAtomValue(hongbaoAtom)
   const rules = game?.rules ?? defaultRules
+  const composition = cardComposition(game)
+  const size = boardSize(game)
+  const unit = packet?.unit ?? 'LDC'
   return <article className="rules-content">
     <header className="rules-dialog-heading"><h2 id="rules-title">怎么玩</h2><button type="button" className="dialog-close" aria-label="关闭玩法规则" onClick={onClose}>×</button></header>
+    <div className="effective-rules" data-testid="effective-rules"><strong>{rulesLabel(rules)}</strong><p>{rules.boardSpec === 'random' ? '每卡随机 5 × 5／6 × 6／7 × 7' : `${size} × ${size} 卡片`}{rules.compositionVariation ? ` · ${rules.compositionVariation === 'fixed' ? '固定配比' : '配比小幅浮动'}` : ''}</p><p>初始 {rules.initialChances} 次 · TNT 扣 {rules.tntPercent}%<br />绿宝石 {formatMoney(rules.smallReward)} · 钻石 {formatMoney(rules.smallReward * rules.bigMultiplier)} {unit}</p></div>
     <button className="secondary-button demo-entry" onClick={onDemo}><ItemIcon kind="pickaxe" size={24} />先练习一下 · 不消耗机会</button>
     <ul className="rules-basics">
       <li>点按或横向刮开格子。初始 {rules.initialChances} 次，每挖一格消耗 1 次。</li>
       <li>别人挖过就能接棒；连续自己挖，需要间隔 {rules.waitSeconds} 秒。</li>
-      <li>右上角点「见好就收」领取奖励；机会用完也会自动结算。结算后不能再挖这个红包。</li>
+      <li>点「见好就收」领取奖励；机会用完也会自动结算。结算后不能再挖这个红包。</li>
     </ul>
     <section className="rules-items" aria-labelledby="items-title">
-      <div className="rules-section-heading"><h2 id="items-title">{game ? `第 ${game.cardId} 张的剩余道具` : '卡片里的道具'}</h2></div>
+      <div className="rules-section-heading"><h2 id="items-title">第 {game.cardId} 张 · {size} × {size} 道具</h2><p>数量已生成并固定，本卡所有玩家共享。</p></div>
       {kinds.map(kind => <div className={`rules-item ${game?.counts[kind] === 0 ? 'depleted' : ''}`} key={kind}>
         <ItemIcon kind={kind} size={40} />
-        <div><h3>{loot[kind].name}<span>{game ? `剩 ${game.counts[kind]} 个` : `每卡 ${loot[kind].count} 个`}</span></h3><p>{kind === 'emerald' ? `奖励 +${formatMoney(rules.smallReward)}` : kind === 'diamond' ? `奖励 +${formatMoney(rules.smallReward * rules.bigMultiplier)}` : kind === 'apple' ? '当前奖励翻倍' : kind === 'totem' ? `机会 +${rules.totemBonus}` : kind === 'tnt' ? `扣除当前奖励的 ${rules.tntPercent}%` : kind === 'pearl' ? '所有人换下一张卡，保留机会和奖励' : kind === 'shield' ? '自动抵挡一次 TNT' : '提前看见一个格子，仅你可见'}</p></div>
+        <div><h3>{loot[kind].name}<span>剩 {game.counts[kind]} / 本卡 {composition[kind]} 个</span></h3><p>{kind === 'emerald' ? `奖励 +${formatMoney(rules.smallReward)}` : kind === 'diamond' ? `奖励 +${formatMoney(rules.smallReward * rules.bigMultiplier)}` : kind === 'apple' ? '当前奖励翻倍' : kind === 'totem' ? `机会 +${rules.totemBonus}` : kind === 'tnt' ? `扣除当前奖励的 ${rules.tntPercent}%` : kind === 'pearl' ? '所有人换下一张卡，保留机会和奖励' : kind === 'shield' ? '自动抵挡一次 TNT' : '提前看见一个格子，仅你可见'}</p></div>
       </div>)}
     </section>
     <details className="rules-details"><summary>更多规则与奖池</summary>
       <p>双铁镐在扣除本次机会后增加 {rules.totemBonus} 次，最后一次也能救回，没有累计限制。金苹果在奖励为零时给一份小奖；重复获得盾牌也给小奖。</p>
-      <p>望远镜情报用虚线格子标记。换卡后情报失效，盾牌保留。没有新格子可看时，望远镜给小奖。25 格全部打开后也会换卡。</p>
+      <p>望远镜情报用虚线格子标记。换卡后情报失效，盾牌保留。没有新格子可看时，望远镜给小奖。本卡 {size ** 2} 格全部打开后也会换卡。</p>
+      {game.version === 2 && <p>{rules.boardSpec === 'random' ? '发新卡时等概率抽取一种规格，刷新或加入不会重抽。' : '每张新卡沿用所选规格。'}{rules.compositionVariation === 'slight' ? '每卡的钻石、双铁镐、TNT、盾牌各独立浮动 −1／0／+1，绿宝石补齐；金苹果、末影珍珠和望远镜不浮动。' : '每种规格的道具数量固定，位置仍会洗牌。'}</p>}
       <p>抢到已开格子、操作旧卡片或未等满接棒时间都不扣机会。红包页本身的提交冷却仍然生效。</p>
       <p>奖励在结算前暂存，TNT 只扣这个红包尚未结算的奖励，按分向下取整。主动领取和机会耗尽都会结算，零奖励也会结束参与。</p>
+      <p>例如持有 1.00 {unit}，无盾遇到 TNT 扣 {formatMoney(rules.tntPercent)}，剩 {formatMoney(100 - rules.tntPercent)} {unit}。实际以你的待结算奖励计算。</p>
       <p>单次奖励不超过可分配奖池。奖池占满、红包截止或发放者结束时，全员统一结算。随机牌面可在红包结束后核对。</p>
       <dl className="pool-details"><div><dt>总奖池</dt><dd>{packet?.pool ?? '—'} {packet?.unit ?? 'LDC'}</dd></div><div><dt>剩余可分配</dt><dd data-testid="pool-amount">{packet?.unclaimed ?? '—'} {packet?.unit ?? 'LDC'}</dd></div></dl>
       <p className="credits">Minecraft 主题小游戏，非官方产品。</p>
@@ -321,5 +351,5 @@ function Toast() {
   const message = useAtomValue(toastAtom)
   const setMessage = useSetAtom(toastAtom)
   useEffect(() => { if (!message) return; const timer = setTimeout(() => setMessage(null), message.tone === 'error' ? 7000 : 5000); return () => clearTimeout(timer) }, [message, setMessage])
-  return <div className="toast-region" aria-live="polite"><AnimatePresence>{message && <motion.div className={`toast ${message.tone}`} key={message.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 6 }}><span aria-hidden="true">{message.tone === 'error' ? '!' : '✦'}</span><p>{message.text}</p><button aria-label="关闭提示" onClick={() => setMessage(null)}>×</button></motion.div>}</AnimatePresence></div>
+  return <div className="toast-region" aria-live="polite"><AnimatePresence>{message && <motion.div className={`toast ${message.tone}`} key="toast" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 6 }}><span aria-hidden="true">{message.tone === 'error' ? '!' : '✦'}</span><p>{message.text}</p><button aria-label="关闭提示" onClick={() => setMessage(null)}>×</button></motion.div>}</AnimatePresence></div>
 }

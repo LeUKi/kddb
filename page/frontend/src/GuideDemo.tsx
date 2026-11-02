@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { ItemIcon } from './ItemIcon'
-import { formatMoney } from './game'
+import { formatMoney, rulesLabel } from './game'
 import type { Rules } from './game'
 import { useReducedMotion } from './useReducedMotion'
 
@@ -42,6 +42,7 @@ export function GuideDemo({ rules, unit, active, finishLabel, onFinish }: { rule
 
   return <article className="guide-demo" data-testid="guide-demo">
     <header className="demo-heading"><span>练习 · 不消耗真实机会</span><button className="dialog-close" aria-label="关闭练习" onClick={onFinish}>×</button></header>
+    <p className="demo-effective-rules">{rulesLabel(rules)} · 正式游戏初始 {rules.initialChances} 次 · TNT {rules.tntPercent}%<br />练习用 2 把镐子，奖励按当前规则演示。</p>
     <div className="demo-copy" role="status"><h2 id="rules-title">{title}</h2><p>{detail}</p></div>
     <div className="demo-summary">
       <div className="demo-summary-topline">

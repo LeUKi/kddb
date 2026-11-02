@@ -4,46 +4,97 @@
 /** @type {import("./judge").Meta} */
 export const meta = {
   name: "矿洞夺宝",
-  description: "共享 5×5 矿洞卡，接棒挖宝、双铁镐加机会，自选时机领取奖励",
+  description: "共享 5×5、6×6、7×7 矿洞卡，接棒挖宝，自选难度与领取时机",
   page: "https://hbweb-kddb.lafi.sh/",
 };
 
 /** @type {import("./judge").ParamDeclaration[]} */
 export const params = [
   {
+    key: "difficulty",
+    label: "游戏难度",
+    hint: "选择难度会填入初始机会、TNT扣除和道具配比；之后仍可手动调整",
+    type: "choice",
+    options: [
+      {
+        value: "easy",
+        label: "简单",
+        hint: "9次机会、TNT扣15%、固定配比；TNT数按5×5/6×6/7×7为3/4/6",
+        set: { initialChances: 9, tntPercent: 15, compositionVariation: "fixed" },
+      },
+      {
+        value: "hard",
+        label: "困难",
+        hint: "7次机会、TNT扣25%、小幅浮动；TNT数按5×5/6×6/7×7为4/6/8",
+        set: { initialChances: 7, tntPercent: 25, compositionVariation: "slight" },
+      },
+      {
+        value: "hell",
+        label: "地狱",
+        hint: "4次机会、TNT扣75%、小幅浮动；TNT数按5×5/6×6/7×7为8/12/17",
+        set: { initialChances: 4, tntPercent: 75, compositionVariation: "slight" },
+      },
+    ],
+    default: "hard",
+  },
+  {
+    key: "boardSpec",
+    label: "卡片规格",
+    hint: "每卡随机为 5×5、6×6、7×7 等概率抽一种；卡片外框尺寸统一",
+    type: "choice",
+    options: [
+      { value: "5", label: "5×5" },
+      { value: "6", label: "6×6" },
+      { value: "7", label: "7×7" },
+      { value: "random", label: "每卡随机" },
+    ],
+    default: "random",
+  },
+  {
+    key: "smallReward",
+    label: "绿宝石奖励",
+    hint: "钻石奖励为此金额的 5 倍；金额越大奖池消耗越快",
+    type: "money",
+    default: 10,
+    min: 1,
+  },
+  {
     key: "initialChances",
-    label: "初始挖掘次数",
-    hint: "每人第一次挖掘时获得；双铁镐另外增加 3 次，没有累计额度",
+    label: "初始机会",
+    hint: "选难度时自动填入，之后可改为1–20次；双铁镐仍额外增加3次",
     type: "integer",
     default: 7,
     min: 1,
     max: 20,
   },
   {
+    key: "tntPercent",
+    label: "TNT 扣除比例（%）",
+    hint: "选难度时自动填入，之后可改为1–100%；TNT格数由难度决定",
+    type: "integer",
+    default: 25,
+    min: 1,
+    max: 100,
+  },
+  {
     key: "waitSeconds",
-    label: "连续操作等待时间",
-    hint: "同一人连续挖掘需等待的秒数；其他玩家成功接棒后可立即挖掘",
+    label: "连续挖掘等待（秒）",
+    hint: "默认 10 秒；其他玩家成功接棒后可立即挖掘，领取不受此等待限制",
     type: "integer",
     default: 10,
     min: 1,
     max: 60,
   },
   {
-    key: "smallReward",
-    label: "小奖金额",
-    hint: "绿宝石奖励；钻石为此金额的 5 倍，金额越大奖池消耗越快",
-    type: "money",
-    default: 10,
-    min: 1,
-  },
-  {
-    key: "tntPercent",
-    label: "TNT 扣除比例",
-    hint: "扣除当前待结算奖励的百分比，向下取整到分；盾牌可挡一次",
-    type: "integer",
-    default: 25,
-    min: 1,
-    max: 100,
+    key: "compositionVariation",
+    label: "道具配比",
+    hint: "选难度时自动填入，之后可改；浮动仅调整钻石、双铁镐、TNT、盾牌各±1",
+    type: "choice",
+    options: [
+      { value: "fixed", label: "固定" },
+      { value: "slight", label: "小幅浮动" },
+    ],
+    default: "slight",
   },
 ];
 
@@ -54,21 +105,28 @@ export const hongbao = {
   total: { min: 5, default: 10000 },
   deadline: { value: 1, unit: "days" },
   humanCheck: false,
-  note: "[打开矿洞夺宝，点格子开始挖宝](#附带网页)\n\n大家共享一张 5×5 卡片，机会和奖励各自独立。每挖一格用 1 把镐子，双铁镐增加 3 次机会。其他玩家挖过后可接棒，否则等倒计时。右上角点「见好就收」可领取奖励并结束挖掘；机会用完也会自动结算，之后不能再挖这个红包。TNT 只扣尚未结算的奖励。",
+  pageAutoOpen: true,
+  note: "[打开矿洞夺宝，点格子开始挖宝](#附带网页)\n\n大家共享同一张矿洞卡，可为 5×5、6×6、7×7 或每卡随机规格。机会和奖励各自独立，每挖一格用 1 把镐子，双铁镐增加 3 次机会，每张新卡只有 1 个末影珍珠。其他玩家挖过后可接棒，否则等倒计时。点「见好就收」可领取奖励并结束挖掘；机会用完也会自动结算，之后不能再挖这个红包。难度与有效奖励规则见网页「怎么玩」，TNT 只扣尚未结算的奖励。",
 };
 
 /** @typedef {'emerald'|'diamond'|'apple'|'totem'|'tnt'|'pearl'|'shield'|'spyglass'} Kind */
-/** @typedef {{initialChances:number,waitSeconds:number,smallReward:number,bigMultiplier:5,totemBonus:3,tntPercent:number}} Rules */
+/** @typedef {5|6|7} Size */
+/** @typedef {'easy'|'hard'|'hell'} Difficulty */
+/** @typedef {Record<Kind,number>} Composition */
+/** @typedef {{initialChances:number,waitSeconds:number,smallReward:number,bigMultiplier:5,totemBonus:3,tntPercent:number}} LegacyRules */
+/** @typedef {LegacyRules & {version:2,difficulty:Difficulty,boardSpec:'5'|'6'|'7'|'random',compositionVariation:'fixed'|'slight'}} CardRules */
+/** @typedef {LegacyRules | CardRules} Rules */
 /** @typedef {{by:string,at:number,actorKey?:string}|null} OpenCell */
-/** @typedef {{actorKey:string,name:string,at:number,cardId:number,index:number}} LastMove */
-/** @typedef {{id:number,actor:string,kind:Kind,text:string,at:number,cardId:number,index:number}} FeedItem */
-/** @typedef {{version:1,cardId:number,deck:Kind[],opened:OpenCell[],lastMove:LastMove|null,stats:{digs:number,players:number},feed:FeedItem[],nextEventId:number}} Game */
+/** @typedef {{actorKey:string,name:string,at:number,cardId:number,index:number,size?:Size}} LastMove */
+/** @typedef {{id:number,actor:string,actorKey?:string,kind:Kind,text:string,at:number,cardId:number,index:number,size?:Size}} FeedItem */
+/** @typedef {{cardId:number,deck:Kind[],opened:OpenCell[],lastMove:LastMove|null,stats:{digs:number,players:number},feed:FeedItem[],nextEventId:number}} GameCore */
+/** @typedef {GameCore & ({version:1} | {version:2,size:Size,composition:Composition,rules:CardRules})} Game */
 /** @typedef {{cardId:number,index:number,kind:Kind}} Peek */
-/** @typedef {{kind:Kind,cardId:number,index:number,amount:number,blocked:boolean,text:string}} Result */
-/** @typedef {{version:1,actorKey:string,chances:number,shield:boolean,peeks:Peek[],digs:number,status:'playing'|'settled',lastResult:Result|null}} Miner */
+/** @typedef {{kind:Kind,cardId:number,index:number,size?:Size,amount:number,blocked:boolean,text:string}} Result */
+/** @typedef {{version:1|2,actorKey:string,chances:number,shield:boolean,peeks:Peek[],digs:number,status:'playing'|'settled',lastResult:Result|null}} Miner */
 
-/** Fixed, public composition. Array order here never represents a dealt card. */
-const COMPOSITION = /** @type {const} */ ({
+/** Legacy games keep this composition on every later card, too. */
+const LEGACY_COMPOSITION = /** @type {const} */ ({
   emerald: 10,
   diamond: 3,
   apple: 1,
@@ -78,18 +136,39 @@ const COMPOSITION = /** @type {const} */ ({
   shield: 2,
   spyglass: 1,
 });
-const CELL_COUNT = 25;
+/** Public baselines; their order never represents the secret shuffled deck. */
+const COMPOSITIONS = /** @type {const} */ ({
+  5: { emerald: 11, diamond: 3, apple: 1, totem: 2, tnt: 4, pearl: 1, shield: 2, spyglass: 1 },
+  6: { emerald: 14, diamond: 4, apple: 2, totem: 3, tnt: 6, pearl: 1, shield: 3, spyglass: 3 },
+  7: { emerald: 20, diamond: 6, apple: 2, totem: 4, tnt: 8, pearl: 1, shield: 4, spyglass: 4 },
+});
+const TNT_COUNTS = /** @type {const} */ ({
+  easy: { 5: 3, 6: 4, 7: 6 },
+  hard: { 5: 4, 6: 6, 7: 8 },
+  hell: { 5: 8, 6: 12, 7: 17 },
+});
 const FEED_LIMIT = 10;
 
-/** @param {import("./judge").Params} values @returns {Rules} */
-function rulesOf(values) {
-  return {
+/** @param {import("./judge").Params} values @param {boolean} [legacy] @returns {Rules} */
+function rulesOf(values, legacy = false) {
+  /** @type {LegacyRules} */
+  const numeric = {
     initialChances: Number(values.initialChances ?? 7),
     waitSeconds: Number(values.waitSeconds ?? 10),
     smallReward: Number(values.smallReward ?? 10),
     bigMultiplier: 5,
     totemBonus: 3,
     tntPercent: Number(values.tntPercent ?? 25),
+  };
+  if (legacy) return numeric;
+  // Native option `set` runs in the author's form. Here use its final submitted
+  // values, preserving manual overrides instead of applying a preset again.
+  return {
+    ...numeric,
+    version: 2,
+    difficulty: /** @type {Difficulty} */ (values.difficulty ?? "hard"),
+    boardSpec: /** @type {CardRules['boardSpec']} */ (values.boardSpec ?? "random"),
+    compositionVariation: /** @type {CardRules['compositionVariation']} */ (values.compositionVariation ?? "slight"),
   };
 }
 
@@ -106,11 +185,11 @@ export function check(values, pool) {
     : [];
 }
 
-/** @param {(min:number,max:number)=>number} int @returns {Kind[]} */
-function shuffledDeck(int) {
+/** @param {(min:number,max:number)=>number} int @param {Composition} composition @returns {Kind[]} */
+function shuffledDeck(int, composition) {
   /** @type {Kind[]} */
   const deck = [];
-  for (const [kind, count] of Object.entries(COMPOSITION)) {
+  for (const [kind, count] of Object.entries(composition)) {
     for (let index = 0; index < count; index += 1) deck.push(/** @type {Kind} */ (kind));
   }
   for (let index = deck.length - 1; index > 0; index -= 1) {
@@ -120,13 +199,29 @@ function shuffledDeck(int) {
   return deck;
 }
 
-/** @param {(min:number,max:number)=>number} int @returns {Game} */
-function newGame(int) {
+/** @param {(min:number,max:number)=>number} int @param {CardRules} rules */
+function newCard(int, rules) {
+  const size = /** @type {Size} */ (rules.boardSpec === "random" ? int(5, 7) : Number(rules.boardSpec));
+  /** @type {Composition} */
+  const composition = { ...COMPOSITIONS[size], tnt: TNT_COUNTS[rules.difficulty][size] };
+  if (rules.compositionVariation === "slight") {
+    for (const kind of /** @type {const} */ (["diamond", "totem", "tnt", "shield"])) {
+      composition[kind] += int(-1, 1);
+    }
+  }
+  composition.emerald = size * size - Object.entries(composition)
+    .filter(([kind]) => kind !== "emerald").reduce((sum, [, count]) => sum + count, 0);
+  return { size, composition, deck: shuffledDeck(int, composition), opened: Array(size * size).fill(null) };
+}
+
+/** @param {(min:number,max:number)=>number} int @param {Rules} rules @returns {Game} */
+function newGame(int, rules) {
+  const card = "version" in rules
+    ? { version: /** @type {const} */ (2), ...newCard(int, rules), rules }
+    : { version: /** @type {const} */ (1), deck: shuffledDeck(int, LEGACY_COMPOSITION), opened: Array(25).fill(null) };
   return {
-    version: 1,
+    ...card,
     cardId: 1,
-    deck: shuffledDeck(int),
-    opened: Array(CELL_COUNT).fill(null),
     lastMove: null,
     stats: { digs: 0, players: 0 },
     feed: [],
@@ -136,7 +231,7 @@ function newGame(int) {
 
 /** @param {Game} game @param {Rules} rules */
 function publicView(game, rules) {
-  const counts = { ...COMPOSITION };
+  const counts = { ...(game.version === 2 ? game.composition : LEGACY_COMPOSITION) };
   const cells = game.opened.map((open, index) => {
     if (open !== null) counts[game.deck[index]] -= 1;
     return {
@@ -151,10 +246,11 @@ function publicView(game, rules) {
   });
   const opened = cells.filter((cell) => cell.kind !== null).length;
   return {
-    summary: `第 ${game.cardId} 张卡 · 已挖 ${opened}/25 格 · ${game.stats.players} 人加入`,
+    summary: `第 ${game.cardId} 张卡 · 已挖 ${opened}/${game.deck.length} 格 · ${game.stats.players} 人加入`,
     data: {
-      version: 1,
+      version: game.version,
       cardId: game.cardId,
+      ...(game.version === 2 ? { size: game.size, composition: game.composition } : {}),
       cells,
       counts,
       rules,
@@ -167,15 +263,16 @@ function publicView(game, rules) {
 
 /** 开放时使用协议提供的封存随机流；不在文件顶层抽牌。 */
 export function setup(/** @type {import("./judge").Params} */ values) {
-  const game = newGame((min, max) => min + Math.floor(Math.random() * (max - min + 1)));
-  return { state: game, view: publicView(game, rulesOf(values)) };
+  const rules = rulesOf(values);
+  const game = newGame((min, max) => min + Math.floor(Math.random() * (max - min + 1)), rules);
+  return { state: game, view: publicView(game, rules) };
 }
 
 /** @param {import("./judge").Submission} submission @param {Rules} rules @param {Game|null} game @returns {Miner} */
 function minerOf(submission, rules, game) {
   const previous = /** @type {Miner|null} */ (submission.player.state);
   return {
-    version: 1,
+    version: game?.version ?? 2,
     actorKey: `u:${submission.user.id}`,
     chances: previous?.chances ?? rules.initialChances,
     shield: previous?.shield ?? false,
@@ -200,9 +297,9 @@ function privateView(miner) {
   };
 }
 
-/** @param {number} index */
-function coordinate(index) {
-  return `${"ABCDE"[Math.floor(index / 5)]}${index % 5 + 1}`;
+/** @param {number} index @param {Size} [size] */
+function coordinate(index, size = 5) {
+  return `${"ABCDEFG"[Math.floor(index / size)]}${index % size + 1}`;
 }
 
 /**
@@ -214,8 +311,11 @@ function coordinate(index) {
  */
 export function judge(submission, tools) {
   const { input, user, now, hongbao: pool } = submission;
-  const rules = rulesOf(submission.params);
   const saved = /** @type {Game|null} */ (submission.state);
+  const rules = saved?.version === 2 ? saved.rules : rulesOf(submission.params, saved?.version === 1);
+  const savedSize = saved?.version === 2 ? saved.size : 5;
+  const maxCell = saved !== null ? savedSize * savedSize
+    : "boardSpec" in rules && rules.boardSpec !== "random" ? Number(rules.boardSpec) ** 2 : 49;
 
   if (input === "cashout" || input === "收手") {
     const miner = minerOf(submission, rules, saved);
@@ -230,16 +330,18 @@ export function judge(submission, tools) {
 
   const command = /^dig ([1-9]\d*) ([1-9]\d*)$/.exec(input);
   if (!command)
-    return { message: `请先打开矿洞夺宝点格子；手动挖掘需完整输入，如 dig ${saved?.cardId ?? 1} 1（最后一个数为格子 1–25）；领取并结束输入 cashout。本次不消耗机会` };
+    return { message: `请先打开矿洞夺宝点格子；手动挖掘需完整输入，如 dig ${saved?.cardId ?? 1} 1（最后一个数为格子 1–${maxCell}）；领取并结束输入 cashout。本次不消耗机会` };
   const cardId = Number(command[1]);
   const cell = Number(command[2]);
-  if (!Number.isSafeInteger(cardId) || !Number.isInteger(cell) || cell < 1 || cell > CELL_COUNT)
-    return { message: "卡片编号需为正整数，格子编号为 1–25；本次不消耗机会" };
+  if (!Number.isSafeInteger(cardId) || !Number.isSafeInteger(cell))
+    return { message: `卡片编号需为正整数，格子编号为 1–${maxCell}；本次不消耗机会` };
   if (cardId !== (saved?.cardId ?? 1))
     return { message: "卡片已经更换，请在当前卡片重新选格；本次不消耗机会" };
+  if (cell > maxCell)
+    return { message: `卡片编号需为正整数，格子编号为 1–${maxCell}；本次不消耗机会` };
   const index = cell - 1;
   if (saved?.opened[index] !== undefined && saved.opened[index] !== null)
-    return { message: `${coordinate(index)} 已被挖开，请换一格；本次不消耗机会` };
+    return { message: `${coordinate(index, savedSize)} 已被挖开，请换一格；本次不消耗机会` };
   const actorKey = `u:${user.id}`;
   if (saved?.lastMove?.actorKey === actorKey) {
     const wait = saved.lastMove.at + rules.waitSeconds * 1000 - now;
@@ -249,7 +351,10 @@ export function judge(submission, tools) {
 
   // Tests may start with null instead of running setup. Lazy initialization is
   // allowed only for a valid first dig; invalid input never deals a new card.
-  const source = saved ?? newGame(tools.random.int);
+  const source = saved ?? newGame(tools.random.int, rules);
+  const size = source.version === 2 ? source.size : 5;
+  if (cell > source.deck.length)
+    return { message: `本卡格子编号为 1–${source.deck.length}；请在当前卡片选格，本次不消耗机会` };
   /** @type {Game} */
   const game = {
     ...source,
@@ -332,7 +437,7 @@ export function judge(submission, tools) {
       } else {
         const target = tools.random.pick(candidates);
         miner.peeks.push({ cardId, index: target, kind: game.deck[target] });
-        text = `望远镜看见了 ${coordinate(target)}，情报仅你可见`;
+        text = `望远镜看见了 ${coordinate(target, size)}，情报仅你可见`;
         publicText = "通过望远镜获得了一条私有情报";
       }
       break;
@@ -350,24 +455,30 @@ export function judge(submission, tools) {
   const poolFilled = add > 0 && add === pool.unclaimed;
   const settle = miner.chances === 0 || poolFilled;
   miner.status = settle ? "settled" : "playing";
-  miner.lastResult = { kind, cardId, index, amount: add, blocked, text };
-  game.lastMove = { actorKey, name, at: now, cardId, index };
+  miner.lastResult = { kind, cardId, index, size, amount: add, blocked, text };
+  game.lastMove = { actorKey, name, at: now, cardId, index, size };
   const event = {
     id: game.nextEventId,
     actor: name,
+    actorKey,
     kind,
     text: publicText,
     at: now,
     cardId,
     index,
+    size,
   };
   game.nextEventId += 1;
   game.feed = [event, ...game.feed].slice(0, FEED_LIMIT);
 
   if (kind === "pearl" || game.opened.every((open) => open !== null)) {
     game.cardId += 1;
-    game.deck = shuffledDeck(tools.random.int);
-    game.opened = Array(CELL_COUNT).fill(null);
+    if (game.version === 2) {
+      Object.assign(game, newCard(tools.random.int, game.rules));
+    } else {
+      game.deck = shuffledDeck(tools.random.int, LEGACY_COMPOSITION);
+      game.opened = Array(25).fill(null);
+    }
     miner.peeks = [];
   }
 
@@ -381,6 +492,6 @@ export function judge(submission, tools) {
     player: { state: miner, view: privateView(miner) },
     state: game,
     view: publicView(game, rules),
-    announce: `${coordinate(index)}：${publicText}`,
+    announce: `${coordinate(index, size)}：${publicText}`,
   };
 }

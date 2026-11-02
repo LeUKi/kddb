@@ -79,6 +79,56 @@ test('an unconfirmed submit queries records and never resubmits', async () => {
   assert.match(gameStore.store.get(gameStore.toastAtom).text, /钻石大奖/)
 })
 
+test('a slow submit stays locked without revealing a cell or changing rewards before confirmation', async () => {
+  let finishSubmit
+  sdk.submit = input => {
+    submissions.push(input)
+    return new Promise(resolve => { finishSubmit = resolve })
+  }
+  const request = gameStore.submit('dig 1 1')
+  assert.equal(gameStore.store.get(gameStore.pendingActionAtom), 'dig 1 1')
+  assert.equal(gameStore.store.get(gameStore.presentationAtom).busy, true)
+  assert.equal(gameStore.store.get(gameStore.presentationAtom).effect, null)
+  assert.equal(gameStore.store.get(gameStore.presentationAtom).game.cells[0].kind, null)
+  assert.equal(gameStore.store.get(gameStore.presentationAtom).me.pending, '0.50')
+
+  await gameStore.submit('dig 1 1')
+  await gameStore.submit('dig 1 2')
+  await gameStore.submit('cashout')
+  assert.deepEqual(submissions, ['dig 1 1'])
+
+  finishSubmit({ judged: false, reason: 'try_later' })
+  await request
+  assert.equal(gameStore.store.get(gameStore.pendingActionAtom), null)
+  assert.equal(gameStore.store.get(gameStore.presentationAtom).busy, false)
+  assert.equal(gameStore.store.get(gameStore.presentationAtom).effect, null)
+  assert.equal(gameStore.store.get(gameStore.presentationAtom).game.cells[0].kind, null)
+  assert.equal(gameStore.store.get(gameStore.presentationAtom).me.pending, '0.50')
+  assert.deepEqual(submissions, ['dig 1 1'])
+})
+
+test('a slow submit that loses its response queries state once and never retries the action', async () => {
+  let rejectSubmit
+  let queries = 0
+  sdk.submit = input => {
+    submissions.push(input)
+    return new Promise((resolve, reject) => { rejectSubmit = reject })
+  }
+  sdk.mine = async () => { queries++; throw new Error('offline') }
+  const request = gameStore.submit('dig 1 1')
+  rejectSubmit(new Error('response lost'))
+  await request
+  await gameStore.submit('dig 1 2')
+  await gameStore.submit('cashout')
+
+  assert.equal(queries, 1)
+  assert.deepEqual(submissions, ['dig 1 1'])
+  assert.equal(gameStore.store.get(gameStore.pendingActionAtom), null)
+  assert.equal(gameStore.store.get(gameStore.unconfirmedInputAtom), 'dig 1 1')
+  assert.equal(gameStore.store.get(gameStore.presentationAtom).effect, null)
+  assert.equal(gameStore.store.get(gameStore.presentationAtom).game.cells[0].kind, null)
+})
+
 test('failed record queries keep all further money actions locked', async () => {
   sdk.mine = async () => { throw new Error('offline') }
   await gameStore.submit('dig 1 1')

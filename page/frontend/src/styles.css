@@ -33,8 +33,13 @@ picture.item-icon > img { width: 100%; height: 100%; image-rendering: pixelated;
 .cave-scene { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; background: radial-gradient(ellipse at 50% 28%, #232b32, #181f26 60%, #11171d); }
 .cave-art { display: block; width: 100%; height: 100%; opacity: .4; }
 .cave-vignette { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 36%, transparent 30%, #0a101638 100%); }
-.app-shell { width: 100%; max-width: 560px; padding: 16px 24px 24px; margin: 0 auto; }
-.game-page { max-width: 480px; margin: 0 auto; }
+.app-shell { width: 100%; max-width: 732px; padding: 24px 24px 32px; margin: 0 auto; }
+.game-page { max-width: 440px; margin: 0 auto; }
+.play-layout { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; }
+.personal-panel { display: contents; }
+.personal-panel > .player-summary { grid-row: 1; }
+.board-panel { grid-row: 2; min-width: 0; }
+.personal-panel > .turn-status { grid-row: 3; }
 .player-summary { display: grid; gap: 10px; padding: 0 0 10px; }
 .summary-topline { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .earnings { position: relative; min-width: 0; width: fit-content; max-width: 100%; padding: 0 2px; }
@@ -68,6 +73,7 @@ picture.item-icon > img { width: 100%; height: 100%; image-rendering: pixelated;
 .hud-delta.negative { color: #f2a18a; }
 .board-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 28px; padding: 0 2px 6px; }
 .board-heading h2 { color: var(--muted); font-size: 14px; font-weight: 400; }
+.board-size { margin-left: 10px; color: #d3c7b2; font-variant-numeric: tabular-nums; }
 .shield-slot { display: flex; justify-content: flex-end; min-width: 24px; min-height: 22px; }
 .equipped-shield { display: inline-flex; align-items: center; gap: 5px; font-size: 14px; color: #dbc39e; animation: equipped .3s var(--ease-out); }
 .board-surround { position: relative; padding: 12px; background: #211f20; border: 3px solid #67533e; border-radius: 5px; box-shadow: inset 0 0 0 2px #10151b, 0 3px 0 #31281f, 0 6px 0 #11151b, 0 18px 48px #060b1266; }
@@ -78,17 +84,25 @@ picture.item-icon > img { width: 100%; height: 100%; image-rendering: pixelated;
 .card-flip-inner { position: absolute; inset: 0; transform-style: preserve-3d; }
 .card-flip-face { position: absolute !important; inset: 0; width: 100%; height: 100%; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
 .flip-back { transform: rotateY(180deg); }
-.mine-grid { position: relative; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 7px; min-width: 0; }
-.mine-cell { position: relative; display: flex; align-items: center; justify-content: center; min-width: 0; aspect-ratio: 1; padding: 3px; isolation: isolate; color: var(--ink); background: #19232d; border: 1px solid #8c89826b; border-bottom: 3px solid #303136; border-radius: 2px; box-shadow: inset 0 2px 0 #c5bbb22b, inset 2px 0 0 #e4d5b717, 0 2px 3px #0006; touch-action: pan-y; transition: border-color .15s, box-shadow .15s; }
+.mine-grid { --board-size: 5; --grid-gap: 7px; --cell-name-size: 13px; --cell-icon-max: 43px; position: relative; display: grid; grid-template-columns: repeat(var(--board-size), minmax(0, 1fr)); grid-template-rows: repeat(var(--board-size), minmax(0, 1fr)); gap: var(--grid-gap); min-width: 0; aspect-ratio: 1; }
+.mine-grid[data-board-size="6"] { --grid-gap: 5px; --cell-name-size: 12px; --cell-icon-max: 34px; }
+.mine-grid[data-board-size="7"] { --grid-gap: 4px; --cell-name-size: 11px; --cell-icon-max: 29px; }
+.mine-cell { position: relative; display: flex; align-items: center; justify-content: center; min-width: 0; min-height: 0; width: 100%; height: 100%; padding: 2px; isolation: isolate; color: var(--ink); background: #19232d; border: 1px solid #8c89826b; border-bottom: 3px solid #303136; border-radius: 2px; box-shadow: inset 0 2px 0 #c5bbb22b, inset 2px 0 0 #e4d5b717, 0 2px 3px #0006; touch-action: pan-y; transition: border-color .15s, box-shadow .15s; }
+.mine-grid[data-board-size="7"] .mine-cell { padding: 1px; }
+.card-flip-slot { min-height: 0; }
+.card-size-transition { position: relative; aspect-ratio: 1; perspective: 750px; }
+.card-size-layer { position: absolute; inset: 0; }
+.card-size-layer .mine-cell { backface-visibility: hidden; }
+.outgoing-grid { pointer-events: none; }
 .stone-cover { position: absolute; z-index: -1; inset: 0; background-image: linear-gradient(135deg, #edc38f0f, #0e172526), url('/assets/minecraft/1.21.4/textures/block/stone.png'); background-size: 100% 100%, 100% 100%; image-rendering: pixelated; border-top: 1px solid #e0d5c14d; border-left: 1px solid #ddd0b92e; box-shadow: inset 0 -3px 0 #0e17253d, inset -2px 0 0 #0e172533; }
 .mine-cell.covered:enabled:hover { border-color: #e3c08a; box-shadow: inset 0 0 0 1px #e3c08a66, 0 2px 3px #0006, 0 0 14px #e9b56b19; }
 .mine-cell.covered:enabled:hover .stone-cover { filter: brightness(1.18); }
 .mine-cell.covered:enabled:active .stone-cover { filter: brightness(.85); }
 .mine-cell.revealed { border-color: #4c5155; border-bottom-color: #171c22; box-shadow: inset 0 2px 6px #060b1266; }
-.cell-reveal { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: 100%; height: 100%; }
-.cell-reveal > .item-icon { width: 48% !important; height: auto !important; aspect-ratio: 1; max-width: 43px; filter: drop-shadow(0 3px 0 #0005); }
+.cell-reveal { display: grid; grid-template-rows: minmax(0, 1fr) auto; align-items: center; justify-items: center; gap: 2px; width: 100%; height: 100%; min-height: 0; overflow: hidden; }
+.cell-reveal > .item-icon { width: auto !important; height: 100% !important; min-height: 0; aspect-ratio: 1; max-width: min(68%, var(--cell-icon-max)); max-height: var(--cell-icon-max); filter: drop-shadow(0 2px 0 #0005); }
 .cell-effect { max-width: 100%; font-size: 14px; line-height: 1.15; font-weight: 550; font-variant-numeric: tabular-nums; letter-spacing: -.25px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #b4d3b2; }
-.cell-author { display: block; max-width: 100%; color: #ddd9cf; font-size: 14px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cell-author { display: block; min-width: 0; max-width: 100%; color: #aeb6bb; font-size: var(--cell-name-size); line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cell-author.is-mine { color: #f3cc8f; font-weight: 650; }
 .mine-cell.my-cell { border-color: #b99760; box-shadow: inset 0 0 0 1px #b9976055; }
 .mine-cell.revealed:focus-visible { z-index: 6; }
@@ -106,13 +120,15 @@ picture.item-icon > img { width: 100%; height: 100%; image-rendering: pixelated;
 .mine-cell.kind-shield { background: #34312f; border-color: #6c6053; }
 .mine-cell.kind-spyglass { background: #2c323a; border-color: #66717a; }
 .mine-cell.has-peek { border: 2px dashed #c5be9c; }
-.peek-item { width: 48%; height: auto; filter: drop-shadow(0 3px 2px #0008); }
-.peek-badge { position: absolute; z-index: 1; right: 3px; top: 3px; line-height: 0; }
+.peek-item { width: min(58%, 39px) !important; height: auto !important; max-height: 70%; aspect-ratio: 1; filter: drop-shadow(0 2px 1px #0008); }
+.peek-badge { position: absolute; z-index: 1; right: 5%; top: 5%; width: min(30%, 16px); aspect-ratio: 1; line-height: 0; }
+.peek-badge > .item-icon { width: 100% !important; height: 100% !important; }
 .has-peek .stone-cover { filter: brightness(.65); }
 .scratch-trail { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .mine-cell.is-pending, .mine-cell.is-resolving { z-index: 5; border-color: var(--gold); }
 .mining-crack, .breaking-crack { position: absolute; inset: 0; background: url('/assets/minecraft/1.21.4/textures/block/destroy_stage_5.png') center/100% 100%; image-rendering: pixelated; pointer-events: none; }
-.mining-pickaxe { position: absolute; z-index: 8; right: -4px; top: -8px; transform-origin: 70% 75%; filter: drop-shadow(0 3px 0 #0006); }
+.mining-pickaxe { position: absolute; z-index: 8; left: 27%; top: 27%; width: min(46%, 38px); aspect-ratio: 1; transform-origin: 70% 75%; filter: drop-shadow(0 2px 0 #0006); }
+.mining-pickaxe > .item-icon { width: 100% !important; height: 100% !important; }
 .stone-break { position: absolute; inset: 0; z-index: 6; pointer-events: none; }
 .breaking-crack { background-image: url('/assets/minecraft/1.21.4/textures/block/destroy_stage_9.png'); }
 .stone-fragment { position: absolute; width: 50%; height: 50%; background: url('/assets/minecraft/1.21.4/textures/block/stone.png') center/200% 200%; image-rendering: pixelated; }
@@ -142,10 +158,10 @@ picture.item-icon > img { width: 100%; height: 100%; image-rendering: pixelated;
 .connection-screen h1 { font-size: 24px; font-weight: 550; }
 .connection-screen p { color: var(--muted); font-size: 16px; line-height: 1.8; margin-top: 16px; }
 .connection-screen .primary-button { margin-top: 24px; }
-.toast-region { position: fixed; bottom: 20px; left: 16px; right: 16px; z-index: 80; display: flex; justify-content: center; pointer-events: none; }
-.toast { display: flex; align-items: center; gap: 10px; max-width: 480px; padding: 10px 10px 10px 16px; color: #273039; background: #e3dccf; border: 1px solid #f1e3cd; border-radius: 6px; box-shadow: 0 8px 30px #070d1566; pointer-events: auto; }
-.toast > span { font-size: 20px; }
-.toast p { font-size: 16px; line-height: 1.6; overflow-wrap: anywhere; }
+.toast-region { position: fixed; bottom: 20px; left: 16px; right: 16px; z-index: 80; display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; pointer-events: none; }
+.toast { grid-area: 1 / 1; display: flex; align-items: center; gap: 10px; width: min(480px, 100%); min-width: 0; padding: 10px 10px 10px 16px; color: #273039; background: #e3dccf; border: 1px solid #f1e3cd; border-radius: 6px; box-shadow: 0 8px 30px #070d1566; pointer-events: auto; }
+.toast > span { flex-shrink: 0; font-size: 20px; }
+.toast p { flex: 1; min-width: 0; font-size: 16px; line-height: 1.6; overflow-wrap: anywhere; }
 .toast > button { flex-shrink: 0; width: 44px; height: 44px; margin-left: auto; padding: 0; color: #4b4b49; background: transparent; border: 0; font-size: 24px; }
 .toast.error { background: #ead3bd; border-color: #d4a58a; }
 .game-dialog { width: min(420px, calc(100vw - 32px)); max-height: calc(100dvh - 40px); padding: 28px; overflow-y: auto; text-align: center; color: var(--ink); background: #222b34; border: 1px solid #657078; border-radius: 12px; box-shadow: inset 0 1px 0 #dccbad33, 0 24px 100px #0008; }
@@ -172,6 +188,10 @@ picture.item-icon > img { width: 100%; height: 100%; image-rendering: pixelated;
 .rules-basics li { padding-left: 3px; font-size: 16px; line-height: 1.8; }
 .rules-section-heading { margin-bottom: 8px; }
 .rules-section-heading h2 { font-size: 20px; font-weight: 600; }
+.rules-section-heading > p { margin-top: 6px; color: var(--muted); font-size: 14px; line-height: 1.6; }
+.effective-rules { margin-top: 16px; padding: 12px 14px; border: 1px solid #62645a; border-radius: 6px; background: #2a302d; }
+.effective-rules > strong { color: #efcf94; font-size: 16px; }
+.effective-rules > p { margin-top: 5px; color: #d1d0c8; font-size: 14px; line-height: 1.7; }
 .rules-item { display: flex; align-items: center; gap: 16px; padding: 18px 0; border-bottom: 1px solid #515458; }
 .rules-item > div { flex: 1; min-width: 0; }
 .rules-item h3 { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 12px; font-size: 16px; line-height: 1.5; font-weight: 600; }
@@ -190,6 +210,7 @@ picture.item-icon > img { width: 100%; height: 100%; image-rendering: pixelated;
 .demo-entry { display: flex; width: 100%; margin-top: 16px; }
 .demo-dialog { width: min(440px, calc(100vw - 32px)); }
 .demo-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #d1c1a6; font-size: 14px; }
+.demo-effective-rules { color: var(--muted); margin-top: 8px; font-size: 14px; line-height: 1.65; }
 .text-button { min-height: 44px; padding: 8px; color: var(--ink); font-size: 14px; background: transparent; border: 0; text-decoration: underline; text-underline-offset: 4px; }
 .demo-copy { min-height: 124px; padding: 16px 0; }
 .guide-demo .demo-copy h2 { margin: 0 0 8px; font-size: 22px; line-height: 1.45; }
@@ -220,8 +241,19 @@ picture.item-icon > img { width: 100%; height: 100%; image-rendering: pixelated;
 @keyframes backdrop-out { from { opacity: 1; } to { opacity: 0; } }
 @keyframes value-receive { 35% { text-shadow: 0 0 20px #e9b56b77; } }
 @keyframes equipped { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
-@media (min-width: 600px) {
-  .game-page { max-width: clamp(320px, calc(100dvh - 360px), 480px); }
+@media (min-width: 760px) {
+  .app-shell { padding-top: 32px; }
+  .game-page { max-width: 684px; }
+  .play-layout { grid-template-columns: minmax(0, 440px) 220px; gap: 24px; align-items: start; }
+  .board-panel { grid-column: 1; grid-row: 1; }
+  .personal-panel { display: block; grid-column: 2; grid-row: 1; padding-top: 12px; min-width: 0; }
+  .personal-panel .summary-topline { flex-direction: column; align-items: stretch; gap: 14px; }
+  .personal-panel .cashout-button { width: 100%; }
+  .personal-panel .player-summary { gap: 16px; }
+  .personal-panel .chance-rack { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
+  .personal-panel .chance-meter { padding: 10px; }
+  .personal-panel .turn-status { justify-content: flex-start; padding-top: 6px; text-align: left; font-size: 14px; line-height: 1.7; }
+  .activity-log { margin-top: 18px; }
 }
 @media (max-width: 480px) {
   .cave-art { opacity: .18; }
@@ -231,15 +263,14 @@ picture.item-icon > img { width: 100%; height: 100%; image-rendering: pixelated;
   .loot-counts { gap: 3px; }
   .loot-count > .item-icon { width: 21px !important; height: 21px !important; }
   .board-surround { padding: 9px; }
-  .mine-grid { gap: 6px; }
-  .cell-reveal { gap: 3px; }
-  .cell-reveal > .item-icon { width: 48% !important; }
+  .mine-grid { --grid-gap: 6px; }
+  .cell-reveal { gap: 1px; }
   .game-dialog { padding: 24px 20px; }
 }
 @media (max-width: 360px) {
   .app-shell { padding-left: 16px; padding-right: 16px; }
-  .mine-grid { gap: 5px; }
-  .mine-cell { padding: 3px; }
+  .mine-grid { --grid-gap: 5px; }
+  .mine-cell { padding: 1px; border-bottom-width: 2px; }
   .earnings strong { font-size: 32px; }
   .chance-meter { padding-left: 10px; padding-right: 10px; }
   .chance-rack { gap: 2px; }
