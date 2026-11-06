@@ -24,12 +24,30 @@
   "vars": {
     "HB_ORIGIN": "https://hb.lafi.sh",
     "PAGE_ORIGIN": "https://hbweb-kddb.lafi.sh",
-    // 上线前填矿洞夺宝判定器的编号和 v3 的版本号
-    "JUDGE_ID": "",
+    // 红包站上“矿洞夺宝”判定器的编号；v3 发成第几版，MIN_JUDGE_VERSION 就填几
+    // （只认 v3 起的版本：v2 的红包不会来这里）。发版前改成实际的版本号。
+    "JUDGE_ID": "c9635560-890f-4cb7-97e0-9a1c9bf10013",
     "MIN_JUDGE_VERSION": "0",
     "CLAIM_KID": "k1"
   },
   "env": {
+    // Stage 试玩：wrangler deploy --env staging。红包站是 Stage，游戏站是单独的
+    // kddb-staging.lafi.sh（自己的 Durable Object，不碰线上的局）。判定器编号是在
+    // Stage 上发的那一份。
+    "staging": {
+      "name": "hbweb-kddb-staging",
+      "routes": [{ "pattern": "kddb-staging.lafi.sh", "custom_domain": true }],
+      "durable_objects": {
+        "bindings": [{ "name": "MINE", "class_name": "MineObject" }]
+      },
+      "vars": {
+        "HB_ORIGIN": "https://staging.hb.lafi.sh",
+        "PAGE_ORIGIN": "https://kddb-staging.lafi.sh",
+        "JUDGE_ID": "",
+        "MIN_JUDGE_VERSION": "1",
+        "CLAIM_KID": "k1"
+      }
+    },
     // 本地联调：wrangler dev --env local。令牌、公钥、红包信息都来自开发包的模拟器
     // （npm run page，http://127.0.0.1:8730），网页由模拟器从 http://localhost:8731 发出。
     "local": {

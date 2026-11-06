@@ -1,6 +1,6 @@
 # 矿洞夺宝 v3：一张地图，游戏放在自己的服务上
 
-状态：2026-11-02 定稿，还没开始写。v2（判定器跑整局、一次一张卡）继续服务已经开着的红包。
+状态：2026-11-02 定稿；2026-11-06 判定器、游戏站、网页在本机做完，对着开发包的模拟器从头玩到领取结算；还没部署。v2（判定器跑整局、一次一张卡）继续服务已经开着的红包。
 
 ## 1 为什么改
 
@@ -131,3 +131,23 @@ v3 是判定器的新版本，`meta.page` 换成 `https://hbweb-kddb.lafi.sh/v3/
 - 收尾时间：截止前 2 分钟停止挖掘，够不够大家领完？
 - 每人最小间隔：1 秒？
 - 地图要不要上限（比如最多同时 N 张没挖完的卡）？暂定不限，看试玩。
+
+## 12 部署
+
+本机联调：`cd game && npx wrangler dev --env local --port 8787 --ip 127.0.0.1`，另开 `npm run page`（模拟器 8730，网页 8731）。`game/.dev.vars` 放本地的 `CLAIM_KEY`（单引号原样写 JWK）和 `TICKET_KEY`，不进仓库。`LOCAL_SEED` 让本地开局用固定的种子，按 `game/shared/rules.mjs` 能算出哪格是什么；清掉 `game/.wrangler/state` 重新开局。
+
+构建：`page/frontend` 里 `npm run build`（v2，`dist/`）和 `npm run build:v3`（v3：线上的 `dist-v3/`，开发包的放进 `page/`），再 `node scripts/site.mjs` 拼出 `game/dist/`（v2 在根上，v3 在 `v3/`）。
+
+上线分两步，每一步都要站长同意：
+
+1. **Stage 试玩**（先在 Stage 的红包站抽屉里试，iPhone 的手势也在这里试）：
+   - `wrangler deploy --env staging`：新的 Worker `hbweb-kddb-staging`，自定义域名 `kddb-staging.lafi.sh`，自己的 Durable Object；
+   - secrets：`CLAIM_KEY`（`hb-ops/kddb-claim-k1.jwk`）、`TICKET_KEY`（新的随机串）；
+   - 在 Stage 的红包站发一份判定器（v3 的 `judge.js`、`tests.json`，`meta.page` 临时指向 `https://kddb-staging.lafi.sh/v3/`），把它的编号填进 `env.staging.vars.JUDGE_ID`，版本号填 `MIN_JUDGE_VERSION`；
+   - 用这个判定器开一个小红包，手机和电脑一起玩到领取，核对游戏站的分和红包站的结算。
+2. **生产**：
+   - （可选，先发）v2 的改进：标签 `v2.1` 的 `judge.js`、`tests.json` 发成矿洞夺宝的下一版，开着的 v2 红包不受影响；
+   - `wrangler deploy`（`game/wrangler.jsonc`）：替换现在只放静态网页的 `hbweb-kddb`，根路径照旧是 v2 的网页，`/v3/` 是 v3；secrets 同上；
+   - 在红包站把 v3 发成矿洞夺宝的下一版（编号 `c9635560-…`），版本号填进 `MIN_JUDGE_VERSION` 再部署一次；
+   - 开一个小红包试玩，核对记录。
+

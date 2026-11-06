@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { CardView } from './CardView'
 import type { Camera, Direction, Level, Viewport } from './camera'
 import { cameraAt, cardToward, centerOf, edgePointer, nearestCard, nearestLevel, onScreen, overviewCamera, scaleOf } from './camera'
-import { blockedAtom, dig, focusRequestAtom, freshAtom, gameAtom, hongbaoAtom, meAtom, newCardAtom, pendingAtom, uidAtom } from './state'
+import { blockedAtom, dig, focusRequestAtom, freshAtom, gameAtom, hongbaoAtom, meAtom, newCardAtom, pendingAtom, settledAtom, uidAtom } from './state'
 import type { PublicCard } from './types'
 
 const DRAG_SLOP = 6
@@ -34,6 +34,7 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
   const newCard = useAtomValue(newCardAtom)
   const setNewCard = useSetAtom(newCardAtom)
   const focusRequest = useAtomValue(focusRequestAtom)
+  const settled_ = useAtomValue(settledAtom)
   const reduced = useReducedMotion() ?? false
 
   const box = useRef<HTMLDivElement>(null)
@@ -320,6 +321,10 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
     if (card) goToCard(card, 2)
   }, [cards, goToCard])
 
+  // 地图上方一条：为什么现在不能挖（不用等点了才知道）
+  const banner = settled_ ? null
+    : me?.status === 'claimed' ? '已经领取，凭证还没交上：点上面的「再交一次」'
+      : blocked
   const detailScale = settled.scale >= 0.42
   const markerCard = marker === null ? null : cards.find(card => card.id === marker) ?? null
   const pointer = markerCard ? edgePointer(markerCard, settled, view) : null
@@ -353,7 +358,8 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
       <span className="new-arrow" style={{ transform: `rotate(${pointer.angle}deg)` }}>➜</span>
       <span>NEW</span>
     </button> : null}
-    {level !== 2 ? <p className="map-hint">点一张卡放大过去，放大以后才能挖</p> : null}
+    {banner ? <p className="map-banner" role="status">{banner}</p>
+      : level !== 2 ? <p className="map-hint">点一张卡放大过去，放大以后才能挖</p> : null}
     </div>
     <div className="map-toolbar">
       <div className="dpad" role="group" aria-label="换卡">

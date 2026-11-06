@@ -132,7 +132,7 @@ function clock(ms: number) {
 }
 
 /** 怎么玩：规则和这个红包的参数。 */
-export function Rules({ onClose }: { onClose: () => void }) {
+export function Rules({ onClose, onPractice }: { onClose: () => void; onPractice: () => void }) {
   const game = useAtomValue(gameAtom)
   const hongbao = useAtomValue(hongbaoAtom)
   const unit = hongbao?.unit ?? 'LDC'
@@ -157,7 +157,10 @@ export function Rules({ onClose }: { onClose: () => void }) {
         <dt><ItemIcon kind="pearl" size={18} /> 末影珍珠</dt><dd>旁边长出一张新卡</dd>
       </dl> : null}
       <p className="rules-tip">拖动地图平移，滚轮或捏合缩放，方向键换卡，+/- 缩放。</p>
-      <button type="button" onClick={onClose}>知道了</button>
+      <div className="rules-actions">
+        <button type="button" className="rules-practice" onClick={onPractice}>练习一下</button>
+        <button type="button" onClick={onClose}>知道了</button>
+      </div>
     </section>
   </div>
 }
