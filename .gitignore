@@ -2,3 +2,8 @@ node_modules/
 # 下载的完整记录里有别人的输入，别提交出去
 judge-records-*.json
 shots/
+
+# 游戏站：本地的 secrets 和拼出来的发布目录
+game/.dev.vars*
+game/dist/
+game/.wrangler/
