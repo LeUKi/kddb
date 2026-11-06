@@ -5,6 +5,7 @@ import { ItemIcon } from '../../src/ItemIcon'
 import { blockedAtom, claim, claimingAtom, focusRequestAtom, gameAtom, hongbaoAtom, meAtom, settledAtom } from './state'
 import type { Kind, PublicCard } from './types'
 import { KIND_NAMES, KINDS, money } from './types'
+import { eyeStatus, isTreasure } from './eye'
 
 /** 数字变了从旧的滚到新的；减少动画时直接到位。 */
 export function Tween({ value, format = String }: { value: number; format?: (value: number) => string }) {
@@ -82,17 +83,23 @@ export function BottomBar({ card }: { card: PublicCard | null }) {
   if (!game) return null
   const unit = hongbao?.unit ?? 'LDC'
   const opened = card ? card.cells.filter(Boolean).length : 0
+  const treasure = card ? isTreasure(card) : false
+  const left = (kind: Kind) => card?.left[kind] ?? 0
+  // 宝藏卡只列它有的三样；普通卡照旧（挖完的绿宝石不列），末影之眼有才列
+  const shown = (kind: Kind) => treasure ? ['emerald', 'diamond', 'apple'].includes(kind)
+    : kind === 'eye' ? left(kind) > 0 : left(kind) > 0 || kind !== 'emerald'
+  const eye = eyeStatus(game.cards, game.rules.eyeEvery)
   return <footer className="bottom-bar">
     {card ? <div className="card-info">
       <div className="card-title">
-        <b>第 {card.id} 张卡</b>
+        <b>{treasure ? '末地宝藏' : `第 ${card.id} 张卡`}</b>
         <span>{card.size}×{card.size} · 已挖 <Tween value={opened} />/{card.cells.length}{card.finished ? ' · 挖完了' : ''}</span>
       </div>
       <ul className="card-left" aria-label="这张卡还剩">
-        {KINDS.filter(kind => card.left[kind] > 0 || kind !== 'emerald').map((kind: Kind) =>
-          <li key={kind} className={card.left[kind] === 0 ? 'is-out' : ''} title={KIND_NAMES[kind]}>
+        {KINDS.filter(shown).map((kind: Kind) =>
+          <li key={kind} className={left(kind) === 0 ? 'is-out' : kind === 'eye' ? 'is-eye' : ''} title={KIND_NAMES[kind]}>
             <ItemIcon kind={kind} size={18} />
-            <Tween value={card.left[kind]} />
+            <Tween value={left(kind)} />
           </li>)}
       </ul>
     </div> : null}
@@ -100,6 +107,9 @@ export function BottomBar({ card }: { card: PublicCard | null }) {
       <span>奖池还剩 <b><Tween value={game.left} format={money} /></b> {unit}</span>
       <span>{game.stats.players} 人在挖 · {game.stats.claimed} 人已领</span>
       <span>{deadlineWords(game.deadlineAt, game.wrapUpAt, now, game.over)}</span>
+      {eye.kind === 'treasure' ? <button type="button" className="eye-status is-treasure" onClick={() => setFocus({ cardId: eye.card.id, at: Date.now() })}><ItemIcon kind="eye" size={14} />末地宝藏开着</button>
+        : eye.kind === 'eye' ? <button type="button" className="eye-status" onClick={() => setFocus({ cardId: eye.card.id, at: Date.now() })}><ItemIcon kind="eye" size={14} />末影之眼在第 {eye.card.id} 张卡</button>
+          : eye.kind === 'coming' ? <span className="eye-status"><ItemIcon kind="eye" size={14} />再长 {eye.cards} 张卡出末影之眼</span> : null}
       <button type="button" className="feed-toggle" onClick={() => setFeedOpen(open => !open)} aria-expanded={feedOpen}>动态 {feedOpen ? '▾' : '▸'}</button>
     </div>
     {feedOpen ? <ol className="feed">
@@ -155,6 +165,7 @@ export function Rules({ onClose, onPractice }: { onClose: () => void; onPractice
         <dt><ItemIcon kind="shield" size={18} /> 盾牌</dt><dd>挡下一次 TNT；已经有了就转成一份小奖</dd>
         <dt><ItemIcon kind="spyglass" size={18} /> 望远镜</dt><dd>看到这张卡上一个没开的格子，只有你看得见</dd>
         <dt><ItemIcon kind="pearl" size={18} /> 末影珍珠</dt><dd>旁边长出一张新卡</dd>
+        {rules.eyeEvery ? <><dt><ItemIcon kind="eye" size={18} /> 末影之眼</dt><dd>每 {rules.eyeEvery} 张卡有一颗，那张卡发紫光；挖到它，远处开出末地宝藏（3×3，只有宝物），没领奖的人都能挖</dd></> : null}
       </dl> : null}
       <p className="rules-tip">拖动地图平移，滚轮或捏合缩放。点旁边的卡就能换过去，方向键也行；+/- 缩放。全图那一级能看到所有的卡，不能拖动。</p>
       <div className="rules-actions">

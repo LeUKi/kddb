@@ -10,8 +10,15 @@ import { CARD_PX } from './camera'
 /** 珍珠先在格子里亮一下再弹起。 */
 export const LIFT_S = 0.25
 export const FLIGHT_S = 0.55
-/** 落地的时刻：新卡从这时开始出现。 */
-export const LAND_MS = (LIFT_S + FLIGHT_S) * 1000
+/** 末影之眼：浮起来转一圈（HOVER_S）再飞，飞得更远更久，尾巴是金色的。 */
+export const HOVER_S = 0.5
+export const EYE_FLIGHT_S = 0.8
+
+export type Flight = 'pearl' | 'eye'
+
+/** 落地的时刻（毫秒）：新卡从这时开始出现。 */
+export const landMs = (variant: Flight) => (variant === 'eye' ? LIFT_S + HOVER_S + EYE_FLIGHT_S : LIFT_S + FLIGHT_S) * 1000
+export const LAND_MS = landMs('pearl')
 
 const PEARL = 40
 const TRAIL = 5
@@ -36,23 +43,32 @@ function apex(from: Point, to: Point): Point {
   return { x: (from.x + to.x) / 2 + nx * lift, y: (from.y + to.y) / 2 + ny * lift }
 }
 
-export function PearlFlight({ from, to }: { from: Point; to: Point }) {
+export function PearlFlight({ from, to, variant = 'pearl' }: { from: Point; to: Point; variant?: Flight }) {
   const top = apex(from, to)
-  const path = { x: [from.x, top.x, to.x], y: [from.y, top.y, to.y] }
-  const land = LAND_MS / 1000
-  return <div className="pearl-flight" aria-hidden="true">
+  const eye = variant === 'eye'
+  // 眼：先在原地往上浮 40、转一圈，再沿弧线飞；珍珠直接飞
+  const total = eye ? HOVER_S + EYE_FLIGHT_S : FLIGHT_S
+  const hover = eye ? HOVER_S / total : 0
+  const path = eye
+    ? { x: [from.x, from.x, top.x, to.x], y: [from.y, from.y - 40, top.y, to.y] }
+    : { x: [from.x, top.x, to.x], y: [from.y, top.y, to.y] }
+  const times = eye ? [0, hover, hover + (1 - hover) / 2, 1] : [0, 0.5, 1]
+  const land = landMs(variant) / 1000
+  return <div className={`pearl-flight${eye ? ' is-eye' : ''}`} aria-hidden="true">
     {Array.from({ length: TRAIL }, (_, index) => {
       const size = 12 - index * 1.6
       return <motion.span key={`t${index}`} className="pearl-trail" style={{ width: size, height: size, left: -size / 2, top: -size / 2 }}
         initial={{ x: from.x, y: from.y, opacity: 0 }}
-        animate={{ ...path, opacity: [0, 0.85 - index * 0.12, 0] }}
-        transition={{ duration: FLIGHT_S, delay: LIFT_S + (index + 1) * 0.04, ease: EASE, times: [0, 0.5, 1] }} />
+        animate={{ ...path, opacity: eye ? [0, 0, 0.85 - index * 0.12, 0] : [0, 0.85 - index * 0.12, 0] }}
+        transition={{ duration: total, delay: LIFT_S + (index + 1) * 0.04, ease: EASE, times }} />
     })}
     <motion.div className="pearl-flyer" style={{ width: PEARL, height: PEARL, left: -PEARL / 2, top: -PEARL / 2 }}
-      initial={{ x: from.x, y: from.y, scale: 0.8, opacity: 0 }}
-      animate={{ ...path, scale: [0.8, 1.4, 0.7], opacity: [1, 1, 0] }}
-      transition={{ duration: FLIGHT_S, delay: LIFT_S, ease: EASE, times: [0, 0.5, 1] }}>
-      <ItemIcon kind="pearl" size={PEARL} />
+      initial={{ x: from.x, y: from.y, scale: 0.8, rotate: 0, opacity: 0 }}
+      animate={eye
+        ? { ...path, scale: [0.8, 1.2, 1.6, 0.8], rotate: [0, 360, 360, 360], opacity: [1, 1, 1, 0] }
+        : { ...path, scale: [0.8, 1.4, 0.7], opacity: [1, 1, 0] }}
+      transition={{ duration: total, delay: LIFT_S, ease: EASE, times }}>
+      <ItemIcon kind={eye ? 'eye' : 'pearl'} size={PEARL} />
     </motion.div>
     <motion.span className="pearl-ripple" style={{ width: RIPPLE, height: RIPPLE, left: to.x - RIPPLE / 2, top: to.y - RIPPLE / 2 }}
       initial={{ scale: 0.15, opacity: 0 }}

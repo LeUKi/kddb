@@ -1,16 +1,19 @@
 // 游戏站给网页的数据（game/shared/rules.mjs 的 publicGame、privatePlayer）。
-export type Kind = 'emerald' | 'diamond' | 'apple' | 'totem' | 'tnt' | 'pearl' | 'shield' | 'spyglass'
-export const KINDS: Kind[] = ['emerald', 'diamond', 'apple', 'totem', 'tnt', 'pearl', 'shield', 'spyglass']
+export type Kind = 'emerald' | 'diamond' | 'apple' | 'totem' | 'tnt' | 'pearl' | 'shield' | 'spyglass' | 'eye'
+export const KINDS: Kind[] = ['emerald', 'diamond', 'apple', 'totem', 'tnt', 'pearl', 'shield', 'spyglass', 'eye']
 export const KIND_NAMES: Record<Kind, string> = {
   emerald: '绿宝石', diamond: '钻石', apple: '附魔金苹果', totem: '双铁镐',
-  tnt: 'TNT', pearl: '末影珍珠', shield: '盾牌', spyglass: '望远镜',
+  tnt: 'TNT', pearl: '末影珍珠', shield: '盾牌', spyglass: '望远镜', eye: '末影之眼',
 }
 
 export interface OpenCell { kind: Kind; uid: number; name: string; at: number }
 export interface PublicCard {
-  id: number; x: number; y: number; size: 5 | 6 | 7
+  id: number; x: number; y: number; size: 3 | 5 | 6 | 7
+  /** 末影之眼开出来的末地宝藏卡 */
+  kind?: 'end'
   cells: (OpenCell | null)[]
-  left: Record<Kind, number>
+  /** 旧局的卡没有 eye 这一项 */
+  left: Partial<Record<Kind, number>>
   finished: boolean
 }
 export interface FeedItem {
@@ -21,6 +24,8 @@ export interface Stats { digs: number; players: number; claimed: number; claimed
 export interface Rules {
   difficulty: 'easy' | 'hard' | 'hell'; smallReward: number; tntPercent: number
   initialChances: number; appleCap: number; totemBonus: number; bigMultiplier: number
+  /** 每几张普通卡一颗末影之眼；0 不开；旧局没有 */
+  eyeEvery?: number
 }
 export interface PublicGame {
   seq: number; rules: Rules; pool: number; left: number

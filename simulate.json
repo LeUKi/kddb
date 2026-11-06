@@ -13,6 +13,7 @@
     "boardSpec": "random",
     "compositionVariation": "slight",
     "initialChances": 20,
+    "eyeEvery": 3,
     "smallReward": 10,
     "tntPercent": 25
   },

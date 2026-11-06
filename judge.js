@@ -95,6 +95,15 @@ export const params = [
     ],
     default: "slight",
   },
+  {
+    key: "eyeEvery",
+    label: "末地宝藏",
+    hint: "每长出几张卡，其中一张藏一颗末影之眼；挖到它，远处开出一张末地宝藏卡（3×3，只有宝物，没领的人都能挖）。填 0 不开",
+    type: "integer",
+    default: 3,
+    min: 0,
+    max: 20,
+  },
 ];
 
 /** @type {import("./judge").HongbaoRules} */

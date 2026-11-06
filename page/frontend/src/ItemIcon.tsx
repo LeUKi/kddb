@@ -7,6 +7,7 @@ const textures: Record<IconKind, string> = {
   apple: 'inventory/enchanted_golden_apple.png',
   totem: 'textures/item/totem_of_undying.png',
   pearl: 'textures/item/ender_pearl.png',
+  eye: 'textures/item/ender_eye.png',
   spyglass: 'textures/item/spyglass.png',
   pickaxe: 'textures/item/iron_pickaxe.png',
   tnt: 'inventory/tnt.png',

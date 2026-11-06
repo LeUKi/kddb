@@ -639,6 +639,22 @@
       "sha256": "2bccdc1ef269b7ae6050d46b70071ead5c3ad4c3a16e3f6baf24fc629752b8bc",
       "width": 16,
       "height": 16
+    },
+    {
+      "path": "textures/item/ender_eye.png",
+      "source": "assets/minecraft/textures/item/ender_eye.png",
+      "bytes": 214,
+      "sha256": "cb9003416a29bdd869a494467a01dba3403b221b88fe3e0a0dc41906d5d49afa",
+      "width": 16,
+      "height": 16
+    },
+    {
+      "path": "textures/block/end_stone.png",
+      "source": "assets/minecraft/textures/block/end_stone.png",
+      "bytes": 206,
+      "sha256": "48eadb631e434beb46f380440db106519da1e692e74954a8bd2c987d6c978d76",
+      "width": 16,
+      "height": 16
     }
   ],
   "source": "Mojang Minecraft Java Edition client JAR; unchanged extracted bytes",

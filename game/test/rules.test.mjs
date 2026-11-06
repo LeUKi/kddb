@@ -29,8 +29,11 @@ describe("规则和金额", () => {
   it("参数按判定器的写法读，没填、乱填用默认，超出的收住", () => {
     assert.deepEqual(rulesOf({}), {
       difficulty: "hard", boardSpec: "random", compositionVariation: "slight",
-      smallReward: 10, bigMultiplier: 5, totemBonus: 3, tntPercent: 25, initialChances: 20, appleCap: 0,
+      smallReward: 10, bigMultiplier: 5, totemBonus: 3, tntPercent: 25, initialChances: 20, appleCap: 0, eyeEvery: 3,
     });
+    assert.equal(rulesOf({ eyeEvery: 0 }).eyeEvery, 0);
+    assert.equal(rulesOf({ eyeEvery: 50 }).eyeEvery, 20);
+    assert.equal(rulesOf({ eyeEvery: "x" }).eyeEvery, 3);
     const odd = rulesOf({ difficulty: "x", initialChances: 150, tntPercent: 300, appleCap: 50 });
     assert.equal(odd.difficulty, "hard");
     assert.equal(odd.initialChances, 99);
@@ -169,6 +172,50 @@ describe("挖", () => {
     const capped = dig(g, p, { cardId: 1, index: 3, now: later() });
     assert.equal(capped.ok && capped.result.amount, 25);
     assert.match(capped.ok ? capped.result.text : "", /最多加 0\.25/);
+  });
+  it("末影之眼：每第 3 张普通卡一颗；挖到它在隔一圈的空位开出 3×3 的末地宝藏，宝藏卡不算张数", () => {
+    const eyes = (g) => Object.values(g.cards).map((card) => card.deck.filter((kind) => kind === "eye").length);
+    const g = game();
+    const p = newPlayer(g, 10001, "小明");
+    p.chances = 50;
+    // 一张一张长：第 1 张挖珍珠长出第 2 张，第 2 张挖珍珠长出第 3 张
+    stack(g, 1, { 0: "pearl" });
+    dig(g, p, { cardId: 1, index: 0, now: later() });
+    stack(g, 2, { 0: "pearl" });
+    const third = dig(g, p, { cardId: 2, index: 0, now: later() });
+    assert.ok(third.ok && third.newCard);
+    assert.deepEqual(eyes(g), [0, 0, 1]);
+    // 挖第 3 张上的眼
+    const card = g.cards[3];
+    const at = card.deck.indexOf("eye");
+    const out = dig(g, p, { cardId: 3, index: at, now: later() });
+    assert.ok(out.ok && out.newCard);
+    assert.equal(out.newCard.kind, "end");
+    assert.equal(out.newCard.size, 3);
+    assert.equal(out.result.amount, 0);
+    assert.match(out.feed.text, /末地宝藏开了/);
+    assert.ok(Math.max(Math.abs(out.newCard.x - card.x), Math.abs(out.newCard.y - card.y)) >= 2);
+    assert.deepEqual([...out.newCard.deck].sort(), ["apple", "diamond", "diamond", "diamond", "emerald", "emerald", "emerald", "emerald", "emerald"]);
+    assert.equal(publicCard(out.newCard).kind, "end");
+    // 宝藏卡不算张数：再长的第 4 张没有眼，第 6 张有
+    const free = [0, 1, 2, 3, 4].filter((index) => index !== at).slice(0, 3);
+    stack(g, 3, Object.fromEntries(free.map((index) => [index, "pearl"])));
+    for (const index of free) assert.ok(dig(g, p, { cardId: 3, index, now: later() }).ok);
+    const normal = Object.values(g.cards).filter((other) => other.kind !== "end").map((other) => other.composition.eye === 1);
+    assert.deepEqual(normal, [false, false, true, false, false, true]);
+    // 宝藏卡上照常挖，只有宝物
+    const dug = dig(g, p, { cardId: out.newCard.id, index: 0, now: later() });
+    assert.ok(dug.ok && dug.result.amount > 0);
+  });
+  it("末影之眼可以关掉：参数 0 就没有眼", () => {
+    const g = game({ params: { eyeEvery: 0 } });
+    const p = newPlayer(g, 10001, "小明");
+    p.chances = 50;
+    for (let id = 1; id <= 4; id++) {
+      stack(g, id, { 0: "pearl" });
+      dig(g, p, { cardId: id, index: 0, now: later() });
+    }
+    assert.ok(Object.values(g.cards).every((card) => !card.deck.includes("eye")));
   });
   it("末影珍珠长出新卡，之后两张都能挖", () => {
     const g = game();

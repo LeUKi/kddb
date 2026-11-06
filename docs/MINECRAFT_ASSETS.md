@@ -15,7 +15,7 @@
 | JAR SHA-1 | `a7e5a6024bfd3cd614625aa05629adf760020304` |
 | JAR 大小 | `28,335,587` 字节 |
 
-`manifest.json` 记录 87 个官方原始文件：58 个 PNG 和 29 个模型 / 物品 JSON，合计 22,374 字节。每个条目都有 JAR 内的原始路径、字节数和 SHA-256；PNG 另有宽高。文件内容未经重采样、改色或重新编码。这些是选用的资源，不是完整资源包。
+`manifest.json` 记录 89 个官方原始文件：60 个 PNG 和 29 个模型 / 物品 JSON，合计 22,794 字节（2026-11-06 为末影之眼和末地宝藏卡，从同一个 JAR——核对过大小和 SHA-1——补提取 `ender_eye.png`、`end_stone.png` 两个文件，各 214、206 字节）。每个条目都有 JAR 内的原始路径、字节数和 SHA-256；PNG 另有宽高。文件内容未经重采样、改色或重新编码。这些是选用的资源，不是完整资源包。
 
 | 页面用途 | 官方原始文件，相对资源根目录 | 尺寸 |
 | --- | --- | --- |
@@ -24,6 +24,8 @@
 | 金苹果基础贴图 | `textures/item/golden_apple.png` | 16 × 16 |
 | 不死图腾（资源库保留，界面已替换） | `textures/item/totem_of_undying.png` | 16 × 16 |
 | 末影珍珠 | `textures/item/ender_pearl.png` | 16 × 16 |
+| 末影之眼 | `textures/item/ender_eye.png` | 16 × 16 |
+| 末地石（末地宝藏卡） | `textures/block/end_stone.png` | 16 × 16 |
 | 望远镜 | `textures/item/spyglass.png` | 16 × 16 |
 | 铁镐 | `textures/item/iron_pickaxe.png` | 16 × 16 |
 | 石头、深板岩、原矿、木材 | `textures/block/` 内对应名称的 PNG | 16 × 16 |

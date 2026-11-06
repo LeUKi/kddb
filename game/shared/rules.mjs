@@ -2,8 +2,8 @@
 // 纯函数，游戏站的 Durable Object 和测试共用；随机数来自每个红包自己的种子，
 // 同一个种子、同样的先后，结果一样，能重放核对。分和金额一样，单位是分。
 
-/** @typedef {'emerald'|'diamond'|'apple'|'totem'|'tnt'|'pearl'|'shield'|'spyglass'} Kind */
-/** @typedef {5|6|7} Size */
+/** @typedef {'emerald'|'diamond'|'apple'|'totem'|'tnt'|'pearl'|'shield'|'spyglass'|'eye'} Kind */
+/** @typedef {3|5|6|7} Size */
 /** @typedef {'easy'|'hard'|'hell'} Difficulty */
 /** @typedef {Record<Kind, number>} Composition */
 /**
@@ -17,12 +17,13 @@
  *   tntPercent: number,
  *   initialChances: number,
  *   appleCap: number,
+ *   eyeEvery: number,
  * }} Rules
  */
 /** @typedef {{ uid: number, name: string, at: number }} OpenCell */
 /**
  * @typedef {{
- *   id: number, x: number, y: number, size: Size,
+ *   id: number, x: number, y: number, size: Size, kind?: 'end',
  *   composition: Composition, deck: Kind[], opened: (OpenCell|null)[],
  *   finished: boolean,
  * }} Card
@@ -70,16 +71,20 @@ export const FEED_LIMIT = 30;
 
 /** 公开的基准配比；顺序不代表洗过的牌。 */
 const COMPOSITIONS = /** @type {const} */ ({
-  5: { emerald: 11, diamond: 3, apple: 1, totem: 2, tnt: 4, pearl: 1, shield: 2, spyglass: 1 },
-  6: { emerald: 14, diamond: 4, apple: 2, totem: 3, tnt: 6, pearl: 1, shield: 3, spyglass: 3 },
-  7: { emerald: 20, diamond: 6, apple: 2, totem: 4, tnt: 8, pearl: 2, shield: 4, spyglass: 4 },
+  5: { emerald: 11, diamond: 3, apple: 1, totem: 2, tnt: 4, pearl: 1, shield: 2, spyglass: 1, eye: 0 },
+  6: { emerald: 14, diamond: 4, apple: 2, totem: 3, tnt: 6, pearl: 1, shield: 3, spyglass: 3, eye: 0 },
+  7: { emerald: 20, diamond: 6, apple: 2, totem: 4, tnt: 8, pearl: 2, shield: 4, spyglass: 4, eye: 0 },
 });
+/** 末地宝藏卡：3×3，只有宝物，没有 TNT、珍珠和眼，不再长卡。 */
+const END_COMPOSITION = /** @type {const} */ ({ emerald: 5, diamond: 3, apple: 1, totem: 0, tnt: 0, pearl: 0, shield: 0, spyglass: 0, eye: 0 });
+/** 末影之眼默认每 3 张普通卡一颗；参数可改，0 是不开末地宝藏。 */
+export const EYE_EVERY = 3
 const TNT_COUNTS = /** @type {const} */ ({
   easy: { 5: 3, 6: 4, 7: 6 },
   hard: { 5: 4, 6: 6, 7: 8 },
   hell: { 5: 8, 6: 12, 7: 17 },
 });
-export const KINDS = /** @type {Kind[]} */ (["emerald", "diamond", "apple", "totem", "tnt", "pearl", "shield", "spyglass"]);
+export const KINDS = /** @type {Kind[]} */ (["emerald", "diamond", "apple", "totem", "tnt", "pearl", "shield", "spyglass", "eye"]);
 export const KIND_NAMES = /** @type {Record<Kind, string>} */ ({
   emerald: "绿宝石",
   diamond: "钻石",
@@ -89,6 +94,7 @@ export const KIND_NAMES = /** @type {Record<Kind, string>} */ ({
   pearl: "末影珍珠",
   shield: "盾牌",
   spyglass: "望远镜",
+  eye: "末影之眼",
 });
 
 /** 判定器参数（红包信息里的 params，金额是分）→ 规则。 */
@@ -111,6 +117,8 @@ export function rulesOf(/** @type {Record<string, unknown>} */ params) {
     tntPercent: Math.min(100, integer(params.tntPercent, 25)),
     initialChances: Math.min(99, integer(params.initialChances, 20)),
     appleCap: params.appleCap == null ? 0 : integer(params.appleCap, 0),
+    eyeEvery: params.eyeEvery == null || params.eyeEvery === "" || !Number.isSafeInteger(Number(params.eyeEvery))
+      ? EYE_EVERY : Math.min(20, Math.max(0, Number(params.eyeEvery))),
   });
 }
 
@@ -189,6 +197,9 @@ export function newCard(/** @type {Game} */ game, /** @type {number} */ id, /** 
     for (const kind of /** @type {const} */ (["diamond", "totem", "tnt", "shield"])) composition[kind] += int(-1, 1);
   // 珍珠：5×5 一颗，6×6 随机一到两颗，7×7 两颗（地图会分叉，人少也能长出几张卡）
   if (size === 6) composition.pearl = int(1, 2);
+  // 末影之眼：每第 eyeEvery 张普通卡藏一颗（末地宝藏卡不算张数）
+  const nth = Object.values(game.cards).filter((other) => other.kind !== "end").length + 1;
+  if (rules.eyeEvery > 0 && nth % rules.eyeEvery === 0) composition.eye = 1;
   composition.emerald = size * size - KINDS.filter((kind) => kind !== "emerald")
     .reduce((sum, kind) => sum + composition[kind], 0);
   return /** @type {Card} */ ({
@@ -218,8 +229,19 @@ export function createGame({ seed, rules, pool, openedAt, deadlineAt }) {
   return game;
 }
 
-function addCard(/** @type {Game} */ game, /** @type {number} */ x, /** @type {number} */ y) {
-  const card = newCard(game, game.nextCardId, x, y);
+/** 末地宝藏卡，放在 (x, y)；牌序也由种子和卡号定。 */
+export function newEndCard(/** @type {Game} */ game, /** @type {number} */ id, /** @type {number} */ x, /** @type {number} */ y) {
+  const composition = /** @type {Composition} */ ({ ...END_COMPOSITION });
+  return /** @type {Card} */ ({
+    id, x, y, size: 3, kind: "end", composition,
+    deck: shuffledDeck(randomOf(game.seed, `card:${id}`), composition),
+    opened: Array(9).fill(null),
+    finished: false,
+  });
+}
+
+function addCard(/** @type {Game} */ game, /** @type {number} */ x, /** @type {number} */ y, end = false) {
+  const card = end ? newEndCard(game, game.nextCardId, x, y) : newCard(game, game.nextCardId, x, y);
   game.cards[card.id] = card;
   game.slots[slotKey(x, y)] = card.id;
   game.nextCardId += 1;
@@ -246,7 +268,20 @@ export function placeFor(/** @type {Game} */ game, /** @type {Card} */ card, /**
     const [dx, dy] = DIRECTIONS[side];
     if (!(slotKey(card.x + dx, card.y + dy) in game.slots)) return { x: card.x + dx, y: card.y + dy };
   }
-  for (let ring = 1; ; ring++) {
+  return nearestFree(game, card, 1);
+}
+
+/**
+ * 末影之眼开的末地宝藏放哪：离这张卡至少隔一圈的最近空位（从第二圈找起），
+ * 看上去是飞到远处开出来的。
+ */
+export function placeFar(/** @type {Game} */ game, /** @type {Card} */ card) {
+  return nearestFree(game, card, 2);
+}
+
+/** 从第 fromRing 圈起，离这张卡最近的空位：切比雪夫距离一圈一圈找，同一圈里按曼哈顿距离，再按右、下、左、上。 */
+function nearestFree(/** @type {Game} */ game, /** @type {Card} */ card, /** @type {number} */ fromRing) {
+  for (let ring = fromRing; ; ring++) {
     /** @type {{ x: number, y: number, manhattan: number, rank: number }[]} */
     const free = [];
     for (let dy = -ring; dy <= ring; dy++)
@@ -370,6 +405,13 @@ export function dig(
       publicText = "末影珍珠长出了一张新卡";
       break;
     }
+    case "eye": {
+      const place = placeFar(game, card);
+      grown = addCard(game, place.x, place.y, true);
+      text = "末影之眼！远处开出了末地宝藏";
+      publicText = "挖到末影之眼，末地宝藏开了！";
+      break;
+    }
     case "shield":
       if (player.shield) {
         wanted = rules.smallReward;
@@ -443,7 +485,7 @@ export function publicCard(/** @type {Card} */ card) {
     left[card.deck[index]] -= 1;
     return { kind: card.deck[index], uid: open.uid, name: open.name, at: open.at };
   });
-  return { id: card.id, x: card.x, y: card.y, size: card.size, cells, left, finished: card.finished };
+  return { id: card.id, x: card.x, y: card.y, size: card.size, ...(card.kind ? { kind: card.kind } : {}), cells, left, finished: card.finished };
 }
 
 /** 整局给大家看的样子。 */

@@ -51,11 +51,13 @@ export const CardView = memo(function CardView({ card, focused, diggable, detail
     gap: GAP,
   }
   const icon = Math.round(side * 0.6)
-  const blockClass = `map-block${focused ? ' is-focused' : ''}${entrance ? ' is-grown' : ''}`
-  const className = `map-card${focused ? ' is-focused' : ''}${card.finished ? ' is-finished' : ''}${detail ? '' : ' is-thumb'}`
+  const end = card.kind === 'end'
+  const hasEye = !end && (card.left.eye ?? 0) > 0
+  const blockClass = `map-block${focused ? ' is-focused' : ''}${entrance ? ' is-grown' : ''}${end ? ' is-end' : ''}${hasEye ? ' has-eye' : ''}${card.finished ? ' is-done' : ''}`
+  const className = `map-card${focused ? ' is-focused' : ''}${card.finished ? ' is-finished' : ''}${detail ? '' : ' is-thumb'}${end ? ' is-end' : ''}`
   const pick = diggable ? undefined : () => onPick(card.id)
   if (!detail)
-    return <div className={blockClass} style={blockStyle} onClick={pick} role="button" aria-label={`第 ${card.id} 张卡${card.finished ? '，已挖完' : ''}`}>
+    return <div className={blockClass} style={blockStyle} onClick={pick} role="button" aria-label={`${end ? '末地宝藏' : `第 ${card.id} 张卡`}${hasEye ? '，有末影之眼' : ''}${card.finished ? '，已挖完' : ''}`}>
       <div className={className} style={style}>
         {card.cells.map((cell, index) => <span key={index} className={`thumb-cell${cell ? ` kind-${cell.kind}` : ''}`} style={wave(index)} />)}
       </div>

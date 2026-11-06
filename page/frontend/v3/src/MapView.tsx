@@ -6,8 +6,9 @@ import type { Entrance } from './CardView'
 import { CardView } from './CardView'
 import type { Camera, Direction, Level, Viewport, WheelZoom } from './camera'
 import { cameraAt, cardNear, cardToward, cellCenter, centerOf, edgeFacing, edgePointer, entryPoint, fullyOnScreen, nearestCard, nearestLevel, onScreen, overviewCamera, scaleOf, wheelZoom } from './camera'
-import type { Point } from './PearlFlight'
-import { LAND_MS, PearlFlight } from './PearlFlight'
+import type { Flight, Point } from './PearlFlight'
+import { landMs, PearlFlight } from './PearlFlight'
+import { isTreasure } from './eye'
 import { blockedAtom, dig, focusRequestAtom, freshAtom, gameAtom, hongbaoAtom, meAtom, newCardAtom, pendingAtom, settledAtom, uidAtom } from './state'
 import type { PublicCard } from './types'
 
@@ -144,19 +145,21 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
   // 新长出来的卡（谁挖出来的都一样，镜头不动）：珍珠那格在画面附近时“珍珠传送”飞过去，
   // 新卡落地后格子从朝着旧卡的那条边翻出来；减少动画时直接出现。每张新卡算一次，
   // 拖动地图不会让它变
-  const entranceKept = useRef<{ at: number; value: (Entrance & { cardId: number; flight: { from: Point; to: Point } | null }) | null } | null>(null)
+  const entranceKept = useRef<{ at: number; value: (Entrance & { cardId: number; flight: { from: Point; to: Point; variant: Flight } | null }) | null } | null>(null)
   if (newCard && entranceKept.current?.at !== newCard.at) {
     const card = cards.find(item => item.id === newCard.cardId)
     const source = cards.find(item => item.id === newCard.from.cardId)
     const flies = !!card && !!source && !reduced && onScreen(source, settled, view, 120)
     const edge = card && source ? edgeFacing(card, source) : null
+    // 末地宝藏是末影之眼开出来的：眼浮起来转一圈，金色的尾巴，飞得更远
+    const variant: Flight = card && isTreasure(card) ? 'eye' : 'pearl'
     entranceKept.current = {
       at: newCard.at,
       value: card && source && edge ? {
         cardId: card.id,
         edge,
-        land: flies ? LAND_MS : 0,
-        flight: flies ? { from: cellCenter(source, newCard.from.index), to: entryPoint(card, edge) } : null,
+        land: flies ? landMs(variant) : 0,
+        flight: flies ? { from: cellCenter(source, newCard.from.index), to: entryPoint(card, edge), variant } : null,
       } : null,
     }
   }
@@ -165,11 +168,19 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
   // 没有整张在画面里时，落地后画面边上闪几下“NEW + 箭头”指着它，点一下过去；
   // 移过去了就不再提醒
   const [marker, setMarker] = useState<number | null>(null)
+  // 末地宝藏开出来时，眼落地以前先不亮 JP
+  const [jpHold, setJpHold] = useState<number | null>(null)
   useEffect(() => {
     if (!newCard) return
     const card = cards.find(item => item.id === newCard.cardId)
     const land = entranceKept.current?.value?.land ?? 0
-    const shown = window.setTimeout(() => setMarker(card && !fullyOnScreen(card, camera(), view) ? card.id : null), land)
+    const treasure = !!card && isTreasure(card)
+    if (treasure) setJpHold(card.id)
+    // 宝藏卡不闪 NEW，它有一直亮着的 JP
+    const shown = window.setTimeout(() => {
+      if (treasure) setJpHold(null)
+      else setMarker(card && !fullyOnScreen(card, camera(), view) ? card.id : null)
+    }, land)
     const timer = window.setTimeout(() => {
       setMarker(null)
       setNewCard(null)
@@ -177,6 +188,7 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
     return () => {
       window.clearTimeout(shown)
       window.clearTimeout(timer)
+      if (treasure) setJpHold(null)
     }
     // 只在新卡出现时
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -356,6 +368,9 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
   const detailScale = settled.scale >= 0.4
   const markerCard = marker === null ? null : cards.find(card => card.id === marker) ?? null
   const pointer = markerCard && !fullyOnScreen(markerCard, settled, view) ? edgePointer(markerCard, settled, view) : null
+  // JP：末地宝藏还有没挖的格子、又没整张在画面里时，画面边上一直亮着金色的 JP 指着它
+  const jpCard = useMemo(() => [...cards].reverse().find(card => isTreasure(card) && !card.finished) ?? null, [cards])
+  const jpPointer = jpCard && jpCard.id !== jpHold && !fullyOnScreen(jpCard, settled, view) ? edgePointer(jpCard, settled, view) : null
 
   return <div className={`map-view level-${level}`}>
     <div className="map-canvas" ref={box}
@@ -379,13 +394,18 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
           onPick={pick}
         />
       })}
-      {entrance?.flight ? <PearlFlight key={newCard?.at} from={entrance.flight.from} to={entrance.flight.to} /> : null}
+      {entrance?.flight ? <PearlFlight key={newCard?.at} from={entrance.flight.from} to={entrance.flight.to} variant={entrance.flight.variant} /> : null}
     </motion.div>
     <div className="map-fog" aria-hidden="true" />
     {pointer && markerCard ? <button type="button" className="new-marker" style={{ left: pointer.x, top: pointer.y }}
       onClick={() => { goToCard(markerCard, level === 0 ? 1 : level); setMarker(null) }} aria-label="新长出的卡，点一下移过去">
       <span className="new-arrow" style={{ transform: `rotate(${pointer.angle}deg)` }}>➜</span>
       <span>NEW</span>
+    </button> : null}
+    {jpPointer && jpCard ? <button type="button" className="jp-marker" style={{ left: jpPointer.x, top: jpPointer.y }}
+      onClick={() => goToCard(jpCard, 2)} aria-label="末地宝藏开着，点一下过去">
+      <span>JP</span>
+      <span className="new-arrow" style={{ transform: `rotate(${jpPointer.angle}deg)` }}>➜</span>
     </button> : null}
     {banner ? <p className="map-banner" role="status">{banner}</p>
       : level !== 2 ? <p className="map-hint">点一张卡放大过去，放大以后才能挖</p> : null}

@@ -31,6 +31,40 @@ body { overflow: hidden; overscroll-behavior: none; }
  * 只有旁边的区块显示，居中正在挖的这块不显示。--px 是屏幕上的 1px（随缩放还原）。
  */
 .map-block { position: absolute; display: grid; place-items: center; border-radius: 16px; transition: background-color .18s var(--ease-out), box-shadow .18s var(--ease-out); }
+/*
+ * 末影之眼和末地宝藏：藏着眼的卡发紫光（挖到眼就灭）；末地宝藏卡是末地石的格子，
+ * 区块一直带着金光（在哪一级都看得见），挖完才灭。写在区块规则后面、带上 .map-view，
+ * 全图那一级的区块底色盖不住它们；指针移上去照常显示区块。
+ */
+.map-view .map-block.has-eye { background: #9a6bff12; box-shadow: inset 0 0 0 calc(1.5px * var(--px, 1)) #b48cff8c, 0 0 calc(34px * var(--px, 1)) #9a6bff4d; animation: eye-glow 2.2s ease-in-out infinite alternate; }
+.map-view .map-block.is-end:not(.is-done) { background: #ffd36b17; box-shadow: inset 0 0 0 calc(2px * var(--px, 1)) #f1c57fb3, 0 0 calc(44px * var(--px, 1)) #ffbf3d59; animation: jp-glow 1.8s ease-in-out infinite alternate; }
+/* 刚长出来的这两种卡：先跟着入场淡入（落地以前看不见），再开始发光 */
+.map-view .map-block.has-eye.is-grown { animation: block-in .3s var(--ease-out) var(--land, 0ms) both, eye-glow 2.2s ease-in-out calc(var(--land, 0ms) + .3s) infinite alternate; }
+.map-view .map-block.is-end.is-grown:not(.is-done) { animation: block-in .3s var(--ease-out) var(--land, 0ms) both, jp-glow 1.8s ease-in-out calc(var(--land, 0ms) + .3s) infinite alternate; }
+@keyframes eye-glow { from { box-shadow: inset 0 0 0 calc(1.5px * var(--px, 1)) #b48cff59, 0 0 calc(20px * var(--px, 1)) #9a6bff33; } to { box-shadow: inset 0 0 0 calc(1.5px * var(--px, 1)) #b48cffb3, 0 0 calc(40px * var(--px, 1)) #9a6bff66; } }
+@keyframes jp-glow { from { box-shadow: inset 0 0 0 calc(2px * var(--px, 1)) #f1c57f80, 0 0 calc(28px * var(--px, 1)) #ffbf3d40; } to { box-shadow: inset 0 0 0 calc(2px * var(--px, 1)) #ffe08ae6, 0 0 calc(56px * var(--px, 1)) #ffbf3d80; } }
+.map-card.is-end { background: #2a2637; border-color: #d9c27a; }
+.map-card.is-end.is-focused { border-color: #ffe08a; }
+.map-card.is-end .map-cell.covered { background-image: linear-gradient(135deg, #fff5c114, #2a1f402e), var(--end-stone); }
+.map-card.is-end .thumb-cell { background: #d9cf9a; }
+.map-card.is-end .thumb-cell[class*='kind-'] { opacity: .55; }
+.card-left li.is-eye { color: #d7c2ff; }
+.eye-status { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; color: #d7c2ff; font: inherit; background: #9a6bff1f; border: 1px solid #b48cff59; border-radius: 999px; }
+button.eye-status { cursor: pointer; }
+.eye-status.is-treasure { color: #2a1a00; font-weight: 650; background: linear-gradient(#ffe08a, #e8a93a); border-color: #fff3c4; }
+
+/* JP：末地宝藏开着、又不在画面里时，画面边上一直亮着；金色，一道光扫过，轻轻呼吸 */
+.jp-marker { position: absolute; z-index: 4; display: flex; align-items: center; gap: 5px; padding: 6px 13px; overflow: hidden; color: #2a1a00; font-weight: 900; font-size: 14px; letter-spacing: .5px; background: linear-gradient(#ffe08a, #e8a93a); border: 0; border-radius: 999px; box-shadow: 0 0 22px #ffd36baa, inset 0 0 0 2px #fff3c4; transform: translate(-50%, -50%); cursor: pointer; animation: jp-breathe 1.6s ease-in-out infinite alternate; }
+.jp-marker::after { content: ''; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 30%, #ffffffcc 50%, transparent 70%); transform: translateX(-120%); animation: jp-sheen 2.2s ease-in-out infinite; pointer-events: none; }
+@keyframes jp-breathe { from { box-shadow: 0 0 12px #ffd36b88, inset 0 0 0 2px #fff3c4; } to { box-shadow: 0 0 30px #ffd36bdd, inset 0 0 0 2px #fff3c4; } }
+@keyframes jp-sheen { 0%, 40% { transform: translateX(-120%); } 80%, 100% { transform: translateX(120%); } }
+
+/* 末影之眼的飞行：金色的尾巴、波纹和粒子 */
+.pearl-flight.is-eye .pearl-flyer { filter: drop-shadow(0 0 12px #7fffd4) drop-shadow(0 0 22px #ffd36b) drop-shadow(0 4px 2px #0008); }
+.pearl-flight.is-eye .pearl-trail { background: #ffe08a; box-shadow: 0 0 8px #ffbf3d; }
+.pearl-flight.is-eye .pearl-ripple { border-color: #ffd36b; box-shadow: 0 0 30px #ffbf3d99, inset 0 0 30px #ffbf3d66; }
+.pearl-flight.is-eye .pearl-spark { background: #fff1b8; box-shadow: 0 0 6px #ffbf3d; }
+
 /* 新卡入场（珍珠传送落地以后，--land 是落地的时刻）：区块淡入，外框带一点回弹落定，
    格子从朝着旧卡的那条边一波一波翻出来（--wave 是每格晚多少） */
 .map-block.is-grown { animation: block-in .3s var(--ease-out) var(--land, 0ms) both; }
@@ -185,5 +219,6 @@ body { overflow: hidden; overscroll-behavior: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .jp-marker, .jp-marker::after, .map-view .map-block.has-eye, .map-view .map-block.is-end:not(.is-done),
   .map-block, .map-card, .map-block.is-grown, .map-block.is-grown .map-card, .map-block.is-grown .map-cell, .map-block.is-grown .thumb-cell, .map-cell.just-mine, .map-cell.just-other, .digging-pick, .cell-float, .new-marker, .toast, .sheen { animation: none !important; transition: none !important; }
 }

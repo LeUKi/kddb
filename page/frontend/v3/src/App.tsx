@@ -48,6 +48,7 @@ export function App() {
   // 素材路径跟着网页走（线上在 /v3/ 下，开发包里在根上）
   useEffect(() => {
     document.documentElement.style.setProperty('--stone', `url("${new URL('assets/minecraft/1.21.4/textures/block/stone.png', document.baseURI)}")`)
+    document.documentElement.style.setProperty('--end-stone', `url("${new URL('assets/minecraft/1.21.4/textures/block/end_stone.png', document.baseURI)}")`)
   }, [])
 
   return <div className="v3-app">
