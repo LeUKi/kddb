@@ -15,6 +15,9 @@ export type EyeStatus =
 
 export const isTreasure = (card: Pick<PublicCard, 'kind'>) => card.kind === 'end'
 
+/** 末影水晶扣还没领的奖励的百分之几：TNT 的两倍，最多 100（和 game/shared/rules.mjs 一样）。 */
+export const crystalPercent = (rules: { tntPercent: number }) => Math.min(100, rules.tntPercent * 2)
+
 export function eyeStatus(cards: PublicCard[], eyeEvery: number | undefined): EyeStatus {
   if (!eyeEvery) return { kind: 'off' }
   const treasure = [...cards].reverse().find(card => isTreasure(card) && !card.finished)

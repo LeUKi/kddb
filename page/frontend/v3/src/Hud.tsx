@@ -1,11 +1,12 @@
-import { useAtomValue, useSetAtom } from 'jotai'
+import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
 import { ItemIcon } from '../../src/ItemIcon'
-import { blockedAtom, claim, claimingAtom, focusRequestAtom, gameAtom, hongbaoAtom, meAtom, readyAtAtom, settledAtom } from './state'
+import { mutedAtom, play, setMuted } from './sound'
+import { blockedAtom, claim, claimingAtom, focusRequestAtom, gameAtom, hongbaoAtom, meAtom, readyAtAtom, settledAtom, summaryOpenAtom } from './state'
 import type { Kind, PublicCard } from './types'
 import { KIND_NAMES, KINDS, money } from './types'
-import { eyeStatus, isTreasure } from './eye'
+import { crystalPercent, eyeStatus, isTreasure } from './eye'
 
 /**
  * 数字变了从旧的滚到新的；减少动画时直接到位。滚动直接改这一小段文字（motion 值），
@@ -66,6 +67,8 @@ export function TopBar({ onRules }: { onRules: () => void }) {
   const unit = hongbao?.unit ?? 'LDC'
   if (!me) return null
   const claimed = me.status === 'claimed'
+  // 手里没有分：领了也是 0，按钮不能点
+  const empty = !claimed && me.points <= 0
   return <header className="top-bar">
     <div className="earned">
       <span>{settled ? '已领到' : '矿洞里的奖励'}</span>
@@ -82,20 +85,39 @@ export function TopBar({ onRules }: { onRules: () => void }) {
     </div>
     <div className="claim">
       {settled ? <span className="claim-done">领取完成</span>
-        : <button type="button" className="claim-button" disabled={claiming === 'working'} onClick={() => void claim()}>
-          {claiming === 'working' ? '正在领取' : claimed || claiming === 'filled' ? '再交一次' : blocked ? '领取' : '见好就收'}
+        : <button type="button" className="claim-button" disabled={claiming === 'working' || empty} onClick={() => void claim()}>
+          {claiming === 'working' ? '正在领取' : claimed || claiming === 'filled' ? '再交一次' : empty && blocked ? '没有奖励' : blocked ? '领取' : '见好就收'}
         </button>}
     </div>
+    <SoundButton />
     <button type="button" className="rules-button" onClick={onRules} aria-label="怎么玩">?</button>
   </header>
 }
 
-/** 下面一条：居中这张卡、奖池、截止、动态。 */
+/** 声音开关：记在本机；打开时响一下，让他知道有声音。 */
+function SoundButton() {
+  const [muted, setMutedState] = useAtom(mutedAtom)
+  const toggle = () => {
+    const next = !muted
+    setMuted(next)
+    setMutedState(next)
+    if (!next) play('click')
+  }
+  return <button type="button" className={`sound-button${muted ? ' is-muted' : ''}`} onClick={toggle} aria-pressed={!muted} aria-label={muted ? '打开音效' : '关掉音效'} title={muted ? '打开音效' : '关掉音效'}>
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+      <path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor" />
+      <g className="sound-waves" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M16 9.5a3.5 3.5 0 0 1 0 5" /><path d="M18.5 7a7 7 0 0 1 0 10" /></g>
+      <path className="sound-cross" d="M16 9l5 6M21 9l-5 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  </button>
+}
+
+/** 下面一条：居中这张卡、奖池、截止，和收益卡的按钮。 */
 export function BottomBar({ card }: { card: PublicCard | null }) {
   const game = useAtomValue(gameAtom)
   const hongbao = useAtomValue(hongbaoAtom)
   const setFocus = useSetAtom(focusRequestAtom)
-  const [feedOpen, setFeedOpen] = useState(false)
+  const setSummary = useSetAtom(summaryOpenAtom)
   const [now, setNow] = useState(() => hb.now())
   useEffect(() => {
     const timer = window.setInterval(() => setNow(hb.now()), 1000)
@@ -106,9 +128,9 @@ export function BottomBar({ card }: { card: PublicCard | null }) {
   const opened = card ? card.cells.filter(Boolean).length : 0
   const treasure = card ? isTreasure(card) : false
   const left = (kind: Kind) => card?.left[kind] ?? 0
-  // 宝藏卡只列它有的三样；普通卡照旧（挖完的绿宝石不列），末影之眼有才列
-  const shown = (kind: Kind) => treasure ? ['emerald', 'diamond', 'apple'].includes(kind)
-    : kind === 'eye' ? left(kind) > 0 : left(kind) > 0 || kind !== 'emerald'
+  // 宝藏卡只列它有的几样（以前开的宝藏卡没有末影水晶）；普通卡照旧（挖完的绿宝石不列），末影之眼有才列
+  const shown = (kind: Kind) => treasure ? ['emerald', 'diamond', 'apple'].includes(kind) || (kind === 'crystal' && card?.left.crystal !== undefined)
+    : kind === 'crystal' ? false : kind === 'eye' ? left(kind) > 0 : left(kind) > 0 || kind !== 'emerald'
   const eye = eyeStatus(game.cards, game.rules.eyeEvery)
   return <footer className="bottom-bar">
     {card ? <div className="card-info">
@@ -118,7 +140,7 @@ export function BottomBar({ card }: { card: PublicCard | null }) {
       </div>
       <ul className="card-left" aria-label="这张卡还剩">
         {KINDS.filter(shown).map((kind: Kind) =>
-          <li key={kind} className={left(kind) === 0 ? 'is-out' : kind === 'eye' ? 'is-eye' : ''} title={KIND_NAMES[kind]}>
+          <li key={kind} className={left(kind) === 0 ? 'is-out' : kind === 'eye' ? 'is-eye' : kind === 'crystal' ? 'is-crystal' : ''} title={KIND_NAMES[kind]}>
             <ItemIcon kind={kind} size={18} />
             <Tween value={left(kind)} />
           </li>)}
@@ -131,18 +153,11 @@ export function BottomBar({ card }: { card: PublicCard | null }) {
       {eye.kind === 'treasure' ? <button type="button" className="eye-status is-treasure" onClick={() => setFocus({ cardId: eye.card.id, at: Date.now() })}><ItemIcon kind="eye" size={14} />末地宝藏开了，点这里过去</button>
         : eye.kind === 'eye' ? <button type="button" className="eye-status" onClick={() => setFocus({ cardId: eye.card.id, at: Date.now() })}><ItemIcon kind="eye" size={14} />末影之眼藏在第 {eye.card.id} 张卡里</button>
           : eye.kind === 'coming' ? <span className="eye-status"><ItemIcon kind="eye" size={14} />{eye.cards === 1 ? '下一张新卡里藏着末影之眼' : `往后第 ${eye.cards} 张新卡里藏着末影之眼`}</span> : null}
-      <button type="button" className="feed-toggle" onClick={() => setFeedOpen(open => !open)} aria-expanded={feedOpen}>动态 {feedOpen ? '▾' : '▸'}</button>
+      <button type="button" className="summary-toggle" onClick={() => setSummary('button')}>
+        <svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true"><path d="M2 16h16M3 13l4-4 3 3 6-7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        收益
+      </button>
     </div>
-    {feedOpen ? <ol className="feed">
-      {game.feed.length === 0 ? <li className="feed-empty">还没有人挖</li> : game.feed.map(item =>
-        <li key={item.seq}>
-          <button type="button" onClick={() => setFocus({ cardId: item.cardId, at: Date.now() })}>
-            <ItemIcon kind={item.kind} size={16} />
-            <b>{item.name}</b> {item.text}
-            <span className="feed-where">第 {item.cardId} 张</span>
-          </button>
-        </li>)}
-    </ol> : null}
   </footer>
 }
 
@@ -188,7 +203,8 @@ export function Rules({ onClose, onPractice }: { onClose: () => void; onPractice
         <dt><ItemIcon kind="shield" size={18} /> 盾牌</dt><dd>挡下一次 TNT；已经有了就转成一份小奖</dd>
         <dt><ItemIcon kind="spyglass" size={18} /> 望远镜</dt><dd>看到这张卡上一个没开的格子，只有你看得见</dd>
         <dt><ItemIcon kind="pearl" size={18} /> 末影珍珠</dt><dd>旁边长出一张新卡</dd>
-        {rules.eyeEvery ? <><dt><ItemIcon kind="eye" size={18} /> 末影之眼</dt><dd>每 {rules.eyeEvery} 张卡有一颗，那张卡发紫光；挖到它，远处开出末地宝藏（3×3，只有宝物），没领奖的人都能挖</dd></> : null}
+        {rules.eyeEvery ? <><dt><ItemIcon kind="eye" size={18} /> 末影之眼</dt><dd>每 {rules.eyeEvery} 张卡有一颗，那张卡发紫光；挖到它，远处开出末地宝藏（3×3），没领奖的人都能挖</dd>
+          <dt><ItemIcon kind="crystal" size={18} /> 末影水晶</dt><dd>藏在末地宝藏里，一张一颗；踩中扣掉还没领的奖励的 {crystalPercent(rules)}%（TNT 的两倍，盾牌能挡）</dd></> : null}
       </dl> : null}
       <p className="rules-tip">拖动地图平移，滚轮或捏合缩放。点旁边的卡就能换过去，方向键也行；+/- 缩放。全图那一级能看到所有的卡，不能拖动。</p>
       <div className="rules-actions">

@@ -1,6 +1,6 @@
 export const kinds = ['emerald', 'diamond', 'apple', 'totem', 'tnt', 'pearl', 'shield', 'spyglass'] as const
 export type Kind = typeof kinds[number]
-export type IconKind = Kind | 'pickaxe' | 'ore' | 'chest' | 'eye'
+export type IconKind = Kind | 'pickaxe' | 'ore' | 'chest' | 'eye' | 'crystal'
 export type BoardSize = 5 | 6 | 7
 export type Difficulty = 'easy' | 'hard' | 'hell'
 export type Composition = Record<Kind, number>

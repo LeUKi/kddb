@@ -2,7 +2,7 @@
 // 纯函数，游戏站的 Durable Object 和测试共用；随机数来自每个红包自己的种子，
 // 同一个种子、同样的先后，结果一样，能重放核对。分和金额一样，单位是分。
 
-/** @typedef {'emerald'|'diamond'|'apple'|'totem'|'tnt'|'pearl'|'shield'|'spyglass'|'eye'} Kind */
+/** @typedef {'emerald'|'diamond'|'apple'|'totem'|'tnt'|'pearl'|'shield'|'spyglass'|'eye'|'crystal'} Kind */
 /** @typedef {3|5|6|7} Size */
 /**
  * 难度：新判定器的参数是 level（easy 简单 / normal 普通 / tough 困难）；旧的 difficulty
@@ -46,8 +46,15 @@
  *   uid: number, name: string, chances: number, shield: boolean,
  *   peeks: Peek[], points: number, digs: number,
  *   status: 'playing'|'claimed', lastDigAt: number, lastResult: Result|null,
+ *   trail?: Step[],
  * }} Player
  */
+/**
+ * 逐格记录（收益曲线用）：挖到什么（k）、这一格加减多少分（a）、挖完手里多少分（p）、
+ * 盾牌挡住了（b: 1）。开始记录以前就来过的人没有 trail。
+ * @typedef {{ k: Kind, a: number, p: number, b?: 1 }} Step
+ */
+/** @typedef {{ uid: number, name: string, points: number }} TopEntry */
 /**
  * @typedef {{
  *   seq: number, uid: number, name: string, kind: Kind, cardId: number,
@@ -63,6 +70,7 @@
  *   feed: FeedItem[], seq: number,
  *   stats: { digs: number, players: number, claimed: number, claimedPoints: number },
  *   over: boolean,
+ *   top?: TopEntry[],
  * }} Game
  */
 
@@ -78,12 +86,15 @@ export const FEED_LIMIT = 30;
 
 /** 公开的基准配比；顺序不代表洗过的牌。 */
 const COMPOSITIONS = /** @type {const} */ ({
-  5: { emerald: 11, diamond: 3, apple: 1, totem: 2, tnt: 4, pearl: 1, shield: 2, spyglass: 1, eye: 0 },
-  6: { emerald: 14, diamond: 4, apple: 2, totem: 3, tnt: 6, pearl: 1, shield: 3, spyglass: 3, eye: 0 },
-  7: { emerald: 20, diamond: 6, apple: 2, totem: 4, tnt: 8, pearl: 2, shield: 4, spyglass: 4, eye: 0 },
+  5: { emerald: 11, diamond: 3, apple: 1, totem: 2, tnt: 4, pearl: 1, shield: 2, spyglass: 1, eye: 0, crystal: 0 },
+  6: { emerald: 14, diamond: 4, apple: 2, totem: 3, tnt: 6, pearl: 1, shield: 3, spyglass: 3, eye: 0, crystal: 0 },
+  7: { emerald: 20, diamond: 6, apple: 2, totem: 4, tnt: 8, pearl: 2, shield: 4, spyglass: 4, eye: 0, crystal: 0 },
 });
-/** 末地宝藏卡：3×3，只有宝物，没有 TNT、珍珠和眼，不再长卡。 */
-const END_COMPOSITION = /** @type {const} */ ({ emerald: 5, diamond: 3, apple: 1, totem: 0, tnt: 0, pearl: 0, shield: 0, spyglass: 0, eye: 0 });
+/**
+ * 末地宝藏卡：3×3，奖励多，但藏着一颗末影水晶（踩中扣双倍，见 dig），不再长卡。
+ * 2026-11-06 以前开出的宝藏卡是 5 绿宝石、3 钻石、1 金苹果，存着的牌不变。
+ */
+const END_COMPOSITION = /** @type {const} */ ({ emerald: 4, diamond: 3, apple: 1, totem: 0, tnt: 0, pearl: 0, shield: 0, spyglass: 0, eye: 0, crystal: 1 });
 /** 末影之眼默认每 3 张普通卡一颗；参数可改，0 是不开末地宝藏。 */
 export const EYE_EVERY = 3
 const TNT_COUNTS = /** @type {const} */ ({
@@ -100,7 +111,9 @@ const TNT_PERCENT = /** @type {const} */ ({ easy: 15, normal: 25, tough: 50, har
 export const POOL_TARGET = 0.8
 /** 没填预计人数时按这么多人算。 */
 export const PLAYERS = 20
-export const KINDS = /** @type {Kind[]} */ (["emerald", "diamond", "apple", "totem", "tnt", "pearl", "shield", "spyglass", "eye"]);
+export const KINDS = /** @type {Kind[]} */ (["emerald", "diamond", "apple", "totem", "tnt", "pearl", "shield", "spyglass", "eye", "crystal"]);
+/** 收益卡上的前几名。 */
+export const TOP_LIMIT = 5;
 export const KIND_NAMES = /** @type {Record<Kind, string>} */ ({
   emerald: "绿宝石",
   diamond: "钻石",
@@ -111,6 +124,7 @@ export const KIND_NAMES = /** @type {Record<Kind, string>} */ ({
   shield: "盾牌",
   spyglass: "望远镜",
   eye: "末影之眼",
+  crystal: "末影水晶",
 });
 
 /**
@@ -272,7 +286,7 @@ export function createGame({ seed, rules, pool, openedAt, deadlineAt }) {
     version: 3, seed, rules, pool, used: 0, openedAt, deadlineAt,
     cards: {}, slots: {}, nextCardId: 1, feed: [], seq: 0,
     stats: { digs: 0, players: 0, claimed: 0, claimedPoints: 0 },
-    over: false,
+    over: false, top: [],
   };
   addCard(game, 0, 0);
   return game;
@@ -361,7 +375,7 @@ export function newPlayer(/** @type {Game} */ game, /** @type {number} */ uid, /
   return /** @type {Player} */ ({
     uid, name: [...name].slice(0, 32).join(""),
     chances: game.rules.initialChances, shield: false, peeks: [],
-    points: 0, digs: 0, status: "playing", lastDigAt: 0, lastResult: null,
+    points: 0, digs: 0, status: "playing", lastDigAt: 0, lastResult: null, trail: [],
   });
 }
 
@@ -379,10 +393,12 @@ export function coolingOf(/** @type {Game} */ game, /** @type {Player} */ player
  */
 export function digBlocked(/** @type {Game} */ game, /** @type {Player} */ player, /** @type {number} */ now, { cooling = true } = {}) {
   if (player.status === "claimed") return "你已经领取了，不能再挖这个红包";
-  if (game.over) return "奖池已经分完，游戏结束了，请领取";
+  // 手里没有分就不叫他领：领 0 分只会在红包里记一笔“领取 0.00”
+  const ask = player.points > 0 ? "，请领取" : "";
+  if (game.over) return `奖池已经分完，游戏结束了${ask}`;
   if (game.deadlineAt !== null && now >= game.deadlineAt - WRAP_UP_MS)
-    return "快截止了，已经停止挖掘，请领取";
-  if (player.chances <= 0) return "机会用完了，请领取";
+    return `快截止了，已经停止挖掘${ask}`;
+  if (player.chances <= 0) return `机会用完了${ask}`;
   const left = cooling ? coolingOf(game, player, now) : 0;
   if (left > 0) return intervalOf(game) <= MIN_INTERVAL_MS ? "挖得太快了，稍等一下" : `还要等 ${Math.ceil(left / 1000)} 秒才能再挖`;
   return null;
@@ -459,6 +475,19 @@ export function dig(
         publicText = "踩中了 TNT";
       }
       break;
+    case "crystal":
+      // 末影水晶（末地宝藏卡里）：像 TNT，扣双倍比例，最多扣光；盾牌一样能挡
+      if (player.shield) {
+        player.shield = false;
+        blockedTnt = true;
+        text = "盾牌挡住了末影水晶的爆炸，盾牌已消耗";
+        publicText = "用盾牌挡住了末影水晶";
+      } else {
+        const percent = crystalPercent(rules);
+        wanted = -(Math.floor(player.points / 100) * percent + Math.floor((player.points % 100) * percent / 100));
+        publicText = "引爆了末影水晶";
+      }
+      break;
     case "pearl": {
       const place = placeFor(game, card, index);
       grown = addCard(game, place.x, place.y);
@@ -510,7 +539,10 @@ export function dig(
       : appleCapped ? `（金苹果一次最多加 ${formatPoints(appleCapped)}）` : ""}`;
   } else if (kind === "tnt" && !blockedTnt) {
     text = `TNT！奖励 -${formatPoints(-amount)}（${rules.tntPercent}%，向下取整）`;
+  } else if (kind === "crystal" && !blockedTnt) {
+    text = `末影水晶爆炸！奖励 -${formatPoints(-amount)}（双倍，${crystalPercent(rules)}%，向下取整）`;
   }
+  player.trail?.push({ k: kind, a: amount, p: player.points, ...(blockedTnt ? { b: /** @type {1} */ (1) } : {}) });
   if (budgetLeft(game) === 0) game.over = true;
 
   /** @type {Result} */
@@ -520,7 +552,8 @@ export function dig(
   /** @type {FeedItem} */
   const feed = { seq: game.seq, uid: player.uid, name: player.name, kind, cardId, index, text: publicText, at: now, newCardId: grown?.id ?? null };
   game.feed = [feed, ...game.feed].slice(0, FEED_LIMIT);
-  return { ok: true, result, feed, newCard: grown, claimNow: player.chances === 0 || game.over };
+  // 机会用完、奖池分完时自动领取；手里没有分就不领（领了也是 0）
+  return { ok: true, result, feed, newCard: grown, claimNow: (player.chances === 0 || game.over) && player.points > 0 };
 }
 
 /** 领取：分定下来，之后不能再挖。再领一次还是同样的分。 */
@@ -529,8 +562,41 @@ export function claim(/** @type {Game} */ game, /** @type {Player} */ player) {
     player.status = "claimed";
     game.stats.claimed += 1;
     game.stats.claimedPoints += player.points;
+    if (game.top) game.top = topWith(game.top, player);
   }
   return player.points;
+}
+
+/** 末影水晶扣还没领的奖励的百分之几：TNT 的两倍，最多 100。 */
+export const crystalPercent = (/** @type {Rules} */ rules) => Math.min(100, rules.tntPercent * 2);
+
+/** 领得最多的前几名：加上刚领的这个人，分一样时先领的在前。 */
+export function topWith(/** @type {TopEntry[]} */ top, /** @type {Player} */ player) {
+  if (player.points <= 0) return top;
+  const next = [...top.filter((entry) => entry.uid !== player.uid), { uid: player.uid, name: player.name, points: player.points }];
+  // sort 是稳定的：分一样时保持原来的先后（先领的在前）
+  return next.sort((a, b) => b.points - a.points).slice(0, TOP_LIMIT);
+}
+
+/** 收益卡（网页的“收益”和结束时的弹窗）：自己的逐格记录和数，加上全场前几名。 */
+export function summaryOf(/** @type {Game} */ game, /** @type {Player} */ player) {
+  const trail = player.trail ?? null;
+  const steps = trail ?? [];
+  return {
+    me: {
+      name: player.name, status: player.status, points: player.points, digs: player.digs,
+      trail,
+      best: steps.reduce((most, step) => Math.max(most, step.a), 0),
+      tnt: steps.filter((step) => (step.k === "tnt" || step.k === "crystal") && !step.b).length,
+      blocked: steps.filter((step) => step.b).length,
+      lost: steps.reduce((sum, step) => sum + (step.a < 0 ? -step.a : 0), 0),
+    },
+    top: game.top ?? [],
+    stats: game.stats,
+    pool: game.pool,
+    left: budgetLeft(game),
+    over: game.over,
+  };
 }
 
 /** A1、C5：行是字母，列是数字。 */

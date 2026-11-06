@@ -1,10 +1,12 @@
-import { useAtomValue } from 'jotai'
+import { useAtom, useAtomValue } from 'jotai'
 import { useCallback, useEffect, useState } from 'react'
 import { CaveScene } from '../../src/CaveScene'
 import { Guide, GUIDE_SEEN } from './Guide'
 import { BottomBar, Rules, TopBar } from './Hud'
 import { MapView } from './MapView'
-import { gameAtom, hongbaoAtom, meAtom, phaseAtom, problemAtom, signIn, start, toastAtom } from './state'
+import { installSound } from './sound'
+import { gameAtom, hongbaoAtom, meAtom, phaseAtom, problemAtom, signIn, start, summaryOpenAtom, toastAtom } from './state'
+import { SummaryCard } from './Summary'
 import type { PublicCard } from './types'
 
 export function App() {
@@ -17,6 +19,8 @@ export function App() {
   const me = useAtomValue(meAtom)
   const hongbao = useAtomValue(hongbaoAtom)
   const onFocus = useCallback((next: PublicCard | null) => setCard(next), [])
+  const [summary, setSummary] = useAtom(summaryOpenAtom)
+  const closeSummary = useCallback(() => setSummary(null), [setSummary])
 
   // 第一次来、还没挖过：先练一下
   const meReady = phase === 'ready' && me !== null
@@ -42,6 +46,7 @@ export function App() {
   }
 
   useEffect(() => {
+    installSound()
     void start()
   }, [])
 
@@ -63,6 +68,7 @@ export function App() {
           </>}
     {rules ? <Rules onClose={() => setRules(false)} onPractice={() => { setRules(false); setGuide(true) }} /> : null}
     {guide && game ? <Guide rules={game.rules} unit={hongbao?.unit ?? 'LDC'} onClose={closeGuide} /> : null}
+    {summary && phase === 'ready' ? <SummaryCard reason={summary} onClose={closeSummary} /> : null}
     <Toast />
   </div>
 }

@@ -1,4 +1,4 @@
-import type { Live, Me, DigResult, State } from './types'
+import type { Live, Me, DigResult, State, Summary } from './types'
 
 declare const __API_BASE__: string
 
@@ -70,6 +70,11 @@ export class GameApi {
 
   state() {
     return this.call<State>('GET', 'state')
+  }
+
+  /** 收益卡：自己的逐格记录和数，全场前几名。 */
+  summary() {
+    return this.call<Summary>('GET', 'summary')
   }
 
   dig(cardId: number, index: number) {

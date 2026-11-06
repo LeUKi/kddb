@@ -1,6 +1,7 @@
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { useState } from 'react'
 import { ItemIcon } from '../../src/ItemIcon'
+import { play } from './sound'
 import type { Kind, Rules } from './types'
 import { money } from './types'
 
@@ -27,11 +28,19 @@ export function Guide({ rules, unit, onClose }: { rules: Rules; unit: string; on
     if (card === 'a' && (step === 'first' || step === 'pearl')) {
       const kind = SCRIPT[step]
       setOpened(value => ({ ...value, [key]: kind }))
+      play('dig')
       if (kind === 'emerald') {
+        play('emerald')
         setPoints(rules.smallReward)
         setStep('pearl')
-      } else setStep('move')
+      } else {
+        play('throw')
+        play('teleport', { delay: 450 })
+        setStep('move')
+      }
     } else if (card === 'b' && step === 'tnt') {
+      play('dig')
+      play('tnt')
       setOpened(value => ({ ...value, [key]: 'tnt' }))
       setPoints(value => value - penalty)
       setStep('done')

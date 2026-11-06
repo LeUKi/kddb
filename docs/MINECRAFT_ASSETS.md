@@ -15,7 +15,7 @@
 | JAR SHA-1 | `a7e5a6024bfd3cd614625aa05629adf760020304` |
 | JAR 大小 | `28,335,587` 字节 |
 
-`manifest.json` 记录 89 个官方原始文件：60 个 PNG 和 29 个模型 / 物品 JSON，合计 22,794 字节（2026-11-06 为末影之眼和末地宝藏卡，从同一个 JAR——核对过大小和 SHA-1——补提取 `ender_eye.png`、`end_stone.png` 两个文件，各 214、206 字节）。每个条目都有 JAR 内的原始路径、字节数和 SHA-256；PNG 另有宽高。文件内容未经重采样、改色或重新编码。这些是选用的资源，不是完整资源包。
+`manifest.json` 记录 90 个官方原始文件：61 个 PNG 和 29 个模型 / 物品 JSON，合计 23,020 字节（2026-11-06 为末影之眼和末地宝藏卡，从同一个 JAR——核对过大小和 SHA-1——补提取 `ender_eye.png`、`end_stone.png` 两个文件，各 214、206 字节；同一天晚些时候用户同意再下一次同一个 JAR，为末影水晶补提取 `end_crystal.png`，226 字节，提取完 JAR 已删）。每个条目都有 JAR 内的原始路径、字节数和 SHA-256；PNG 另有宽高。文件内容未经重采样、改色或重新编码。这些是选用的资源，不是完整资源包。
 
 | 页面用途 | 官方原始文件，相对资源根目录 | 尺寸 |
 | --- | --- | --- |
@@ -26,6 +26,7 @@
 | 末影珍珠 | `textures/item/ender_pearl.png` | 16 × 16 |
 | 末影之眼 | `textures/item/ender_eye.png` | 16 × 16 |
 | 末地石（末地宝藏卡） | `textures/block/end_stone.png` | 16 × 16 |
+| 末影水晶（末地宝藏卡里的“雷”） | `textures/item/end_crystal.png` | 16 × 16 |
 | 望远镜 | `textures/item/spyglass.png` | 16 × 16 |
 | 铁镐 | `textures/item/iron_pickaxe.png` | 16 × 16 |
 | 石头、深板岩、原矿、木材 | `textures/block/` 内对应名称的 PNG | 16 × 16 |
@@ -62,4 +63,10 @@
 
 如需要自行绘制方块三维面，`models/block/tnt.json`、`cube_bottom_top.json`、`cube.json` 和 `block.json` 保留了官方模型与材质映射。普通方块背包姿态位于 `models/block/block.json`：旋转 `[30, 225, 0]`，缩放 `[0.625, 0.625, 0.625]`。箱子姿态位于 `models/item/template_chest.json`：旋转 `[30, 45, 0]`，相同缩放。盾牌姿态位于 `models/item/shield.json`：旋转 `[15, -25, -5]`、平移 `[2, 3, 0]`、缩放 `[0.65, 0.65, 0.65]`。实体图集不能直接当作背包图显示。
 
-Minecraft 的美术资源由 Mojang / Microsoft 持有权利；本项目没有将其重新授权为自己的原创素材。Wiki 的 `License Mojang` 标记也不等于给游戏图像授予 Wiki 正文的许可。项目与 Minecraft、Mojang 或 Microsoft 没有官方关联。
+## 音效（v3）
+
+2026-11-06 用户同意从 Mojang 官方资源服务器下载选用的音效。1.21.4 版本元数据（上表，SHA-1 已核对）里的资源索引 `19`（<https://piston-meta.mojang.com/v1/packages/54842101298f1258c7076491af2fad4702fd3523/19.json>，SHA-1 `54842101298f1258c7076491af2fad4702fd3523`）列出每个声音文件的 SHA-1，文件从 `https://resources.download.minecraft.net/<SHA-1 前两位>/<SHA-1>` 下载，逐个核对 SHA-1 和大小。选了 26 个 `.ogg`（合计 416,678 字节）：`dig/stone1–4`、`random/orb`、`random/levelup`、`random/eat1–3`、`item/armor/equip_iron1–2`、`random/explode1–2`、`item/armor/equip_generic1–2`、`item/shield/block1–2`、`item/spyglass/use`、`random/bow`、`mob/endermen/portal`、`portal2`、`entity/endereye/endereye_launch1`、`dead1`、`block/end_portal/endportal`、`ui/toast/challenge_complete`、`random/click`。
+
+iPhone 的 Safari 不一定能解 Ogg Vorbis，所以用 ffmpeg 转成 MP3（单声道 64 kbps，双声道的两个 96 kbps，去掉元数据），只转格式，没有剪辑、混音或改音量。放在 `sounds/` 下，路径照原来的（`sounds/dig/stone1.mp3`），合计 342,491 字节；`sounds/provenance.json` 记着每个文件的原始路径、原始 SHA-1 和大小、转换参数、转换后的大小和 SHA-256。下载的 `.ogg` 没有放进仓库。
+
+Minecraft 的美术和声音资源由 Mojang / Microsoft 持有权利；本项目没有将其重新授权为自己的原创素材。Wiki 的 `License Mojang` 标记也不等于给游戏图像授予 Wiki 正文的许可。项目与 Minecraft、Mojang 或 Microsoft 没有官方关联。

@@ -6,7 +6,7 @@
 
 import {
   amountOf, claim, createGame, dig, digBlocked, newPlayer, privatePlayer,
-  publicCard, publicGame, rulesOf,
+  publicCard, publicGame, rulesOf, summaryOf, topWith,
 } from "../shared/rules.mjs";
 
 /**
@@ -155,6 +155,34 @@ export class MineRoom {
     };
   }
 
+  /** 收益卡：自己的逐格记录和数，全场前几名。 */
+  async summary(/** @type {Info} */ info, /** @type {number} */ uid, /** @type {string} */ name) {
+    const game = await this.gameFor(info);
+    const player = await this.playerOf(game, uid, name);
+    await this.topOf(game);
+    return summaryOf(game, player);
+  }
+
+  /**
+   * 前几名：新开的局一直记着；记录以前开的局第一次要时从所有领过的人里算一遍，存下来，
+   * 之后每领一个人更新。
+   */
+  async topOf(/** @type {Game} */ game) {
+    if (game.top) return game.top;
+    const players = await this.storage.list({ prefix: "player:" });
+    /** @type {import("../shared/rules.mjs").TopEntry[]} */
+    let top = [];
+    for (const value of players.values()) {
+      const player = /** @type {Player} */ (value);
+      const latest = this.players.get(player.uid) ?? player;
+      if (latest.status === "claimed") top = topWith(top, latest);
+    }
+    game.top = top;
+    const { cards: _cards, ...meta } = game;
+    await this.storage.put({ game: meta });
+    return top;
+  }
+
   /**
    * 领取：分定下来，签一张凭证；再要一次还是同一张。
    * @returns {Promise<{ answer: Record<string, unknown>, broadcast: Record<string, unknown>|null }>}
@@ -164,6 +192,10 @@ export class MineRoom {
     const player = await this.playerOf(game, uid, name);
     if (info.status !== "active" && player.status !== "claimed")
       return { answer: { ok: false, message: "红包已经结束了，没领的奖励作废", me: privatePlayer(player) }, broadcast: null };
+    // 手里没有分：不签凭证（交上去只会在红包里记一笔“领取 0.00”）
+    if (player.status !== "claimed" && player.points <= 0)
+      return { answer: { ok: false, message: "手里还没有奖励，不用领取", me: privatePlayer(player) }, broadcast: null };
+    await this.topOf(game);
     const first = player.status !== "claimed";
     const points = claim(game, player);
     // ECDSA 每次签出来不一样：第一次签的存下来，再要还是这一张

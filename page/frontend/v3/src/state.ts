@@ -2,6 +2,8 @@
 import { atom, createStore } from 'jotai'
 import type { HbHongbao } from '../../../hb'
 import { ApiError, GameApi } from './api'
+import { landMs } from './PearlFlight'
+import { play, soundOfResult } from './sound'
 import type { DigResult, Live, Me, PublicCard, PublicGame } from './types'
 import { money } from './types'
 
@@ -31,10 +33,38 @@ export type Claiming = 'idle' | 'working' | 'filled' | 'done'
 export const claimingAtom = atom<Claiming>('idle')
 /** 红包站已经给他结算了：领到多少 */
 export const settledAtom = atom<{ amount: string; unit: string } | null>(null)
+/** 收益卡开着：他点开的（button），或者这一局对他结束了自动弹的（end） */
+export const summaryOpenAtom = atom<'button' | 'end' | null>(null)
 
 let api: GameApi | null = null
 let stopLive: (() => void) | null = null
 let autoClaimed = false
+/** 结束时的弹窗每次打开网页只弹一次 */
+let endShown = false
+
+/** 收益卡的数据（打开时才要）。 */
+export function loadSummary() {
+  if (!api) return Promise.reject(new Error('还没连上矿洞'))
+  return api.summary()
+}
+
+/** 这一局对他结束了（领到了、奖池分完或机会用完而手里没有分）：弹一次收益卡。 */
+function showEnd() {
+  if (endShown) return
+  endShown = true
+  store.set(summaryOpenAtom, 'end')
+}
+
+/** 刚开出来的格子，只留最近 3 秒的（闪一下、飘字都在这之内），不让它越攒越大。 */
+const FRESH_MS = 3000
+function addFresh(entries: Record<string, { mine: boolean; at: number; result?: DigResult }>) {
+  store.set(freshAtom, value => {
+    const now = Date.now()
+    const next: typeof value = {}
+    for (const [cell, entry] of Object.entries(value)) if (now - entry.at < FRESH_MS) next[cell] = entry
+    return Object.assign(next, entries)
+  })
+}
 
 const key = (cardId: number, index: number) => `${cardId}:${index}`
 
@@ -105,41 +135,88 @@ export async function refresh() {
   }
 }
 
-function replaceCard(cards: PublicCard[], card: PublicCard) {
-  const at = cards.findIndex(item => item.id === card.id)
-  if (at < 0) return [...cards, card]
-  const next = cards.slice()
-  next[at] = card
-  return next
+/**
+ * 实时推送：攒到下一帧一起放进去（几十个人一起挖时一秒几十条，一条一渲染手机跟不上）。
+ * 网页在后台时动画帧不跑，另有一个定时器兜底。
+ */
+let liveQueue: Live[] = []
+let liveFrame = 0
+let liveTimer: ReturnType<typeof setTimeout> | undefined
+function onLive(message: Live) {
+  liveQueue.push(message)
+  if (liveFrame) return
+  liveFrame = requestAnimationFrame(flushLive)
+  liveTimer = setTimeout(flushLive, 150)
 }
 
-/** 一条推送（或自己挖的那次的变化）：按序号接上，漏了就整张重读。 */
-function onLive(message: Live) {
-  const game = store.get(gameAtom)
+function flushLive() {
+  cancelAnimationFrame(liveFrame)
+  clearTimeout(liveTimer)
+  liveFrame = 0
+  const queue = liveQueue
+  liveQueue = []
+  if (queue.length > 0) applyLive(queue)
+}
+
+/** 按序号一条条接上（漏了就整张重读），最后只设一次状态。 */
+function applyLive(messages: Live[]) {
+  let game = store.get(gameAtom)
   if (!game) return
-  if (message.type === 'claim') {
-    store.set(gameAtom, { ...game, stats: message.stats })
+  const uid = store.get(uidAtom)
+  const now = Date.now()
+  let cards: PublicCard[] | null = null
+  const put = (card: PublicCard) => {
+    cards ??= game!.cards.slice()
+    const at = cards.findIndex(item => item.id === card.id)
+    if (at < 0) cards.push(card)
+    else cards[at] = card
+  }
+  const fresh: Record<string, { mine: boolean; at: number }> = {}
+  let grown: { cardId: number; at: number; from: { cardId: number; index: number } } | null = null
+  let missed = false
+  for (const message of messages) {
+    if (message.type === 'claim') {
+      game = { ...game, stats: message.stats }
+      continue
+    }
+    if (message.seq <= game.seq) continue
+    if (message.seq > game.seq + 1) {
+      missed = true
+      break
+    }
+    put(message.card)
+    if (message.newCard) put(message.newCard)
+    game = {
+      ...game, seq: message.seq, cards: cards ?? game.cards, left: message.left, over: message.over, stats: message.stats,
+      feed: [message.feed, ...game.feed].slice(0, 30),
+    }
+    const mine = message.feed.uid === uid
+    if (!mine) fresh[key(message.feed.cardId, message.feed.index)] = { mine: false, at: now }
+    // 新卡（谁挖出来的都一样）：地图上长出来，不在画面里就在边上提醒，镜头不动
+    if (message.newCard) {
+      grown = { cardId: message.newCard.id, at: now, from: { cardId: message.feed.cardId, index: message.feed.index } }
+      // 别人挖到末影之眼：末地宝藏开了，大家都听得见（轻一些）
+      if (!mine && message.newCard.kind === 'end') play('portal', { volume: 0.6, delay: landMs('eye') })
+    }
+  }
+  store.set(gameAtom, game)
+  if (Object.keys(fresh).length > 0) addFresh(fresh)
+  if (grown) store.set(newCardAtom, grown)
+  if (game.over) gameOver()
+  if (missed) void refresh()
+}
+
+/** 奖池分完：手里有分的自动领；没有分的只说游戏结束了，不领（领了也是 0）。 */
+function gameOver() {
+  const me = store.get(meAtom)
+  if (!me || me.status !== 'playing') return
+  if (me.points > 0) {
+    store.set(blockedAtom, '奖池已经分完，游戏结束了，请领取')
+    void claim(true)
     return
   }
-  if (message.seq <= game.seq) return
-  if (message.seq > game.seq + 1) {
-    void refresh()
-    return
-  }
-  let cards = replaceCard(game.cards, message.card)
-  if (message.newCard) cards = replaceCard(cards, message.newCard)
-  store.set(gameAtom, {
-    ...game, seq: message.seq, cards, left: message.left, over: message.over, stats: message.stats,
-    feed: [message.feed, ...game.feed].slice(0, 30),
-  })
-  const mine = message.feed.uid === store.get(uidAtom)
-  if (!mine) {
-    const cell = key(message.feed.cardId, message.feed.index)
-    store.set(freshAtom, value => ({ ...value, [cell]: { mine: false, at: Date.now() } }))
-  }
-  // 新卡（谁挖出来的都一样）：地图上长出来，不在画面里就在边上提醒，镜头不动
-  if (message.newCard) store.set(newCardAtom, { cardId: message.newCard.id, at: Date.now(), from: { cardId: message.feed.cardId, index: message.feed.index } })
-  if (message.over && store.get(meAtom)?.status === 'playing') void claim(true)
+  store.set(blockedAtom, '奖池已经分完，游戏结束了')
+  if (me.digs > 0) showEnd()
 }
 
 /** 挖一格。 */
@@ -158,6 +235,7 @@ export async function dig(cardId: number, index: number) {
     return
   }
   store.set(pendingAtom, value => ({ ...value, [cell]: true }))
+  play('dig')
   try {
     const answer = await api.dig(cardId, index)
     setMe(answer.me)
@@ -166,9 +244,23 @@ export async function dig(cardId: number, index: number) {
       void refresh()
       return
     }
-    onLive({ ...(answer as unknown as { update: Live }).update })
-    store.set(freshAtom, value => ({ ...value, [cell]: { mine: true, at: Date.now(), result: answer.result } }))
+    // 先接上攒着的推送，再放自己这次的（序号接得上）
+    flushLive()
+    applyLive([(answer as unknown as { update: Live }).update])
+    addFresh({ [cell]: { mine: true, at: Date.now(), result: answer.result } })
+    const sound = soundOfResult(answer.result)
+    if (sound) play(sound)
+    if (answer.result.kind === 'pearl' && answer.result.newCardId !== null) {
+      play('throw', { delay: 250 })
+      play('teleport', { delay: landMs('pearl') })
+    }
+    if (answer.result.kind === 'eye' && answer.result.newCardId !== null) {
+      play('eye', { delay: 250 })
+      play('portal', { delay: landMs('eye') })
+    }
     if (answer.claimNow) window.setTimeout(() => void claim(true), 1200)
+    // 机会用完、手里没有分：这一局对他结束了
+    else if (answer.me.chances <= 0 && answer.me.points <= 0) window.setTimeout(showEnd, 1200)
   } catch (error) {
     toast(error instanceof ApiError ? error.message : '没挖成，稍后再试', 'bad')
   } finally {
@@ -186,6 +278,12 @@ export async function dig(cardId: number, index: number) {
  */
 export async function claim(auto = false) {
   if (!api || store.get(claimingAtom) === 'working' || store.get(settledAtom)) return
+  const me = store.get(meAtom)
+  // 手里没有分不领：交上去只会在红包里记一笔“领取 0.00”
+  if (me && me.status === 'playing' && me.points <= 0) {
+    if (!auto) toast('手里还没有奖励，不用领取')
+    return
+  }
   if (auto) {
     if (autoClaimed) return
     autoClaimed = true
@@ -203,6 +301,8 @@ export async function claim(auto = false) {
     if (result.judged && result.claimed) {
       store.set(settledAtom, { amount: result.amount, unit: result.unit })
       store.set(claimingAtom, 'done')
+      play('claim')
+      showEnd()
       return
     }
     if (result.judged) {
@@ -226,8 +326,8 @@ function checkWrapUp() {
   const me = store.get(meAtom)
   if (!game || !me || me.status !== 'playing' || game.wrapUpAt === null) return
   if (hb.now() >= game.wrapUpAt) {
-    if (!store.get(blockedAtom)) store.set(blockedAtom, '快截止了，已经停止挖掘，请领取')
-    void claim(true)
+    if (!store.get(blockedAtom)) store.set(blockedAtom, me.points > 0 ? '快截止了，已经停止挖掘，请领取' : '快截止了，已经停止挖掘')
+    if (me.points > 0) void claim(true)
   }
 }
 

@@ -649,6 +649,14 @@
       "height": 16
     },
     {
+      "path": "textures/item/end_crystal.png",
+      "source": "assets/minecraft/textures/item/end_crystal.png",
+      "bytes": 226,
+      "sha256": "1a75f035d740b3f4f269bbdddfa4cca59c406a43b6c6212bafadbb26db34afd3",
+      "width": 16,
+      "height": 16
+    },
+    {
       "path": "textures/block/end_stone.png",
       "source": "assets/minecraft/textures/block/end_stone.png",
       "bytes": 206,

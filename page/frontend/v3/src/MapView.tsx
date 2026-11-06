@@ -6,15 +6,43 @@ import type { Entrance } from './CardView'
 import { CardView } from './CardView'
 import { useGesture } from '@use-gesture/react'
 import type { Camera, Direction, Level, Viewport, WheelZoom } from './camera'
-import { cameraAt, cardNear, cardToward, cellCenter, centerOf, edgeFacing, edgePointer, entryPoint, fullyOnScreen, nearestCard, nearestLevel, onScreen, overviewCamera, scaleOf, wheelZoom } from './camera'
+import { BLOCK_PX, cameraAt, cardNear, cardToward, cellCenter, centerOf, edgeFacing, edgePointer, entryPoint, fullyOnScreen, nearestCard, nearestLevel, onScreen, overviewCamera, scaleOf, SLOT_PX, wheelZoom } from './camera'
 import type { Flight, Point } from './PearlFlight'
+import { cardAt, MapCanvas } from './MapCanvas'
 import { landMs, PearlFlight } from './PearlFlight'
 import { isTreasure } from './eye'
 import { useCooling } from './Hud'
 import { blockedAtom, dig, focusRequestAtom, freshAtom, gameAtom, hongbaoAtom, meAtom, newCardAtom, pendingAtom, settledAtom, uidAtom } from './state'
-import type { PublicCard } from './types'
+import type { DigResult, Peek, PublicCard } from './types'
 
 const DRAG_SLOP = 6
+const NO_PEEKS: Peek[] = []
+const NO_PENDING: Record<string, true> = {}
+const NO_FRESH: Record<string, { mine: boolean; at: number; result?: DigResult }> = {}
+
+/**
+ * 按卡分开（键是“卡号:格”）：内容没变的卡给回上一次的同一个对象，CardView 的 memo
+ * 才认得出没变，别人挖了一格只重画那一张。
+ */
+function useByCard<T>(all: Record<string, T>, empty: Record<string, T>) {
+  const previous = useRef(new Map<number, Record<string, T>>())
+  return useMemo(() => {
+    const groups = new Map<number, Record<string, T>>()
+    for (const [cell, value] of Object.entries(all)) {
+      const cardId = Number(cell.slice(0, cell.indexOf(':')))
+      let group = groups.get(cardId)
+      if (!group) groups.set(cardId, (group = {}))
+      group[cell] = value
+    }
+    for (const [cardId, group] of groups) {
+      const before = previous.current.get(cardId)
+      const keys = Object.keys(group)
+      if (before && keys.length === Object.keys(before).length && keys.every(cell => before[cell] === group[cell])) groups.set(cardId, before)
+    }
+    previous.current = groups
+    return (cardId: number) => groups.get(cardId) ?? empty
+  }, [all, empty])
+}
 const lastSeenKey = (hongbao: string) => `kddb:v3:last:${hongbao}`
 
 function readLastSeen(hongbao: string) {
@@ -37,6 +65,8 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
   const uid = useAtomValue(uidAtom)
   const pending = useAtomValue(pendingAtom)
   const fresh = useAtomValue(freshAtom)
+  const freshOf = useByCard(fresh, NO_FRESH)
+  const pendingOf = useByCard(pending, NO_PENDING)
   const blocked = useAtomValue(blockedAtom)
   const newCard = useAtomValue(newCardAtom)
   const setNewCard = useSetAtom(newCardAtom)
@@ -378,34 +408,74 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
     if (card) goToCard(card, 2)
   }, [cards, goToCard])
 
+  // —— 画在整张地图画布上的卡（MapCanvas）：点击、悬停按坐标算是哪张 ——
+  const bySlot = useMemo(() => new Map(cards.map(card => [`${card.x},${card.y}`, card])), [cards])
+  const worldAt = (clientX: number, clientY: number) => {
+    const at = toLocal(clientX, clientY)
+    const now = camera()
+    return { x: (at.x - now.x) / now.scale, y: (at.y - now.y) / now.scale }
+  }
+  const [hover, setHover] = useState<number | null>(null)
+  const pickOnCanvas = (event: React.MouseEvent) => {
+    const card = cardAt(bySlot, worldAt(event.clientX, event.clientY))
+    if (card) pick(card.id)
+  }
+  const hoverOnCanvas = (event: React.PointerEvent | null) => {
+    // 只有鼠标有悬停；挖卡那一级画布上的卡都在画面外
+    const card = event && event.pointerType === 'mouse' && level !== 2 ? cardAt(bySlot, worldAt(event.clientX, event.clientY)) : null
+    setHover(card?.id ?? null)
+  }
+
   // 地图上方一条：为什么现在不能挖（不用等点了才知道）
   const banner = settled_ ? null
     : me?.status === 'claimed' ? '已经领取，凭证还没交上：点上面的「再交一次」'
       : blocked
   const detailScale = cullAt.scale >= 0.4
+  /** 近处（画面里，或当前卡四周一圈）：放大到能看清的级别时画格子 */
+  const nearOf = (card: PublicCard) => onScreen(card, cullAt, view, 200)
+    || (!!cullFocus && Math.max(Math.abs(card.x - cullFocus.x), Math.abs(card.y - cullFocus.y)) <= 1)
+  /**
+   * 放在网页里的卡：画格子的、正要飞过去的、当前卡、发光的（藏着眼的、没挖完的宝藏）、
+   * 刚长出来的。别的都只画在整张地图的画布上。
+   */
+  const dom = new Set(cards.filter(card => (detailScale && nearOf(card)) || card.id === warm || card.id === focused?.id
+    || (isTreasure(card) && !card.finished) || (card.left.eye ?? 0) > 0 || card.id === entrance?.cardId).map(card => card.id))
+  const hoverCard = hover === null ? null : cards.find(card => card.id === hover) ?? null
+  // 望远镜看到的格子按卡分开；只有自己的望远镜会变
+  const peeksOf = useMemo(() => {
+    const groups = new Map<number, Peek[]>()
+    for (const peek of me?.peeks ?? []) groups.set(peek.cardId, [...(groups.get(peek.cardId) ?? []), peek])
+    return groups
+  }, [me?.peeks])
   const markerCard = marker === null ? null : cards.find(card => card.id === marker) ?? null
   const pointer = markerCard && !fullyOnScreen(markerCard, settled, view) ? edgePointer(markerCard, settled, view) : null
   // JP：末地宝藏还有没挖的格子、又没整张在画面里时，画面边上一直亮着金色的 JP 指着它
   const jpCard = useMemo(() => [...cards].reverse().find(card => isTreasure(card) && !card.finished) ?? null, [cards])
   const jpPointer = jpCard && jpCard.id !== jpHold && !fullyOnScreen(jpCard, settled, view) ? edgePointer(jpCard, settled, view) : null
 
-  return <div className={`map-view level-${level}${cooling.seconds ? ' is-cooling' : ''}`}>
+  return <div className={`map-view level-${level}${cooling.seconds ? ' is-cooling' : ''}${hoverCard ? ' is-pointing' : ''}`}>
     <div className="map-canvas" ref={box} onClickCapture={onClickCapture}>
     <motion.div className="map-world" style={{ x, y, scale, transformOrigin: '0 0', '--px': 1 / settled.scale } as MotionStyle}>
+      <MapCanvas cards={cards} view={view} skip={entrance?.cardId ?? null} onPick={pickOnCanvas} onHover={hoverOnCanvas} />
+      {hoverCard && !dom.has(hoverCard.id) ? <div className="map-hover" aria-hidden="true"
+        style={{ left: hoverCard.x * SLOT_PX - BLOCK_PX / 2, top: hoverCard.y * SLOT_PX - BLOCK_PX / 2, width: BLOCK_PX, height: BLOCK_PX }} /> : null}
       {cards.map(card => {
-        const near = onScreen(card, cullAt, view, 200)
-          || (!!cullFocus && Math.max(Math.abs(card.x - cullFocus.x), Math.abs(card.y - cullFocus.y)) <= 1)
+        if (!dom.has(card.id)) return null
+        const near = nearOf(card)
         const ready = card.id === warm
+        const current = card.id === focused?.id
         return <CardView
           key={card.id}
           card={card}
-          focused={card.id === focused?.id}
-          diggable={level === 2 && card.id === focused?.id && !card.finished && !blocked && me?.status === 'playing'}
+          focused={current}
+          diggable={level === 2 && current && !card.finished && !blocked && me?.status === 'playing'}
           detail={(detailScale && near) || ready}
+          names={level === 2 && current}
+          current={current}
           myUid={uid}
-          peeks={me?.peeks ?? []}
-          pending={pending}
-          fresh={fresh}
+          peeks={peeksOf.get(card.id) ?? NO_PEEKS}
+          pending={pendingOf(card.id)}
+          fresh={freshOf(card.id)}
           entrance={entrance?.cardId === card.id ? entrance : null}
           onDig={dig}
           onPick={pick}

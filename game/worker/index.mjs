@@ -153,6 +153,8 @@ export class MineObject extends DurableObject {
 
       if (route === "GET /state") return json(await this.room.state(info, who.uid, who.name, Date.now()));
 
+      if (route === "GET /summary") return json(await this.room.summary(info, who.uid, who.name));
+
       if (route === "POST /dig") {
         const body = /** @type {{ cardId?: unknown, index?: unknown }} */ (await request.json().catch(() => ({})));
         const cardId = Number(body.cardId);

@@ -155,6 +155,36 @@ describe("一局", () => {
     assert.equal((await room.dig(ended, 10001, "xiaoming", { cardId: 1, index: 1 }, NOW + 2000)).answer.message, "红包已经结束了");
     assert.equal((await room.claim(ended, 10001, "xiaoming")).answer.message, "红包已经结束了，没领的奖励作废");
   });
+  it("手里没有分不签凭证（不然红包里多一笔“领取 0.00”）", async () => {
+    const room = new MineRoom(memory(), tools);
+    const game = await room.gameFor(info);
+    game.cards[1].deck = game.cards[1].deck.map(() => "tnt");
+    await room.dig(info, 10001, "xiaoming", { cardId: 1, index: 0 }, NOW);
+    const out = await room.claim(info, 10001, "xiaoming");
+    assert.equal(out.answer.ok, false);
+    assert.equal(out.answer.message, "手里还没有奖励，不用领取");
+    assert.equal(out.broadcast, null);
+  });
+  it("收益卡：自己的逐格记录和全场前几名；记录以前开的局第一次要时从领过的人里算", async () => {
+    const storage = memory();
+    const room = new MineRoom(storage, tools);
+    const game = await room.gameFor(info);
+    game.cards[1].deck = game.cards[1].deck.map((_, index) => (index === 2 ? "diamond" : "emerald"));
+    await room.dig(info, 10001, "xiaoming", { cardId: 1, index: 0 }, NOW);
+    await room.dig(info, 10002, "xiaohong", { cardId: 1, index: 2 }, NOW);
+    await room.claim(info, 10001, "xiaoming");
+    await room.claim(info, 10002, "xiaohong");
+    const summary = await room.summary(info, 10001, "xiaoming");
+    assert.deepEqual(summary.me.trail, [{ k: "emerald", a: 10, p: 10 }]);
+    assert.deepEqual(summary.top.map((entry) => [entry.name, entry.points]), [["xiaohong", 50], ["xiaoming", 10]]);
+    // 记录以前开的局：整局里没有 top
+    const meta = /** @type {Record<string, unknown>} */ (storage.map.get("game"));
+    delete meta.top;
+    const again = new MineRoom(storage, tools);
+    const rebuilt = await again.summary(info, 10003, "xiaogang");
+    assert.deepEqual(rebuilt.top.map((entry) => entry.uid), [10002, 10001]);
+    assert.ok(Array.isArray(/** @type {{ top?: unknown }} */ (storage.map.get("game")).top));
+  });
   it("nonce 只能用一次", async () => {
     const room = new MineRoom(memory(), tools);
     assert.equal(await room.takeNonce("abc", NOW), true);

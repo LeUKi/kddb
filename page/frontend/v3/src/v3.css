@@ -24,6 +24,12 @@ body { overflow: hidden; overscroll-behavior: none; }
 .claim-button:disabled { filter: grayscale(.4) brightness(.8); }
 .claim-done { color: #b4d3b2; font-weight: 600; }
 .rules-button { width: 32px; height: 32px; color: var(--ink); background: #242d34; border: 1px solid #56636b; border-radius: 50%; }
+/* 声音开关：关掉时喇叭旁边是叉，开着时是声波 */
+.sound-button { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; color: var(--ink); background: #242d34; border: 1px solid #56636b; border-radius: 50%; }
+.sound-button .sound-cross { display: none; }
+.sound-button.is-muted { color: var(--muted); }
+.sound-button.is-muted .sound-waves { display: none; }
+.sound-button.is-muted .sound-cross { display: inline; }
 
 /* —— 地图 —— */
 .map-view { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
@@ -54,7 +60,6 @@ body { overflow: hidden; overscroll-behavior: none; }
 .map-card.is-end { background: #2a2637; border-color: #d9c27a; }
 .map-card.is-end.is-focused { border-color: #ffe08a; }
 .map-card.is-end .map-cell.covered { background-image: linear-gradient(135deg, #fff5c114, #2a1f402e), var(--end-stone); }
-.map-card.is-end .thumb-cell:not([class*='kind-']) { background-image: linear-gradient(135deg, #fff5c114, #2a1f402e), var(--end-stone); }
 .card-left li.is-eye { color: #d7c2ff; }
 .eye-status { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; color: #d7c2ff; font: inherit; background: #9a6bff1f; border: 1px solid #b48cff59; border-radius: 999px; }
 button.eye-status { cursor: pointer; }
@@ -76,7 +81,7 @@ button.eye-status { cursor: pointer; }
    格子从朝着旧卡的那条边一波一波翻出来（--wave 是每格晚多少） */
 .map-block.is-grown { animation: block-in .3s var(--ease-out) var(--land, 0ms) both; }
 .map-block.is-grown .map-card { animation: frame-in .45s cubic-bezier(.34, 1.56, .64, 1) var(--land, 0ms) both; }
-.map-block.is-grown :is(.map-cell, .thumb-cell):not(.just-mine, .just-other) { animation: cell-in .38s var(--ease-out) calc(var(--land, 0ms) + var(--wave, 0ms)) both; }
+.map-block.is-grown .map-cell:not(.just-mine, .just-other) { animation: cell-in .38s var(--ease-out) calc(var(--land, 0ms) + var(--wave, 0ms)) both; }
 @keyframes block-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes frame-in { from { transform: scale(.86); } to { transform: none; } }
 @keyframes cell-in { from { opacity: 0; transform: perspective(240px) rotateX(-80deg) scale(.7); } to { opacity: 1; transform: none; } }
@@ -106,14 +111,20 @@ button.eye-status { cursor: pointer; }
 .map-card.is-finished { filter: grayscale(.75) brightness(.55); }
 .map-cell { position: relative; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; color: var(--ink); background: #19232d; border: 1px solid #8c89826b; border-bottom: 3px solid #303136; border-radius: 2px; }
 /* 地图上的卡外框一样大，格子跟着卡的大小走（练习里的小卡还是 44） */
-.map-card .map-cell, .map-card .thumb-cell { width: auto; height: auto; }
+.map-card .map-cell { width: auto; height: auto; }
 .map-cell.covered { background-image: linear-gradient(135deg, #edc38f0f, #0e172526), var(--stone); background-size: 100% 100%; image-rendering: pixelated; box-shadow: inset 0 2px 0 #c5bbb22b, 0 2px 0 #0006; }
 .map-cell.covered:enabled { cursor: pointer; }
 .map-cell.covered:enabled:hover { border-color: #e3c08a; filter: brightness(1.18); }
 .map-cell.covered:enabled:active { filter: brightness(.85); }
 /* 不能挖的格子不接点击：点它就是点它的区块（换到这张卡） */
 .map-cell.covered:disabled { cursor: inherit; pointer-events: none; }
-.map-cell.revealed { grid-template-rows: 1fr auto; padding-top: 3px; border-color: #4c5155; border-bottom-color: #171c22; box-shadow: inset 0 2px 0 #060b1266; }
+.map-cell.revealed { border-color: #4c5155; border-bottom-color: #171c22; box-shadow: inset 0 2px 0 #060b1266; }
+/*
+ * 谁挖的：只在当前卡、挖卡那一级显示（.show-names）。图标平时在格子正中（和缩略图一样，
+ * 换级时不跳），显示名字时往上让一点、小一点，名字从下面淡入；两样一起过渡。
+ */
+.map-cell.revealed > .item-icon { transition: transform .28s var(--ease-out); }
+.show-names .map-cell.revealed > .item-icon { transform: translateY(-14%) scale(.84); }
 .map-cell.kind-diamond { background: #20363e; border-color: #496772; }
 .map-cell.kind-apple { background: #3a302e; border-color: #827049; }
 .map-cell.kind-tnt { background: #3b292b; border-color: #75504a; }
@@ -121,8 +132,10 @@ button.eye-status { cursor: pointer; }
 .map-cell.kind-pearl { background: #2c2b3c; border-color: #686080; }
 .map-cell.kind-shield { background: #34312f; border-color: #6c6053; }
 .map-cell.kind-spyglass { background: #2c323a; border-color: #66717a; }
+.map-cell.kind-crystal { background: #33263d; border-color: #7f5d96; }
 .map-cell.is-mine { border-color: #b99760; box-shadow: inset 0 0 0 1px #b9976055; }
-.cell-who { max-width: 90%; overflow: hidden; color: #aeb6bb; font-size: 9px; line-height: 1.2; white-space: nowrap; text-overflow: ellipsis; }
+.cell-who { position: absolute; left: 50%; bottom: 2px; max-width: 90%; overflow: hidden; color: #aeb6bb; font-size: 9px; line-height: 1.2; white-space: nowrap; text-overflow: ellipsis; opacity: 0; transform: translate(-50%, 4px); transition: opacity .22s var(--ease-out), transform .28s var(--ease-out); pointer-events: none; }
+.show-names .cell-who { opacity: 1; transform: translate(-50%, 0); transition-delay: .06s; }
 .is-mine .cell-who { color: #f3cc8f; font-weight: 650; }
 .map-cell.has-peek { border: 2px dashed #c5be9c; }
 .peek-icon { opacity: .55; }
@@ -140,15 +153,19 @@ button.eye-status { cursor: pointer; }
  * 缩略图（远处、全图时）：和格子画得一样——没挖的是同样的石头，挖开的是同样的底色和图标，
  * 只是不带边框、阴影和“谁挖的”，那么小本来也看不清。从格子换成缩略图时看不出来。
  */
-.thumb-cell { display: grid; place-items: center; width: 44px; height: 44px; background-image: linear-gradient(135deg, #edc38f0f, #0e172526), var(--stone); background-size: 100% 100%; image-rendering: pixelated; border-radius: 2px; }
-.thumb-cell[class*='kind-'] { background: #19232d; }
-.thumb-cell.kind-diamond { background: #20363e; }
-.thumb-cell.kind-apple { background: #3a302e; }
-.thumb-cell.kind-tnt { background: #3b292b; }
-.thumb-cell.kind-totem { background: #2e382e; }
-.thumb-cell.kind-pearl { background: #2c2b3c; }
-.thumb-cell.kind-shield { background: #34312f; }
-.thumb-cell.kind-spyglass { background: #2c323a; }
+.thumb-canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+/*
+ * 整张地图的画布（MapCanvas）：远处的卡都画在这上面，网页里的卡盖在它上面。区块底色
+ * 另画一块，只在全图那一级显示。悬停在画布上的卡时，用一块和区块一样的高亮罩住它。
+ */
+.map-blocks-canvas, .map-cards-canvas { position: absolute; display: block; }
+.map-blocks-canvas { opacity: 0; transition: opacity .18s var(--ease-out); pointer-events: none; }
+.map-view.level-0 .map-blocks-canvas { opacity: 1; }
+.map-view.is-pointing .map-cards-canvas { cursor: pointer; }
+.map-hover { position: absolute; border-radius: 16px; pointer-events: none; background: #ffffff0f; box-shadow: inset 0 0 0 calc(1px * var(--px, 1)) #ffffff40; }
+.map-view.level-0 .map-hover { background: #ffffff17; box-shadow: inset 0 0 0 calc(1.5px * var(--px, 1)) #ffffff59; }
+/* 远处长出来的卡（缩略图）：整张一起翻出来 */
+.map-block.is-grown .thumb-canvas { animation: cell-in .45s var(--ease-out) var(--land, 0ms) both; }
 .map-fog { position: absolute; inset: 0; z-index: 2; pointer-events: none; box-shadow: inset 0 0 36px 18px #0d1318; }
 .map-banner { position: absolute; left: 50%; top: 10px; z-index: 3; max-width: calc(100% - 24px); padding: 5px 14px; color: #1b1408; font-size: 13px; font-weight: 600; text-align: center; background: linear-gradient(#f1c57f, #d79b4f); border-radius: 999px; transform: translateX(-50%); pointer-events: none; }
 .map-hint { position: absolute; left: 50%; top: 10px; z-index: 3; padding: 4px 12px; color: #d8cfbd; font-size: 13px; white-space: nowrap; background: #11171dcc; border-radius: 999px; transform: translateX(-50%); pointer-events: none; }
@@ -179,11 +196,63 @@ button.eye-status { cursor: pointer; }
 .card-left li.is-out { opacity: .35; }
 .game-info { display: flex; align-items: center; gap: 12px; min-width: 0; overflow: hidden; color: var(--muted); font-size: 13px; white-space: nowrap; }
 .game-info b { color: var(--ink); font-variant-numeric: tabular-nums; }
-.feed-toggle { margin-left: auto; padding: 2px 8px; color: var(--ink); background: none; border: 1px solid #56636b; border-radius: 6px; }
-.feed { max-height: 28vh; margin: 0; padding: 0; overflow: auto; list-style: none; }
-.feed button { display: flex; align-items: center; gap: 6px; width: 100%; padding: 5px 2px; color: var(--ink); text-align: left; background: none; border: 0; border-bottom: 1px solid #2c343b; font-size: 13px; }
-.feed-where { margin-left: auto; color: var(--muted); font-size: 12px; white-space: nowrap; }
-.feed-empty { padding: 6px 2px; color: var(--muted); font-size: 13px; }
+.summary-toggle { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; padding: 3px 9px; color: var(--ink); background: #242d34; border: 1px solid #56636b; border-radius: 6px; }
+.card-left li.is-crystal { color: #d9b8f0; }
+
+/* —— 收益卡：点“收益”打开，这一局结束时弹一次；排成能直接截图的一张 —— */
+.summary-backdrop { position: fixed; inset: 0; z-index: 22; display: grid; place-items: center; padding: 16px; background: #05090dcc; }
+.summary { display: grid; gap: 12px; width: min(380px, 100%); max-height: calc(100% - 8px); overflow: auto; padding: 16px 16px 14px; background: linear-gradient(#222b33, #1b2228); border: 1px solid #5d5040; border-radius: 12px; box-shadow: 0 0 0 1px #00000066, 0 18px 50px #000000aa; }
+.summary-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.summary-brand { display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; color: #d1c1a6; font-size: 12px; white-space: nowrap; text-overflow: ellipsis; }
+.summary-close { flex: 0 0 auto; width: 28px; height: 28px; color: var(--ink); background: none; border: 1px solid #56636b; border-radius: 50%; }
+.summary h2 { margin: 0; font-size: 18px; line-height: 1.3; }
+.summary-amount { display: grid; gap: 2px; margin: 0; }
+.summary-figure { display: flex; align-items: baseline; gap: 6px; }
+.summary-amount strong { color: #f3cc8f; font-size: 32px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; letter-spacing: -.5px; }
+.summary-amount strong.is-none { color: var(--ink); font-size: 20px; }
+.summary-amount small { color: var(--muted); font-size: 14px; }
+.summary-amount span { color: var(--muted); font-size: 13px; }
+.summary-chart { position: relative; margin: 0; padding: 8px 8px 6px; background: #151b20; border: 1px solid #2f383f; border-radius: 8px; }
+.summary-chart svg { display: block; width: 100%; height: 132px; overflow: visible; }
+.chart-base { stroke: #ffffff26; stroke-width: 1; stroke-dasharray: 3 4; vector-effect: non-scaling-stroke; }
+.chart-line { fill: none; stroke: #e9b56b; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.chart-mark { stroke: #151b20; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.mark-big { fill: #7fd8e6; }
+.mark-apple { fill: #f6cf5a; }
+.mark-boom { fill: #ff7a66; }
+.mark-blocked { fill: #d6d0c4; }
+.chart-peak { position: absolute; margin: -22px 0 0 8px; padding: 1px 5px; color: #f3cc8f; font-size: 11px; white-space: nowrap; background: #11171dcc; border-radius: 4px; transform: translateX(-50%); pointer-events: none; }
+/* 最高点靠边时标签往里放，不出框 */
+.chart-peak.is-right { transform: translateX(-100%); }
+.chart-peak.is-left { transform: none; }
+.summary-chart figcaption { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; color: var(--muted); font-size: 11px; }
+.chart-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px 8px; }
+.chart-legend > span { display: inline-flex; align-items: center; gap: 3px; }
+.legend-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; }
+.summary-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 0; }
+.summary-stats div { display: grid; gap: 2px; padding: 7px 6px; text-align: center; background: #151b20; border: 1px solid #2f383f; border-radius: 8px; }
+.summary-stats dt { color: var(--muted); font-size: 11px; }
+.summary-stats dd { margin: 0; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.summary-stats dd small { color: var(--muted); font-size: 11px; font-weight: 400; }
+.summary-top h3 { margin: 0 0 6px; color: #d1c1a6; font-size: 13px; font-weight: 600; }
+.summary-top ol { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.summary-top li { display: flex; align-items: center; gap: 8px; padding: 5px 8px; font-size: 13px; border-radius: 6px; }
+.summary-top li:nth-child(odd) { background: #ffffff08; }
+.summary-top li.is-me { background: #e9b56b26; box-shadow: inset 0 0 0 1px #e9b56b55; }
+.top-rank { width: 18px; color: var(--muted); font-variant-numeric: tabular-nums; text-align: center; }
+.summary-top li:nth-child(-n + 3) .top-rank { color: #f3cc8f; font-weight: 700; }
+.top-name { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.top-points { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.top-points small { color: var(--muted); }
+.summary-note, .summary-foot { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.summary-loading { display: grid; gap: 10px; }
+.summary-sheen { width: 100%; height: 132px; }
+.summary-sheen.is-short { height: 48px; }
+.summary-problem { display: grid; gap: 8px; justify-items: start; color: var(--muted); font-size: 14px; }
+.summary-problem button { padding: 6px 12px; color: var(--ink); background: #242d34; border: 1px solid #56636b; border-radius: 8px; }
+.summary-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.summary-actions span { color: var(--muted); font-size: 12px; }
+.summary-actions button { padding: 7px 16px; color: #1b1408; font-weight: 650; background: linear-gradient(#f1c57f, #d79b4f); border: 0; border-radius: 8px; }
 
 /* —— 开局、登录、出错 —— */
 .state-card { display: grid; gap: 12px; place-items: center; margin: auto; padding: 24px; text-align: center; }
@@ -240,9 +309,12 @@ button.eye-status { cursor: pointer; }
   .card-left { flex-wrap: nowrap; }
   .card-left li { min-width: 0; }
   .game-info { gap: 4px 10px; }
+  .summary { padding: 14px 12px 12px; }
+  .summary-stats { grid-template-columns: repeat(2, 1fr); }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .jp-marker, .jp-marker::after, .map-block::before, .map-card::after,
-  .map-block, .map-card, .map-block.is-grown, .map-block.is-grown .map-card, .map-block.is-grown .map-cell, .map-block.is-grown .thumb-cell, .map-cell.just-mine, .map-cell.just-other, .digging-pick, .cell-float, .new-marker, .toast, .sheen { animation: none !important; transition: none !important; }
+  .map-block, .map-card, .map-block.is-grown, .map-block.is-grown .map-card, .map-block.is-grown .map-cell, .map-block.is-grown .thumb-canvas, .map-cell.just-mine, .map-cell.just-other, .digging-pick, .cell-float, .new-marker, .toast, .sheen,
+  .map-cell.revealed > .item-icon, .cell-who { animation: none !important; transition: none !important; }
 }

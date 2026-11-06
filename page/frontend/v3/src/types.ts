@@ -1,9 +1,9 @@
 // 游戏站给网页的数据（game/shared/rules.mjs 的 publicGame、privatePlayer）。
-export type Kind = 'emerald' | 'diamond' | 'apple' | 'totem' | 'tnt' | 'pearl' | 'shield' | 'spyglass' | 'eye'
-export const KINDS: Kind[] = ['emerald', 'diamond', 'apple', 'totem', 'tnt', 'pearl', 'shield', 'spyglass', 'eye']
+export type Kind = 'emerald' | 'diamond' | 'apple' | 'totem' | 'tnt' | 'pearl' | 'shield' | 'spyglass' | 'eye' | 'crystal'
+export const KINDS: Kind[] = ['emerald', 'diamond', 'apple', 'totem', 'tnt', 'pearl', 'shield', 'spyglass', 'eye', 'crystal']
 export const KIND_NAMES: Record<Kind, string> = {
   emerald: '绿宝石', diamond: '钻石', apple: '附魔金苹果', totem: '双铁镐',
-  tnt: 'TNT', pearl: '末影珍珠', shield: '盾牌', spyglass: '望远镜', eye: '末影之眼',
+  tnt: 'TNT', pearl: '末影珍珠', shield: '盾牌', spyglass: '望远镜', eye: '末影之眼', crystal: '末影水晶',
 }
 
 export interface OpenCell { kind: Kind; uid: number; name: string; at: number }
@@ -48,6 +48,21 @@ export interface Me {
   coolingMs?: number
 }
 export interface State { game: PublicGame; me: Me; blocked: string | null }
+
+/** 逐格记录：挖到什么（k）、这一格加减多少分（a）、挖完手里多少分（p）、盾牌挡住了（b）。 */
+export interface Step { k: Kind; a: number; p: number; b?: 1 }
+export interface TopEntry { uid: number; name: string; points: number }
+/** 收益卡（game/shared/rules.mjs 的 summaryOf）。 */
+export interface Summary {
+  me: {
+    name: string; status: 'playing' | 'claimed'; points: number; digs: number
+    /** 开始记录以前就来过的人没有 */
+    trail: Step[] | null
+    best: number; tnt: number; blocked: number; lost: number
+  }
+  top: TopEntry[]
+  stats: Stats; pool: number; left: number; over: boolean
+}
 
 /** 实时推送（game/worker/room.mjs 的 broadcast）。 */
 export type Live =

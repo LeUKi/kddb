@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
-  amountOf, budgetLeft, claim, createGame, dig, digBlocked, formatPoints,
+  amountOf, budgetLeft, claim, createGame, crystalPercent, dig, digBlocked, formatPoints,
   averageUnits, coolingOf, MIN_INTERVAL_MS, newPlayer, placeFor, POOL_TARGET, privatePlayer, publicCard, publicGame,
-  rewardFor, rulesOf, WRAP_UP_MS,
+  rewardFor, rulesOf, summaryOf, topWith, WRAP_UP_MS,
 } from "../shared/rules.mjs";
 
 const T0 = Date.parse("2026-11-06T12:00:00+08:00");
@@ -159,7 +159,9 @@ describe("挖", () => {
     assert.match(out.result.text, /奖池只剩这么多/);
     assert.equal(g.over, true);
     assert.equal(out.claimNow, true);
-    assert.equal(digBlocked(g, newPlayer(g, 10002, "小红"), later()), "奖池已经分完，游戏结束了，请领取");
+    assert.equal(digBlocked(g, p, later()), "奖池已经分完，游戏结束了，请领取");
+    // 手里没有分的人不叫他领（领了只会记一笔“领取 0.00”）
+    assert.equal(digBlocked(g, newPlayer(g, 10002, "小红"), later()), "奖池已经分完，游戏结束了");
   });
   it("TNT 按比例向下取整扣，扣掉的回到预算；盾牌挡一次", () => {
     const g = game({ params: { tntPercent: 25 } });
@@ -222,7 +224,7 @@ describe("挖", () => {
     assert.equal(out.result.amount, 0);
     assert.match(out.feed.text, /末地宝藏开了/);
     assert.ok(Math.max(Math.abs(out.newCard.x - card.x), Math.abs(out.newCard.y - card.y)) >= 2);
-    assert.deepEqual([...out.newCard.deck].sort(), ["apple", "diamond", "diamond", "diamond", "emerald", "emerald", "emerald", "emerald", "emerald"]);
+    assert.deepEqual([...out.newCard.deck].sort(), ["apple", "crystal", "diamond", "diamond", "diamond", "emerald", "emerald", "emerald", "emerald"]);
     assert.equal(publicCard(out.newCard).kind, "end");
     // 宝藏卡不算张数：再长的第 4 张没有眼，第 6 张有
     const free = [0, 1, 2, 3, 4].filter((index) => index !== at).slice(0, 3);
@@ -230,8 +232,9 @@ describe("挖", () => {
     for (const index of free) assert.ok(dig(g, p, { cardId: 3, index, now: later() }).ok);
     const normal = Object.values(g.cards).filter((other) => other.kind !== "end").map((other) => other.composition.eye === 1);
     assert.deepEqual(normal, [false, false, true, false, false, true]);
-    // 宝藏卡上照常挖，只有宝物
-    const dug = dig(g, p, { cardId: out.newCard.id, index: 0, now: later() });
+    // 宝藏卡上照常挖：除了一颗末影水晶都是宝物
+    const safe = out.newCard.deck.findIndex((kind) => kind !== "crystal");
+    const dug = dig(g, p, { cardId: out.newCard.id, index: safe, now: later() });
     assert.ok(dug.ok && dug.result.amount > 0);
   });
   it("末影之眼可以关掉：参数 0 就没有眼", () => {
@@ -299,6 +302,77 @@ describe("挖", () => {
   });
 });
 
+describe("末影水晶", () => {
+  it("扣 TNT 的两倍比例，向下取整，最多扣光；盾牌照样挡一次", () => {
+    assert.deepEqual(["easy", "normal", "tough"].map((level) => crystalPercent(rulesOf({ level }))), [30, 50, 100]);
+    const g = game({ params: { tntPercent: 25 } });
+    stack(g, 1, { 2: "crystal", 3: "shield", 4: "crystal" });
+    const p = newPlayer(g, 10001, "小明");
+    for (const index of [0, 1]) dig(g, p, { cardId: 1, index, now: later() });
+    assert.equal(p.points, 20);
+    const boom = dig(g, p, { cardId: 1, index: 2, now: later() });
+    assert.ok(boom.ok);
+    assert.equal(boom.result.amount, -10); // 20 × 50%
+    assert.match(boom.result.text, /末影水晶爆炸！奖励 -0\.10（双倍，50%/);
+    assert.match(boom.feed.text, /末影水晶/);
+    assert.equal(g.used, 10);
+    dig(g, p, { cardId: 1, index: 3, now: later() });
+    const blocked = dig(g, p, { cardId: 1, index: 4, now: later() });
+    assert.ok(blocked.ok && blocked.result.blocked);
+    assert.equal(blocked.result.amount, 0);
+    assert.equal(p.shield, false);
+    const tough = game({ params: { level: "tough" } });
+    stack(tough, 1, { 1: "crystal" });
+    const q = newPlayer(tough, 10002, "小红");
+    dig(tough, q, { cardId: 1, index: 0, now: later() });
+    dig(tough, q, { cardId: 1, index: 1, now: later() });
+    assert.equal(q.points, 0); // 困难：一下扣光
+  });
+});
+
+describe("收益卡", () => {
+  it("逐格记下挖到什么、加减多少、挖完手里多少；数出最大一笔、炸了几次、挡了几次", () => {
+    const g = game({ params: { tntPercent: 50 } });
+    stack(g, 1, { 1: "diamond", 2: "tnt", 3: "shield", 4: "tnt", 5: "totem" });
+    const p = newPlayer(g, 10001, "小明");
+    for (const index of [0, 1, 2, 3, 4, 5]) assert.ok(dig(g, p, { cardId: 1, index, now: later() }).ok);
+    assert.deepEqual(p.trail, [
+      { k: "emerald", a: 10, p: 10 }, { k: "diamond", a: 50, p: 60 }, { k: "tnt", a: -30, p: 30 },
+      { k: "shield", a: 0, p: 30 }, { k: "tnt", a: 0, p: 30, b: 1 }, { k: "totem", a: 0, p: 30 },
+    ]);
+    const summary = summaryOf(g, p);
+    assert.deepEqual({ best: summary.me.best, tnt: summary.me.tnt, blocked: summary.me.blocked, lost: summary.me.lost, digs: summary.me.digs },
+      { best: 50, tnt: 1, blocked: 1, lost: 30, digs: 6 });
+    assert.deepEqual(summary.top, []);
+    // 记录以前就来过的人没有 trail：收益卡说没有记录
+    const old = newPlayer(g, 10002, "小红");
+    delete old.trail;
+    old.digs = 3;
+    assert.ok(dig(g, old, { cardId: 1, index: 6, now: later() }).ok);
+    assert.equal(summaryOf(g, old).me.trail, null);
+  });
+  it("前几名：领了才算，0 分不算，分一样先领的在前，最多 5 个", () => {
+    let top = [];
+    const people = [[1, 30], [2, 50], [3, 0], [4, 30], [5, 10], [6, 70], [7, 20]];
+    for (const [uid, points] of people) top = topWith(top, { uid, name: `u${uid}`, points });
+    assert.deepEqual(top.map((entry) => entry.uid), [6, 2, 1, 4, 7]);
+    const g = game();
+    const p = newPlayer(g, 10001, "小明");
+    dig(g, p, { cardId: 1, index: 0, now: later() });
+    claim(g, p);
+    assert.deepEqual(g.top, [{ uid: 10001, name: "小明", points: p.points }]);
+  });
+  it("手里没有分：机会用完、奖池分完都不自动领", () => {
+    const g = game({ params: { initialChances: 1, tntPercent: 100 } });
+    stack(g, 1, { 0: "tnt" });
+    const p = newPlayer(g, 10001, "小明");
+    const out = dig(g, p, { cardId: 1, index: 0, now: later() });
+    assert.ok(out.ok);
+    assert.equal(out.claimNow, false);
+    assert.equal(digBlocked(g, p, later()), "机会用完了");
+  });
+});
+
 describe("什么时候不能挖", () => {
   it("挖掘间隔：参数拉长以后要等够；还要等几秒说出来，也给本人", () => {
     const g = game({ params: { interval: 10 } });
@@ -326,6 +400,8 @@ describe("什么时候不能挖", () => {
     claim(g, p);
     assert.equal(digBlocked(g, p, now + 5000), "你已经领取了，不能再挖这个红包");
     const late = newPlayer(g, 10003, "小刚");
+    assert.equal(digBlocked(g, late, T0 + DAY - WRAP_UP_MS), "快截止了，已经停止挖掘");
+    late.points = 10;
     assert.equal(digBlocked(g, late, T0 + DAY - WRAP_UP_MS), "快截止了，已经停止挖掘，请领取");
     assert.equal(digBlocked(g, late, T0 + DAY - WRAP_UP_MS - 1), null);
   });
