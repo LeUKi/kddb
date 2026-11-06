@@ -1,5 +1,5 @@
 import { useAtomValue, useSetAtom } from 'jotai'
-import { animate, useReducedMotion } from 'motion/react'
+import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
 import { ItemIcon } from '../../src/ItemIcon'
 import { blockedAtom, claim, claimingAtom, focusRequestAtom, gameAtom, hongbaoAtom, meAtom, readyAtAtom, settledAtom } from './state'
@@ -7,36 +7,30 @@ import type { Kind, PublicCard } from './types'
 import { KIND_NAMES, KINDS, money } from './types'
 import { eyeStatus, isTreasure } from './eye'
 
-/** 数字变了从旧的滚到新的；减少动画时直接到位。 */
+/**
+ * 数字变了从旧的滚到新的；减少动画时直接到位。滚动直接改这一小段文字（motion 值），
+ * 不让整条栏每一帧重新渲染：手机上拖地图、吸附的时候不抢主线程。
+ */
 export function Tween({ value, format = String }: { value: number; format?: (value: number) => string }) {
   const reduced = useReducedMotion() ?? false
-  const [shown, setShown] = useState(value)
-  const from = useRef(value)
+  const shown = useMotionValue(value)
+  const formatRef = useRef(format)
+  formatRef.current = format
+  const text = useTransform(shown, latest => formatRef.current(Math.round(latest)))
   useEffect(() => {
     if (reduced) {
-      from.current = value
-      setShown(value)
+      shown.set(value)
       return
     }
-    const controls = animate(from.current, value, {
-      duration: 0.45,
-      ease: [0.22, 1, 0.36, 1],
-      onUpdate: latest => {
-        from.current = latest
-        setShown(Math.round(latest))
-      },
-    })
+    const controls = animate(shown, value, { duration: 0.45, ease: [0.22, 1, 0.36, 1] })
     // 页面在后台时动画帧不跑：到时间就直接是最终的数
-    const settle = window.setTimeout(() => {
-      from.current = value
-      setShown(value)
-    }, 600)
+    const settle = window.setTimeout(() => shown.set(value), 600)
     return () => {
       controls.stop()
       window.clearTimeout(settle)
     }
-  }, [reduced, value])
-  return <>{format(shown)}</>
+  }, [reduced, value, shown])
+  return <motion.span>{text}</motion.span>
 }
 
 /**

@@ -1,7 +1,7 @@
 import { useAtomValue, useSetAtom } from 'jotai'
 import type { MotionStyle } from 'motion/react'
 import { animate, motion, useMotionValue, useReducedMotion } from 'motion/react'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Entrance } from './CardView'
 import { CardView } from './CardView'
 import type { Camera, Direction, Level, Viewport, WheelZoom } from './camera'
@@ -50,8 +50,13 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
   const y = useMotionValue(0)
   const scale = useMotionValue(1)
   const [level, setLevel] = useState<Level>(2)
-  /** 镜头停下来（或拖动中每隔一会儿）时的位置：决定聚焦哪张、哪些卡画细节 */
+  /** 镜头停下来（或拖动中每隔一会儿）时的位置：NEW、JP 指向哪里 */
   const [settled, setSettled] = useState<Camera>({ x: 0, y: 0, scale: 1 })
+  /**
+   * 落定的位置：决定居中的是哪张、哪些卡画格子。拖动中不变，松手吸附时才换：拖过两张卡
+   * 相接的地方时不再同时换聚焦边框、底栏和格子，手机上不卡
+   */
+  const [focusAt, setFocusAt] = useState<Camera>({ x: 0, y: 0, scale: 1 })
   const landed = useRef(false)
   const cards = useMemo(() => game?.cards ?? [], [game])
 
@@ -60,6 +65,7 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
   const flyTo = useCallback((target: Camera, instant = false) => {
     // 一起飞就按目标算聚焦和细节：缩放不变时 scale 的动画不会有“结束”
     setSettled(target)
+    setFocusAt(target)
     if (instant || reduced) {
       x.set(target.x)
       y.set(target.y)
@@ -116,7 +122,11 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view.width, view.height])
 
-  const focused = useMemo(() => nearestCard(cards, settled, view), [cards, settled, view])
+  const focused = useMemo(() => nearestCard(cards, focusAt, view), [cards, focusAt, view])
+  // 哪些卡画格子：按落定的位置算，晚一拍（不挡着吸附的动画）；居中这张四周一圈先画好，
+  // 拖到邻卡上不用临时生成格子
+  const cullAt = useDeferredValue(focusAt)
+  const cullFocus = useMemo(() => nearestCard(cards, cullAt, view), [cards, cullAt, view])
   useEffect(() => {
     onFocus(focused)
     // 落定以前镜头还在原点，算出来的不是他看的那张，别记
@@ -196,6 +206,9 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [newCard])
 
+  /** 捏合缩放锁在全图和挖卡两级之间，不能缩得比全图小、放得比挖卡大。 */
+  const clampScale = (next: number) => Math.min(scaleOf(2, view, cards), Math.max(scaleOf(0, view, cards), next))
+
   // —— 拖动、捏合 ——
   const pointers = useRef(new Map<number, { x: number; y: number }>())
   const gesture = useRef<{ startX: number; startY: number; camera: Camera; dragging: boolean; pinch?: { distance: number; mid: { x: number; y: number } } } | null>(null)
@@ -211,6 +224,7 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
     const now = camera()
     if (level === 0) {
       setSettled(now)
+      setFocusAt(now)
       return
     }
     const card = nearestCard(cards, now, view)
@@ -240,7 +254,7 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
       const [a, b] = [...pointers.current.values()]
       const distance = Math.hypot(a.x - b.x, a.y - b.y)
       const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
-      const nextScale = Math.min(2, Math.max(0.04, g.camera.scale * (distance / g.pinch.distance)))
+      const nextScale = clampScale(g.camera.scale * (distance / g.pinch.distance))
       const world = { x: (g.pinch.mid.x - g.camera.x) / g.camera.scale, y: (g.pinch.mid.y - g.camera.y) / g.camera.scale }
       scale.set(nextScale)
       x.set(mid.x - world.x * nextScale)
@@ -314,7 +328,7 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
       y.stop()
       scale.stop()
       const current = camera()
-      const nextScale = Math.min(2, Math.max(0.04, current.scale * Math.exp(-event.deltaY * 0.01)))
+      const nextScale = clampScale(current.scale * Math.exp(-event.deltaY * 0.01))
       const world = { x: (at.x - current.x) / current.scale, y: (at.y - current.y) / current.scale }
       scale.set(nextScale)
       x.set(at.x - world.x * nextScale)
@@ -367,7 +381,7 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
   const banner = settled_ ? null
     : me?.status === 'claimed' ? '已经领取，凭证还没交上：点上面的「再交一次」'
       : blocked
-  const detailScale = settled.scale >= 0.4
+  const detailScale = cullAt.scale >= 0.4
   const markerCard = marker === null ? null : cards.find(card => card.id === marker) ?? null
   const pointer = markerCard && !fullyOnScreen(markerCard, settled, view) ? edgePointer(markerCard, settled, view) : null
   // JP：末地宝藏还有没挖的格子、又没整张在画面里时，画面边上一直亮着金色的 JP 指着它
@@ -380,7 +394,8 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
     onClickCapture={onClickCapture}>
     <motion.div className="map-world" style={{ x, y, scale, transformOrigin: '0 0', '--px': 1 / settled.scale } as MotionStyle}>
       {cards.map(card => {
-        const near = onScreen(card, settled, view, 200)
+        const near = onScreen(card, cullAt, view, 200)
+          || (!!cullFocus && Math.max(Math.abs(card.x - cullFocus.x), Math.abs(card.y - cullFocus.y)) <= 1)
         return <CardView
           key={card.id}
           card={card}
@@ -409,15 +424,14 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
       <span>JP</span>
       <span className="new-arrow" style={{ transform: `rotate(${jpPointer.angle}deg)` }}>➜</span>
     </button> : null}
+    {/* 缩放：地图右下角竖着一列，半透明；按下不算拖地图 */}
+    <div className="zoom zoom-float" role="group" aria-label="缩放" onPointerDown={event => event.stopPropagation()}>
+      <button type="button" onClick={() => changeLevel(1)} disabled={level === 2} aria-label="放大">＋</button>
+      <span>{level === 2 ? '挖卡' : level === 1 ? '附近' : '全图'}</span>
+      <button type="button" onClick={() => changeLevel(-1)} disabled={level === 0} aria-label="缩小">－</button>
+    </div>
     {banner ? <p className="map-banner" role="status">{banner}</p>
       : level !== 2 ? <p className="map-hint">点一张卡放大过去，放大以后才能挖</p> : null}
-    </div>
-    <div className="map-toolbar">
-      <div className="zoom" role="group" aria-label="缩放">
-        <button type="button" onClick={() => changeLevel(-1)} disabled={level === 0} aria-label="缩小">－</button>
-        <span>{level === 2 ? '挖卡' : level === 1 ? '附近' : '全图'}</span>
-        <button type="button" onClick={() => changeLevel(1)} disabled={level === 2} aria-label="放大">＋</button>
-      </div>
     </div>
   </div>
 }
