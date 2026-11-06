@@ -106,3 +106,11 @@ test('effective custom numbers are displayed without reapplying a difficulty pre
   assert.equal(game.rulesLabel({ ...rules, difficulty: 'easy', initialChances: 9, tntPercent: 15, compositionVariation: 'fixed' }), '简单')
   assert.equal(game.rulesLabel({ ...rules, difficulty: 'hard' }), '困难')
 })
+
+test('a golden apple cap in the rules parses; a zero or broken one fails closed', () => {
+  const card = publicCard()
+  const capped = { ...card, rules: { ...card.rules, appleCap: 30 } }
+  assert.equal(game.readPublic(capped)?.rules.appleCap, 30)
+  assert.equal(game.readPublic(card)?.rules.appleCap, undefined)
+  for (const appleCap of [0, -1, 1.5, '30']) assert.equal(game.readPublic({ ...card, rules: { ...card.rules, appleCap } }), null)
+})

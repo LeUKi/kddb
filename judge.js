@@ -59,6 +59,13 @@ export const params = [
     min: 1,
   },
   {
+    key: "appleCap",
+    label: "金苹果上限",
+    hint: "金苹果一次最多加这么多（翻倍或零余额时的小奖都算）；不填为不限制",
+    type: "money",
+    required: false,
+  },
+  {
     key: "initialChances",
     label: "初始机会",
     hint: "选难度时自动填入，之后可改为1–20次；双铁镐仍额外增加3次",
@@ -114,7 +121,7 @@ export const hongbao = {
 /** @typedef {'easy'|'hard'|'hell'} Difficulty */
 /** @typedef {Record<Kind,number>} Composition */
 /** @typedef {{initialChances:number,waitSeconds:number,smallReward:number,bigMultiplier:5,totemBonus:3,tntPercent:number}} LegacyRules */
-/** @typedef {LegacyRules & {version:2,difficulty:Difficulty,boardSpec:'5'|'6'|'7'|'random',compositionVariation:'fixed'|'slight'}} CardRules */
+/** @typedef {LegacyRules & {version:2,difficulty:Difficulty,boardSpec:'5'|'6'|'7'|'random',compositionVariation:'fixed'|'slight',appleCap?:number}} CardRules */
 /** @typedef {LegacyRules | CardRules} Rules */
 /** @typedef {{by:string,at:number,actorKey?:string}|null} OpenCell */
 /** @typedef {{actorKey:string,name:string,at:number,cardId:number,index:number,size?:Size}} LastMove */
@@ -163,12 +170,15 @@ function rulesOf(values, legacy = false) {
   if (legacy) return numeric;
   // Native option `set` runs in the author's form. Here use its final submitted
   // values, preserving manual overrides instead of applying a preset again.
+  const appleCap = values.appleCap == null ? 0 : Number(values.appleCap);
   return {
     ...numeric,
     version: 2,
     difficulty: /** @type {Difficulty} */ (values.difficulty ?? "hard"),
     boardSpec: /** @type {CardRules['boardSpec']} */ (values.boardSpec ?? "random"),
     compositionVariation: /** @type {CardRules['compositionVariation']} */ (values.compositionVariation ?? "slight"),
+    // Only when set: games saved without it, and their rules, stay as they were.
+    ...(appleCap > 0 ? { appleCap } : {}),
   };
 }
 
@@ -378,6 +388,8 @@ export function judge(submission, tools) {
   const pending = submission.player.pending;
   let wanted = 0;
   let blocked = false;
+  /** The apple's cap when it held it back; 0 otherwise. */
+  let appleCapped = 0;
   let text = "";
   let publicText = "";
   switch (kind) {
@@ -389,10 +401,15 @@ export function judge(submission, tools) {
       wanted = rules.smallReward * rules.bigMultiplier;
       publicText = "挖到了钻石大奖";
       break;
-    case "apple":
-      wanted = pending === 0 ? rules.smallReward : pending;
-      publicText = pending === 0 ? "附魔金苹果送来一份小奖" : "附魔金苹果让待结算奖励翻倍";
+    case "apple": {
+      const doubled = pending === 0 ? rules.smallReward : pending;
+      const cap = "appleCap" in rules ? Number(rules.appleCap ?? 0) : 0;
+      wanted = cap > 0 ? Math.min(doubled, cap) : doubled;
+      if (wanted < doubled) appleCapped = cap;
+      publicText = pending === 0 ? "附魔金苹果送来一份小奖"
+        : appleCapped ? "附魔金苹果让待结算奖励翻倍，加到了上限" : "附魔金苹果让待结算奖励翻倍";
       break;
+    }
     case "totem":
       miner.chances += rules.totemBonus;
       text = `双铁镐！机会 +${rules.totemBonus}`;
@@ -448,7 +465,7 @@ export function judge(submission, tools) {
   if (wanted > 0) {
     const item = kind === "emerald" ? "绿宝石" : kind === "diamond" ? "钻石大奖"
       : kind === "apple" ? "附魔金苹果" : kind === "shield" ? "重复盾牌转小奖" : "望远镜转小奖";
-    text = `${item}，奖励 +${tools.money.format(add)}${add < wanted ? "（剩余奖池不足，已按余额发放）" : ""}`;
+    text = `${item}，奖励 +${tools.money.format(add)}${add < wanted ? "（剩余奖池不足，已按余额发放）" : appleCapped ? `（金苹果一次最多加 ${tools.money.format(appleCapped)}）` : ""}`;
   } else if (kind === "tnt" && !blocked) {
     text = `TNT！待结算奖励 -${tools.money.format(-add)}（${rules.tntPercent}%，向下取整）`;
   }

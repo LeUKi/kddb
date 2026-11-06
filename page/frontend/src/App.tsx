@@ -303,11 +303,11 @@ function RulesContent({ game, onClose, onDemo }: { game: PublicGame; onClose: ()
       <div className="rules-section-heading"><h2 id="items-title">第 {game.cardId} 张 · {size} × {size} 道具</h2><p>数量已生成并固定，本卡所有玩家共享。</p></div>
       {kinds.map(kind => <div className={`rules-item ${game?.counts[kind] === 0 ? 'depleted' : ''}`} key={kind}>
         <ItemIcon kind={kind} size={40} />
-        <div><h3>{loot[kind].name}<span>剩 {game.counts[kind]} / 本卡 {composition[kind]} 个</span></h3><p>{kind === 'emerald' ? `奖励 +${formatMoney(rules.smallReward)}` : kind === 'diamond' ? `奖励 +${formatMoney(rules.smallReward * rules.bigMultiplier)}` : kind === 'apple' ? '当前奖励翻倍' : kind === 'totem' ? `机会 +${rules.totemBonus}` : kind === 'tnt' ? `扣除当前奖励的 ${rules.tntPercent}%` : kind === 'pearl' ? '所有人换下一张卡，保留机会和奖励' : kind === 'shield' ? '自动抵挡一次 TNT' : '提前看见一个格子，仅你可见'}</p></div>
+        <div><h3>{loot[kind].name}<span>剩 {game.counts[kind]} / 本卡 {composition[kind]} 个</span></h3><p>{kind === 'emerald' ? `奖励 +${formatMoney(rules.smallReward)}` : kind === 'diamond' ? `奖励 +${formatMoney(rules.smallReward * rules.bigMultiplier)}` : kind === 'apple' ? (rules.appleCap ? `当前奖励翻倍，一次最多 +${formatMoney(rules.appleCap)}` : '当前奖励翻倍') : kind === 'totem' ? `机会 +${rules.totemBonus}` : kind === 'tnt' ? `扣除当前奖励的 ${rules.tntPercent}%` : kind === 'pearl' ? '所有人换下一张卡，保留机会和奖励' : kind === 'shield' ? '自动抵挡一次 TNT' : '提前看见一个格子，仅你可见'}</p></div>
       </div>)}
     </section>
     <details className="rules-details"><summary>更多规则与奖池</summary>
-      <p>双铁镐在扣除本次机会后增加 {rules.totemBonus} 次，最后一次也能救回，没有累计限制。金苹果在奖励为零时给一份小奖；重复获得盾牌也给小奖。</p>
+      <p>双铁镐在扣除本次机会后增加 {rules.totemBonus} 次，最后一次也能救回，没有累计限制。金苹果在奖励为零时给一份小奖{rules.appleCap ? `，无论翻倍还是小奖，一次最多加 ${formatMoney(rules.appleCap)}` : ''}；重复获得盾牌也给小奖。</p>
       <p>望远镜情报用虚线格子标记。换卡后情报失效，盾牌保留。没有新格子可看时，望远镜给小奖。本卡 {size ** 2} 格全部打开后也会换卡。</p>
       {game.version === 2 && <p>{rules.boardSpec === 'random' ? '发新卡时等概率抽取一种规格，刷新或加入不会重抽。' : '每张新卡沿用所选规格。'}{rules.compositionVariation === 'slight' ? '每卡的钻石、双铁镐、TNT、盾牌各独立浮动 −1／0／+1，绿宝石补齐；金苹果、末影珍珠和望远镜不浮动。' : '每种规格的道具数量固定，位置仍会洗牌。'}</p>}
       <p>抢到已开格子、操作旧卡片或未等满接棒时间都不扣机会。红包页本身的提交冷却仍然生效。</p>

@@ -87,6 +87,8 @@ export function createPresentationController(options: PresentationOptions) {
   // Private lastResult can precede its public packet. Retain only the proven
   // cells until public catches up; counters and all other hidden cells stay put.
   const confirmedCells = new Map<string, Cell>()
+  // Peer cells already shown beside one's own dig: not animated again after it.
+  const shownPeers = new Set<string>()
   let reducedMotion = false
   let disposed = false
   let timer: unknown
@@ -113,12 +115,50 @@ export function createPresentationController(options: PresentationOptions) {
     if (latest.game?.cardId === cardId && latest.game.cells[cell.index]?.kind === null) confirmedCells.set(`${cardId}:${cell.index}`, cell)
   }
 
+  /** The cell one's own dig holds back on this card: on its way, or being shown. */
+  function heldIndex(cardId: number) {
+    if (pending) {
+      const command = /^dig (\d+) (\d+)$/.exec(pending.input)
+      return command && Number(command[1]) === cardId ? Number(command[2]) - 1 : null
+    }
+    return active?.effect.isOwn && active.effect.cardId === cardId ? active.effect.index : null
+  }
+
+  /**
+   * Other players' cells on the shown card land as they arrive, whatever one's
+   * own dig is doing; only its own cell (its count and feed line with it) and a
+   * new card wait for its reveal. A board held through one's own dig showed
+   * several cells, or a new card, at once in a busy room (2026-11-02).
+   */
+  function withPeers(base: PublicGame | null) {
+    const game = latest.game
+    if (!pending && !active?.effect.isOwn) return base
+    if (!base || !game || game.cardId !== base.cardId || compareGames(game, base) <= 0) return base
+    const held = heldIndex(base.cardId)
+    const ownKey = latest.own?.actorKey
+    const unshownOwn = (index: number, actorKey?: string) => base.cells[index]?.kind === null && (index === held || (actorKey !== undefined && actorKey === ownKey))
+    const landed = game.cells.filter(cell => cell.kind !== null && !unshownOwn(cell.index, cell.actorKey) && base.cells[cell.index]?.kind === null)
+    if (landed.length === 0) return base
+    const counts = { ...base.counts }
+    for (const cell of landed) {
+      if (cell.kind !== null) counts[cell.kind] = Math.max(0, counts[cell.kind] - 1)
+      shownPeers.add(`${base.cardId}:${cell.index}`)
+    }
+    return {
+      ...base,
+      cells: base.cells.map(cell => landed.find(peer => peer.index === cell.index) ?? cell),
+      counts,
+      feed: game.feed.filter(item => item.cardId !== base.cardId || !unshownOwn(item.index, item.actorKey)),
+    }
+  }
+
   function publish() {
     if (disposed) return
     const targetGame = active?.target.game ?? displayed.game
     const queued = latest.game && targetGame && compareGames(latest.game, targetGame) > 0 ? 1 : 0
     snapshot = {
       ...displayed,
+      game: withPeers(displayed.game),
       transitionFrom: active?.flipFrom ?? null,
       effect: active ? { ...active.effect } : null,
       phase: active?.effect.phase ?? 'idle',
@@ -269,7 +309,7 @@ export function createPresentationController(options: PresentationOptions) {
     const target = currentValues()
     if (displayed.game && target.game) {
       const reveal = publicReveal(displayed.game, target.game)
-      if (reveal) {
+      if (reveal && !(target.game.cardId === displayed.game.cardId && shownPeers.has(`${displayed.game.cardId}:${reveal.cell.index}`))) {
         beginSequence(displayed, target, reveal.cell, reveal.feed, reveal.resolved)
         return
       }
@@ -441,10 +481,11 @@ export function createPresentationController(options: PresentationOptions) {
         return
       }
     }
-    // Denied, invalid, stale-card and cashout commands have no tile animation.
-    // Refreshing a failed attempt must never re-use its previous lastResult.
-    displayed = currentValues()
-    publish()
+    // Denied, invalid, stale-card and cashout commands have no tile animation
+    // of their own; what others did meanwhile plays as it would have (a card
+    // changed under it flips, not jumps). drive() never re-uses the previous
+    // lastResult: only a newer dig proves one.
+    drive()
   }
 
   function setReducedMotion(value: boolean) {

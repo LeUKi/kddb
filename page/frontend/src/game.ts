@@ -27,6 +27,8 @@ export interface Rules {
   difficulty?: Difficulty
   boardSpec?: '5' | '6' | '7' | 'random'
   compositionVariation?: 'fixed' | 'slight'
+  /** The most one golden apple adds, in 分; absent for no cap. */
+  appleCap?: number
 }
 
 export interface Cell { index: number; kind: Kind | null; by: string | null; at: number | null; actorKey?: string }
@@ -89,6 +91,7 @@ const positioned = (value: Record<string, unknown>, version: 1 | 2) => integer(v
 function rulesValue(value: unknown, version: 1 | 2): value is Rules {
   if (!object(value) || !Object.keys(defaultRules).every(key => integer(value[key], 1))) return false
   if ((value.initialChances as number) > 20 || (value.waitSeconds as number) > 60 || (value.tntPercent as number) > 100) return false
+  if (value.appleCap !== undefined && !integer(value.appleCap, 1)) return false
   return version === 1 || value.version === 2 && (value.difficulty === 'easy' || value.difficulty === 'hard' || value.difficulty === 'hell') && ['5', '6', '7', 'random'].includes(value.boardSpec as string) && (value.compositionVariation === 'fixed' || value.compositionVariation === 'slight')
 }
 

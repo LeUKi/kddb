@@ -559,7 +559,7 @@ test('late private results from an old card do not reveal a tile on the new card
   assert.equal(h.get().me.pending, '0.50')
 })
 
-test('an own sequence absorbs a large remote burst without playing a remote backlog', () => {
+test('an own sequence shows a large remote burst as it comes without playing a remote backlog', () => {
   const h = harness()
   const mine = move()
   h.controller.begin('dig 1 1')
@@ -569,10 +569,15 @@ test('an own sequence absorbs a large remote burst without playing a remote back
   for (let index = 1; index <= 20; index++) {
     const peer = move({ id: index + 1, actor: `远端${index}`, actorKey: `u:${index + 1}`, index, kind: 'emerald', at: 1000 + index })
     peers.push(peer)
-    h.controller.receive({ game: board({ digs: index + 1, cells: [mine.cell, ...peers.map(item => item.cell)], feed: peers.map(item => item.feed).reverse(), lastMove: peer.lastMove }) })
+    h.controller.receive({ game: board({ digs: index + 1, cells: [mine.cell, ...peers.map(item => item.cell)], feed: [...peers.map(item => item.feed).reverse(), mine.feed], lastMove: peer.lastMove }) })
     assert.equal(h.get().effect.isOwn, true)
     assert.ok(h.get().queued <= 1)
-    assert.equal(h.get().game.cells[20].kind, null)
+    // Others' cells land at once; the own one, its count and line wait for the showcase.
+    assert.equal(h.get().game.cells[index].kind, 'emerald')
+    assert.equal(h.get().game.counts.emerald, Math.max(0, 10 - index))
+    assert.equal(h.get().game.cells[0].kind, null)
+    assert.equal(h.get().game.counts.diamond, 3)
+    assert.ok(h.get().game.feed.every(item => item.index !== 0))
   }
   const final = h.finish()
   assert.equal(final.game.stats.digs, 21)
@@ -584,6 +589,66 @@ test('an own sequence absorbs a large remote burst without playing a remote back
   assert.equal(remoteCentral.length, 0)
   const remoteIds = new Set(h.updates.flatMap(update => update.effect && !update.effect.isOwn ? [update.effect.id] : []))
   assert.ok(remoteIds.size <= 1, 'only the newest remote snapshot can be pending')
+})
+
+test('peer cells land while one\'s own dig is on its way, and the dug cell stays covered until its showcase', () => {
+  const h = harness()
+  assert.equal(h.controller.begin('dig 1 1'), true)
+  const peer = move({ id: 2, actor: '小红', actorKey: 'u:2', index: 6, kind: 'emerald', at: 1500 })
+  h.controller.receive({ game: board({ digs: 1, cells: [peer.cell], feed: [peer.feed], lastMove: peer.lastMove }) })
+  assert.equal(h.get().busy, true)
+  assert.equal(h.get().game.cells[6].kind, 'emerald')
+  assert.equal(h.get().game.cells[6].by, '小红')
+  assert.equal(h.get().game.counts.emerald, 9)
+  assert.deepEqual(h.get().game.feed.map(item => item.id), [2])
+  // The own move comes in public first: still covered, its count and line too.
+  const mine = move({ index: 0, kind: 'diamond', at: 2000 })
+  h.controller.receive({ game: board({ digs: 2, cells: [peer.cell, mine.cell], feed: [mine.feed, peer.feed], lastMove: mine.lastMove }) })
+  assert.equal(h.get().game.cells[0].kind, null)
+  assert.equal(h.get().game.counts.diamond, 3)
+  assert.deepEqual(h.get().game.feed.map(item => item.id), [2])
+  h.controller.receive({ own: own({ chances: 6, digs: 1, lastResult: { kind: 'diamond', cardId: 1, index: 0, amount: 50, blocked: false, text: '钻石大奖 +0.50' } }), me: me({ pending: '0.50' }) })
+  h.controller.complete('dig 1 1')
+  assert.equal(h.get().effect.isOwn, true)
+  assert.equal(h.get().phase, 'reveal')
+  assert.equal(h.get().game.cells[0].kind, null)
+  assert.equal(h.get().game.cells[6].kind, 'emerald')
+  h.step()
+  h.step()
+  assert.equal(h.get().phase, 'transfer')
+  assert.equal(h.get().game.cells[0].kind, null)
+  assert.equal(h.get().own.chances, 7, 'the HUD still waits for the flight')
+  h.step()
+  assert.equal(h.get().phase, 'resolve')
+  assert.equal(h.get().game.cells[0].kind, 'diamond')
+  assert.equal(h.get().game.cells[6].kind, 'emerald')
+  const final = h.finish()
+  assert.equal(final.game.stats.digs, 2)
+  assert.equal(final.own.chances, 6)
+  // The peer cell was shown beside it: not played again afterwards.
+  assert.equal(h.updates.filter(update => update.effect && !update.effect.isOwn).length, 0)
+})
+
+test('a new card that comes while one\'s own dig is on its way waits for its answer', () => {
+  const h = harness()
+  h.controller.begin('dig 1 1')
+  const peer = move({ id: 2, actor: '小红', actorKey: 'u:2', index: 12, kind: 'pearl', at: 1500 })
+  h.controller.receive({ game: board({ cardId: 2, digs: 1, feed: [peer.feed], lastMove: peer.lastMove }) })
+  assert.equal(h.get().game.cardId, 1)
+  assert.equal(h.get().game.cells[12].kind, null)
+  // Judged on the old card: turned down. What changed it plays as it would
+  // have: the pearl on the old card, then the flip, not a jump.
+  h.controller.receive({ game: board({ cardId: 2, digs: 1, feed: [peer.feed], lastMove: peer.lastMove }), own: own(), me: me() })
+  h.controller.complete('dig 1 1')
+  assert.equal(h.get().busy, false)
+  assert.equal(h.get().game.cardId, 1)
+  assert.equal(h.get().game.cells[12].kind, 'pearl')
+  assert.equal(h.get().game.cells[12].by, '小红')
+  assert.equal(h.get().effect.isOwn, false)
+  h.step()
+  assert.equal(h.get().phase, 'transition')
+  assert.equal(h.get().transitionFrom.cardId, 1)
+  assert.equal(h.finish().game.cardId, 2)
 })
 
 test('a peer pearl received during an own showcase remains on the old card before the flip', () => {

@@ -611,6 +611,190 @@
       }
     },
     {
+      "name": "v2 金苹果上限：翻倍超过上限时只加上限",
+      "now": 1793419200000,
+      "state": {
+        "version": 2,
+        "size": 5,
+        "composition": {
+          "emerald": 11,
+          "diamond": 3,
+          "apple": 1,
+          "totem": 2,
+          "tnt": 4,
+          "pearl": 1,
+          "shield": 2,
+          "spyglass": 1
+        },
+        "rules": {
+          "initialChances": 7,
+          "waitSeconds": 10,
+          "smallReward": 10,
+          "bigMultiplier": 5,
+          "totemBonus": 3,
+          "tntPercent": 25,
+          "version": 2,
+          "difficulty": "hard",
+          "boardSpec": "5",
+          "compositionVariation": "fixed",
+          "appleCap": 20
+        },
+        "cardId": 1,
+        "deck": [ "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "diamond", "diamond", "diamond", "apple", "totem", "totem", "tnt", "tnt", "tnt", "tnt", "pearl", "shield", "shield", "spyglass" ],
+        "opened": [ null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null ],
+        "lastMove": null,
+        "stats": {
+          "digs": 0,
+          "players": 0
+        },
+        "feed": [  ],
+        "nextEventId": 1
+      },
+      "input": "dig 1 15",
+      "expect": {
+        "add": 20,
+        "pending": 57,
+        "messageIncludes": "金苹果一次最多加 0.20",
+        "playerIncludes": {
+          "view": {
+            "data": {
+              "lastResult": {
+                "kind": "apple",
+                "amount": 20
+              }
+            }
+          }
+        }
+      },
+      "players": {
+        "tester": {
+          "pending": 37
+        }
+      }
+    },
+    {
+      "name": "v2 金苹果上限：没超过上限照常翻倍",
+      "now": 1793419200000,
+      "state": {
+        "version": 2,
+        "size": 5,
+        "composition": {
+          "emerald": 11,
+          "diamond": 3,
+          "apple": 1,
+          "totem": 2,
+          "tnt": 4,
+          "pearl": 1,
+          "shield": 2,
+          "spyglass": 1
+        },
+        "rules": {
+          "initialChances": 7,
+          "waitSeconds": 10,
+          "smallReward": 10,
+          "bigMultiplier": 5,
+          "totemBonus": 3,
+          "tntPercent": 25,
+          "version": 2,
+          "difficulty": "hard",
+          "boardSpec": "5",
+          "compositionVariation": "fixed",
+          "appleCap": 50
+        },
+        "cardId": 1,
+        "deck": [ "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "diamond", "diamond", "diamond", "apple", "totem", "totem", "tnt", "tnt", "tnt", "tnt", "pearl", "shield", "shield", "spyglass" ],
+        "opened": [ null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null ],
+        "lastMove": null,
+        "stats": {
+          "digs": 0,
+          "players": 0
+        },
+        "feed": [  ],
+        "nextEventId": 1
+      },
+      "input": "dig 1 15",
+      "expect": {
+        "add": 37,
+        "pending": 74,
+        "playerIncludes": {
+          "view": {
+            "data": {
+              "lastResult": {
+                "kind": "apple",
+                "amount": 37
+              }
+            }
+          }
+        }
+      },
+      "players": {
+        "tester": {
+          "pending": 37
+        }
+      }
+    },
+    {
+      "name": "v2 金苹果上限：零余额时的小奖也按上限",
+      "now": 1793419200000,
+      "state": {
+        "version": 2,
+        "size": 5,
+        "composition": {
+          "emerald": 11,
+          "diamond": 3,
+          "apple": 1,
+          "totem": 2,
+          "tnt": 4,
+          "pearl": 1,
+          "shield": 2,
+          "spyglass": 1
+        },
+        "rules": {
+          "initialChances": 7,
+          "waitSeconds": 10,
+          "smallReward": 10,
+          "bigMultiplier": 5,
+          "totemBonus": 3,
+          "tntPercent": 25,
+          "version": 2,
+          "difficulty": "hard",
+          "boardSpec": "5",
+          "compositionVariation": "fixed",
+          "appleCap": 5
+        },
+        "cardId": 1,
+        "deck": [ "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "emerald", "diamond", "diamond", "diamond", "apple", "totem", "totem", "tnt", "tnt", "tnt", "tnt", "pearl", "shield", "shield", "spyglass" ],
+        "opened": [ null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null ],
+        "lastMove": null,
+        "stats": {
+          "digs": 0,
+          "players": 0
+        },
+        "feed": [  ],
+        "nextEventId": 1
+      },
+      "input": "dig 1 15",
+      "expect": {
+        "add": 5,
+        "pending": 5,
+        "messageIncludes": "金苹果一次最多加 0.05"
+      }
+    },
+    {
+      "name": "v2 金苹果上限：填了就写进新游戏的规则",
+      "input": "dig 1 1",
+      "params": {
+        "appleCap": 30
+      },
+      "expect": {
+        "stateIncludes": {
+          "rules": {
+            "appleCap": 30
+          }
+        }
+      }
+    },
+    {
       "name": "TNT：扣除百分之二十五，零头向下取整",
       "now": 1793419200000,
       "state": {
