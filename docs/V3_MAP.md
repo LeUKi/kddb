@@ -1,6 +1,6 @@
 # 矿洞夺宝 v3：一张地图，游戏放在自己的服务上
 
-状态：2026-11-02 定稿；2026-11-06 判定器、游戏站、网页在本机做完，对着开发包的模拟器从头玩到领取结算；还没部署。v2（判定器跑整局、一次一张卡）继续服务已经开着的红包。
+状态：2026-11-02 定稿；2026-11-06 判定器、游戏站、网页在本机做完，对着开发包的模拟器从头玩到领取结算；同日部署到 Stage（`kddb-staging.lafi.sh`），开了一个 10 🐟 的试玩红包，等真机试玩。生产还没部署。v2（判定器跑整局、一次一张卡）继续服务已经开着的红包。
 
 ## 1 为什么改
 
@@ -136,7 +136,7 @@ v3 是判定器的新版本，`meta.page` 换成 `https://hbweb-kddb.lafi.sh/v3/
 
 本机联调：`cd game && npx wrangler dev --env local --port 8787 --ip 127.0.0.1`，另开 `npm run page`（模拟器 8730，网页 8731）。`game/.dev.vars` 放本地的 `CLAIM_KEY`（单引号原样写 JWK）和 `TICKET_KEY`，不进仓库。`LOCAL_SEED` 让本地开局用固定的种子，按 `game/shared/rules.mjs` 能算出哪格是什么；清掉 `game/.wrangler/state` 重新开局。
 
-构建：`page/frontend` 里 `npm run build`（v2，`dist/`）和 `npm run build:v3`（v3：线上的 `dist-v3/`，开发包的放进 `page/`），再 `node scripts/site.mjs` 拼出 `game/dist/`（v2 在根上，v3 在 `v3/`）。
+构建：`page/frontend` 里 `npm run build`（v2，`dist/`）和 `npm run build:v3`（v3：线上的 `dist-v3/`，开发包的放进 `page/`），再 `node scripts/site.mjs` 拼出 `game/dist/`（v2 在根上，v3 在 `v3/`）。网页里写的是线上红包站的 SDK 地址，SDK 只和加载它的站说话：Worker 发 `/v3/` 时换成这个环境的 `HB_ORIGIN`（`game/worker/page.mjs`），Stage 的网页才接得上 Stage 的红包页。
 
 上线分两步，每一步都要站长同意：
 

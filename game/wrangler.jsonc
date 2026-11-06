@@ -13,7 +13,7 @@
     "directory": "./dist",
     "binding": "ASSETS",
     "not_found_handling": "none",
-    "run_worker_first": ["/v3/api/*", "/v3"]
+    "run_worker_first": ["/v3/api/*", "/v3", "/v3/"]
   },
   "routes": [{ "pattern": "hbweb-kddb.lafi.sh", "custom_domain": true }],
   "durable_objects": {
@@ -43,7 +43,8 @@
       "vars": {
         "HB_ORIGIN": "https://staging.hb.lafi.sh",
         "PAGE_ORIGIN": "https://kddb-staging.lafi.sh",
-        "JUDGE_ID": "",
+        // Stage 上测试账号发的“矿洞夺宝 v3 · Stage”（2026-11-06）
+        "JUDGE_ID": "f9cd36e6-66f4-47d9-9427-db1b06bae05b",
         "MIN_JUDGE_VERSION": "1",
         "CLAIM_KID": "k1"
       }

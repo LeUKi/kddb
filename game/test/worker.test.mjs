@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { fromBase64url, makeNonce, makeTicket, nonceValid, NONCE_TTL_MS, readTicket, toBase64url, verifyIdentity } from "../worker/auth.mjs";
 import { MineRoom } from "../worker/room.mjs";
 import { signVoucher } from "../shared/voucher.mjs";
+import { pageFrom, SDK_URL, withSdkFrom } from "../worker/page.mjs";
 
 const SITE = "http://127.0.0.1:8730";
 const PAGE = "http://127.0.0.1:8787";
@@ -153,5 +154,28 @@ describe("一局", () => {
     const room = new MineRoom(memory(), tools);
     assert.equal(await room.takeNonce("abc", NOW), true);
     assert.equal(await room.takeNonce("abc", NOW + 1), false);
+  });
+});
+
+describe("v3 的网页从这个环境的红包站加载 SDK", () => {
+  const html = `<head><script src="${SDK_URL}"></script></head>`;
+  const page = (body, type = "text/html; charset=utf-8", status = 200) =>
+    new Response(status === 304 ? null : body, { status, headers: { "content-type": type, "content-length": String(body.length), etag: '"a"' } });
+
+  it("Stage 换成 Stage 的地址，长度和 ETag 不再带着", async () => {
+    const out = await pageFrom(page(html), "https://staging.hb.lafi.sh");
+    assert.equal(await out.text(), '<head><script src="https://staging.hb.lafi.sh/sdk/v1.js"></script></head>');
+    assert.equal(out.headers.get("content-length"), null);
+    assert.equal(out.headers.get("etag"), null);
+  });
+
+  it("线上原样给；304 和别的类型也原样给", async () => {
+    const same = page(html);
+    assert.equal(await pageFrom(same, "https://hb.lafi.sh"), same);
+    const notModified = page("", "text/html", 304);
+    assert.equal(await pageFrom(notModified, "https://staging.hb.lafi.sh"), notModified);
+    const script = page("x", "text/javascript");
+    assert.equal(await pageFrom(script, "https://staging.hb.lafi.sh"), script);
+    assert.equal(withSdkFrom(html, "http://127.0.0.1:8730"), '<head><script src="http://127.0.0.1:8730/sdk/v1.js"></script></head>');
   });
 });

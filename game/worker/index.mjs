@@ -10,6 +10,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { signVoucher } from "../shared/voucher.mjs";
 import { makeNonce, makeTicket, nonceValid, readTicket, TICKET_TTL_MS, verifyIdentity } from "./auth.mjs";
+import { pageFrom } from "./page.mjs";
 import { MineRoom, RoomError } from "./room.mjs";
 
 /**
@@ -48,6 +49,7 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/v3") return Response.redirect(`${url.origin}/v3/${url.search}`, 301);
+    if (url.pathname === "/v3/") return pageFrom(await env.ASSETS.fetch(request), env.HB_ORIGIN);
     if (!url.pathname.startsWith("/v3/api/")) return env.ASSETS.fetch(request);
     if (request.method === "OPTIONS")
       return withCors(request, env, new Response(null, {
