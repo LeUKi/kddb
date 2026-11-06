@@ -23,17 +23,27 @@ body { overflow: hidden; overscroll-behavior: none; }
 .map-canvas { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; }
 .map-canvas:active { cursor: grabbing; }
 .map-world { position: absolute; left: 0; top: 0; will-change: transform; }
-.map-card { position: absolute; display: grid; align-content: start; background: #211f20; border: 3px solid #67533e; border-radius: 6px; box-shadow: inset 0 0 0 2px #10151b, 0 3px 0 #31281f, 0 6px 0 #11151b, 0 18px 48px #060b1266; transition: border-color .35s var(--ease-out), box-shadow .35s var(--ease-out), filter .35s var(--ease-out); }
+/* 区块：每张卡一块，大小一样、间距一样，卡在正中；--px 是屏幕上的 1px（随缩放还原） */
+.map-block { position: absolute; display: grid; place-items: center; background: #ffffff06; border-radius: 16px; box-shadow: inset 0 0 0 calc(1px * var(--px, 1)) #ffffff12; transition: background-color .2s var(--ease-out), box-shadow .2s var(--ease-out); }
+.map-block.is-focused { box-shadow: inset 0 0 0 calc(1px * var(--px, 1)) #e9b56b40; }
+.map-block.is-grown { animation: card-grow .7s var(--ease-out) both; }
+.map-view.level-2 .map-block.is-pickable { cursor: pointer; }
+.map-view:is(.level-0, .level-1) .map-block { cursor: pointer; }
+@media (hover: hover) {
+  .map-view:is(.level-0, .level-1) .map-block:hover { background: #e9b56b24; box-shadow: inset 0 0 0 calc(2px * var(--px, 1)) #e9b56bcc, 0 0 calc(24px * var(--px, 1)) #e9b56b55; }
+  .map-view:is(.level-0, .level-1) .map-block:hover .map-card:not(.is-finished) { filter: brightness(1.18); }
+}
+.map-card { position: relative; display: grid; align-content: start; background: #211f20; border: 3px solid #67533e; border-radius: 6px; box-shadow: inset 0 0 0 2px #10151b, 0 3px 0 #31281f, 0 6px 0 #11151b, 0 18px 48px #060b1266; transition: border-color .35s var(--ease-out), box-shadow .35s var(--ease-out), filter .35s var(--ease-out); }
 .map-card.is-focused { border-color: var(--gold); box-shadow: inset 0 0 0 2px #10151b, 0 0 0 3px #e9b56b4d, 0 0 46px #e9b56b40, 0 18px 48px #060b1266; }
 .map-card.is-finished { filter: grayscale(.75) brightness(.55); }
-.map-card.is-grown { animation: card-grow .7s var(--ease-out) both; }
 @keyframes card-grow { from { opacity: 0; transform: scale(.35); } to { opacity: 1; transform: none; } }
 .map-cell { position: relative; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; color: var(--ink); background: #19232d; border: 1px solid #8c89826b; border-bottom: 3px solid #303136; border-radius: 2px; }
 .map-cell.covered { background-image: linear-gradient(135deg, #edc38f0f, #0e172526), var(--stone); background-size: 100% 100%; image-rendering: pixelated; box-shadow: inset 0 2px 0 #c5bbb22b, 0 2px 3px #0006; }
 .map-cell.covered:enabled { cursor: pointer; }
 .map-cell.covered:enabled:hover { border-color: #e3c08a; filter: brightness(1.18); }
 .map-cell.covered:enabled:active { filter: brightness(.85); }
-.map-cell.covered:disabled { cursor: inherit; }
+/* 不能挖的格子不接点击：点它就是点它的区块（换到这张卡） */
+.map-cell.covered:disabled { cursor: inherit; pointer-events: none; }
 .map-cell.revealed { grid-template-rows: 1fr auto; padding-top: 3px; border-color: #4c5155; border-bottom-color: #171c22; box-shadow: inset 0 2px 6px #060b1266; }
 .map-cell.revealed .item-icon { filter: drop-shadow(0 2px 0 #0005); }
 .map-cell.kind-diamond { background: #20363e; border-color: #496772; }
@@ -58,7 +68,6 @@ body { overflow: hidden; overscroll-behavior: none; }
 .cell-float { position: absolute; left: 50%; top: 4px; z-index: 3; padding: 1px 5px; color: #b4f0a8; font-size: 12px; font-weight: 700; white-space: nowrap; background: #11171dcc; border-radius: 4px; transform: translateX(-50%); animation: float-up 1.6s var(--ease-out) forwards; pointer-events: none; }
 .cell-float.is-bad { color: #ff9c8a; }
 @keyframes float-up { from { opacity: 0; transform: translate(-50%, 8px); } 15% { opacity: 1; } 75% { opacity: 1; } to { opacity: 0; transform: translate(-50%, -8px); } }
-.map-card.is-thumb { cursor: pointer; }
 .thumb-cell { width: 44px; height: 44px; background: #3a3f44; border-radius: 3px; }
 .thumb-cell.kind-emerald { background: #3f7d4f; }
 .thumb-cell.kind-diamond { background: #3e8ea0; }
@@ -77,11 +86,23 @@ body { overflow: hidden; overscroll-behavior: none; }
 .new-arrow { display: inline-block; }
 @keyframes marker-flash { from { opacity: 1; } to { opacity: .35; } }
 
-/* 方向和缩放按钮：地图下面单独一行，不盖住卡 */
-.map-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 14px; background: #161d23; border-top: 1px solid #2c343b; }
-.dpad, .zoom { display: flex; align-items: center; gap: 6px; }
-.dpad button, .zoom button { width: 34px; height: 30px; color: var(--ink); background: #242d34; border: 1px solid #56636b; border-radius: 8px; }
-.dpad button:disabled, .zoom button:disabled { opacity: .35; }
+/* 邻卡箭头：在邻卡区块靠这边的边上，扁的长条，好点 */
+.map-overlay { position: absolute; left: 0; top: 0; z-index: 3; pointer-events: none; }
+.edge-arrow { position: absolute; display: grid; place-items: center; width: 88px; height: 22px; padding: 0; color: #f3d6a6; background: #11171dd9; border: 1px solid #e9b56b99; border-radius: 7px; box-shadow: 0 2px 10px #0008; pointer-events: auto; cursor: pointer; animation: arrow-in .3s .15s var(--ease-out) both; }
+.edge-arrow.to-left, .edge-arrow.to-right { width: 22px; height: 88px; }
+.edge-arrow svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.edge-arrow.to-left svg { transform: rotate(180deg); }
+.edge-arrow.to-up svg { transform: rotate(-90deg); }
+.edge-arrow.to-down svg { transform: rotate(90deg); }
+@media (hover: hover) { .edge-arrow:hover { color: #1b1408; background: linear-gradient(#f1c57f, #d79b4f); border-color: #f1c57f; } }
+.edge-arrow:active { filter: brightness(.9); }
+@keyframes arrow-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* 缩放按钮：地图下面一行 */
+.map-toolbar { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 6px 14px; background: #161d23; border-top: 1px solid #2c343b; }
+.zoom { display: flex; align-items: center; gap: 6px; }
+.zoom button { width: 34px; height: 30px; color: var(--ink); background: #242d34; border: 1px solid #56636b; border-radius: 8px; }
+.zoom button:disabled { opacity: .35; }
 .zoom span { min-width: 2.5em; color: var(--muted); font-size: 13px; text-align: center; }
 
 /* —— 下面一条 —— */
@@ -145,7 +166,7 @@ body { overflow: hidden; overscroll-behavior: none; }
   .earned strong { font-size: 20px; }
   .claim-button { padding: 8px 12px; }
   .map-toolbar { padding: 5px 10px; }
-  .dpad button, .zoom button { width: 32px; }
+  .zoom button { width: 32px; }
   .bottom-bar { padding: 6px 10px 8px; }
   .card-info, .game-info { flex-wrap: wrap; row-gap: 2px; white-space: normal; }
   .card-left { flex-wrap: wrap; row-gap: 2px; }
@@ -154,5 +175,5 @@ body { overflow: hidden; overscroll-behavior: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .map-card, .map-card.is-grown, .map-cell.just-mine, .map-cell.just-other, .digging-pick, .cell-float, .new-marker, .toast, .sheen { animation: none !important; transition: none !important; }
+  .map-block, .map-card, .map-block.is-grown, .edge-arrow, .map-cell.just-mine, .map-cell.just-other, .digging-pick, .cell-float, .new-marker, .toast, .sheen { animation: none !important; transition: none !important; }
 }

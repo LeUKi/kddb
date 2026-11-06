@@ -1,6 +1,6 @@
 import { memo } from 'react'
 import { ItemIcon } from '../../src/ItemIcon'
-import { cardPx, CELL, GAP, PAD, SLOT_PX } from './camera'
+import { BLOCK_PX, cardPx, CELL, GAP, PAD, SLOT_PX } from './camera'
 import type { DigResult, Peek, PublicCard } from './types'
 import { KIND_NAMES, money } from './types'
 
@@ -24,25 +24,37 @@ export interface CardProps {
   onPick: (cardId: number) => void
 }
 
-/** 一张卡，按格位放在世界里（中心在 x·400, y·400）。 */
+/**
+ * 一张卡：放在它的区块正中（区块中心在 x·400, y·400，376 见方）。点区块就是换到这张；
+ * 能挖的那张只有格子能点。
+ */
 export const CardView = memo(function CardView({ card, focused, diggable, detail, myUid, peeks, pending, fresh, grown, onDig, onPick }: CardProps) {
   const px = cardPx(card.size)
+  const blockStyle = {
+    left: card.x * SLOT_PX - BLOCK_PX / 2,
+    top: card.y * SLOT_PX - BLOCK_PX / 2,
+    width: BLOCK_PX,
+    height: BLOCK_PX,
+  }
   const style = {
-    left: card.x * SLOT_PX - px / 2,
-    top: card.y * SLOT_PX - px / 2,
     width: px,
     height: px,
     padding: PAD,
     gridTemplateColumns: `repeat(${card.size}, ${CELL}px)`,
     gap: GAP,
   }
-  const className = `map-card${focused ? ' is-focused' : ''}${card.finished ? ' is-finished' : ''}${grown ? ' is-grown' : ''}${detail ? '' : ' is-thumb'}`
+  const blockClass = `map-block${focused ? ' is-focused' : ''}${grown ? ' is-grown' : ''}${diggable ? '' : ' is-pickable'}`
+  const className = `map-card${focused ? ' is-focused' : ''}${card.finished ? ' is-finished' : ''}${detail ? '' : ' is-thumb'}`
+  const pick = diggable ? undefined : () => onPick(card.id)
   if (!detail)
-    return <div className={className} style={style} onClick={() => onPick(card.id)} role="button" aria-label={`第 ${card.id} 张卡${card.finished ? '，已挖完' : ''}`}>
-      {card.cells.map((cell, index) => <span key={index} className={`thumb-cell${cell ? ` kind-${cell.kind}` : ''}`} />)}
+    return <div className={blockClass} style={blockStyle} onClick={pick} role="button" aria-label={`第 ${card.id} 张卡${card.finished ? '，已挖完' : ''}`}>
+      <div className={className} style={style}>
+        {card.cells.map((cell, index) => <span key={index} className={`thumb-cell${cell ? ` kind-${cell.kind}` : ''}`} />)}
+      </div>
     </div>
   const peekAt = new Map(peeks.filter(peek => peek.cardId === card.id).map(peek => [peek.index, peek]))
-  return <div className={className} style={style} onClick={diggable ? undefined : () => onPick(card.id)} data-card={card.id}>
+  return <div className={blockClass} style={blockStyle} onClick={pick} data-card={card.id}>
+    <div className={className} style={style}>
     {card.cells.map((cell, index) => {
       const cellKey = `${card.id}:${index}`
       const name = `${ROWS[Math.floor(index / card.size)]}${(index % card.size) + 1}`
@@ -73,6 +85,7 @@ export const CardView = memo(function CardView({ card, focused, diggable, detail
         {busy ? <ItemIcon kind="pickaxe" size={24} className="digging-pick" /> : null}
       </button>
     })}
+    </div>
   </div>
 })
 

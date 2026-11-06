@@ -156,7 +156,7 @@ export function Rules({ onClose, onPractice }: { onClose: () => void; onPractice
         <dt><ItemIcon kind="spyglass" size={18} /> 望远镜</dt><dd>看到这张卡上一个没开的格子，只有你看得见</dd>
         <dt><ItemIcon kind="pearl" size={18} /> 末影珍珠</dt><dd>旁边长出一张新卡</dd>
       </dl> : null}
-      <p className="rules-tip">拖动地图平移，滚轮或捏合缩放，方向键换卡，+/- 缩放。</p>
+      <p className="rules-tip">拖动地图平移，鼠标滚轮或捏合缩放。点邻卡边上的箭头或直接点那张卡就能换过去，方向键也行；+/- 缩放。</p>
       <div className="rules-actions">
         <button type="button" className="rules-practice" onClick={onPractice}>练习一下</button>
         <button type="button" onClick={onClose}>知道了</button>

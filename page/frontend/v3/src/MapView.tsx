@@ -1,13 +1,15 @@
 import { useAtomValue, useSetAtom } from 'jotai'
+import type { MotionStyle } from 'motion/react'
 import { animate, motion, useMotionValue, useReducedMotion } from 'motion/react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { CardView } from './CardView'
-import type { Camera, Direction, Level, Viewport } from './camera'
-import { cameraAt, cardToward, centerOf, edgePointer, nearestCard, nearestLevel, onScreen, overviewCamera, scaleOf } from './camera'
+import type { Camera, Direction, Level, Viewport, WheelKind } from './camera'
+import { cameraAt, cardNear, cardToward, centerOf, edgeArrows, edgePointer, nearestCard, nearestLevel, onScreen, overviewCamera, scaleOf, wheelKind } from './camera'
 import { blockedAtom, dig, focusRequestAtom, freshAtom, gameAtom, hongbaoAtom, meAtom, newCardAtom, pendingAtom, settledAtom, uidAtom } from './state'
 import type { PublicCard } from './types'
 
 const DRAG_SLOP = 6
+const DIRECTION_NAMES: Record<Direction, string> = { up: '上面', right: '右边', down: '下面', left: '左边' }
 const lastSeenKey = (hongbao: string) => `kddb:v3:last:${hongbao}`
 
 function readLastSeen(hongbao: string) {
@@ -20,8 +22,8 @@ function readLastSeen(hongbao: string) {
 
 /**
  * 地图（docs/V3_MAP.md §6）：拖动平移、松手吸附到最近的卡、三级缩放（捏合、滚轮、
- * 按钮、+/-）、方向键和方向按钮、四周的迷雾、居中的卡边框亮。镜头只改一个
- * transform；挖卡那一级才能挖，前两级点一下是放大过去。
+ * 按钮、+/-）、方向键和邻卡上的箭头、四周的迷雾、居中的卡边框亮。镜头只改一个
+ * transform；挖卡那一级才能挖，点别的区块就换过去。
  */
 export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => void }) {
   const game = useAtomValue(gameAtom)
@@ -242,28 +244,33 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
     }
   }
 
-  // —— 滚轮：鼠标滚轮一格一级；触控板双指滑动平移、捏合缩放 ——
+  // —— 滚轮：鼠标滚轮一格一级（朝指针那张放大）；触控板双指滑动平移、捏合缩放 ——
+  // 一串事件（中间停不到 200ms）按第一个算是哪一种，不会一会儿平移一会儿缩放
   const wheelTimer = useRef<number | undefined>(undefined)
   const wheelStep = useRef(0)
+  const wheelBurst = useRef<{ kind: WheelKind; last: number } | null>(null)
   useEffect(() => {
     const element = box.current
     if (!element) return
     const onWheel = (event: WheelEvent) => {
       event.preventDefault()
-      const mouseWheel = !event.ctrlKey && (event.deltaMode !== 0 || (event.deltaX === 0 && Math.abs(event.deltaY) >= 40 && Number.isInteger(event.deltaY)))
-      if (mouseWheel) {
-        const now = performance.now()
-        if (now - wheelStep.current < 260) return
+      const now = performance.now()
+      const kind = wheelKind(event as WheelEvent & { wheelDeltaY?: number })
+      let burst = wheelBurst.current
+      if (!burst || now - burst.last > 200 || (kind === 'pinch') !== (burst.kind === 'pinch')) burst = wheelBurst.current = { kind, last: now }
+      burst.last = now
+      const rect = element.getBoundingClientRect()
+      const at = { x: event.clientX - rect.left, y: event.clientY - rect.top }
+      if (burst.kind === 'mouse') {
+        if (event.deltaY === 0 || now - wheelStep.current < 260) return
         wheelStep.current = now
-        changeLevel(event.deltaY < 0 ? 1 : -1)
+        changeLevel(event.deltaY < 0 ? 1 : -1, at)
         return
       }
       x.stop()
       y.stop()
       scale.stop()
-      if (event.ctrlKey) {
-        const rect = element.getBoundingClientRect()
-        const at = { x: event.clientX - rect.left, y: event.clientY - rect.top }
+      if (burst.kind === 'pinch') {
         const current = camera()
         const nextScale = Math.min(2, Math.max(0.04, current.scale * Math.exp(-event.deltaY * 0.01)))
         const world = { x: (at.x - current.x) / current.scale, y: (at.y - current.y) / current.scale }
@@ -274,12 +281,13 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
         x.set(x.get() - event.deltaX)
         y.set(y.get() - event.deltaY)
       }
+      const pinched = burst.kind === 'pinch'
       window.clearTimeout(wheelTimer.current)
       wheelTimer.current = window.setTimeout(() => {
         const nextLevel = nearestLevel(scale.get(), view, cards)
         const card = nearestCard(cards, camera(), view)
         if (!card) return
-        if (event.ctrlKey || nextLevel !== level) goToCard(card, nextLevel)
+        if (pinched || nextLevel !== level) goToCard(card, nextLevel)
         else snap()
       }, 180)
     }
@@ -287,10 +295,10 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
     return () => element.removeEventListener('wheel', onWheel)
   })
 
-  const changeLevel = (by: 1 | -1) => {
+  const changeLevel = (by: 1 | -1, at?: { x: number; y: number }) => {
     const next = Math.min(2, Math.max(0, level + by)) as Level
     if (next === level) return
-    const card = nearestCard(cards, camera(), view) ?? cards[0]
+    const card = (by > 0 && at ? cardNear(cards, camera(), at) : nearestCard(cards, camera(), view)) ?? cards[0]
     if (card) goToCard(card, next)
   }
 
@@ -325,7 +333,8 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
   const banner = settled_ ? null
     : me?.status === 'claimed' ? '已经领取，凭证还没交上：点上面的「再交一次」'
       : blocked
-  const detailScale = settled.scale >= 0.42
+  const detailScale = settled.scale >= 0.4
+  const arrows = level === 2 && focused ? edgeArrows(cards, focused, settled, view, banner ? 44 : 0) : []
   const markerCard = marker === null ? null : cards.find(card => card.id === marker) ?? null
   const pointer = markerCard ? edgePointer(markerCard, settled, view) : null
 
@@ -333,7 +342,7 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
     <div className="map-canvas" ref={box}
     onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}
     onClickCapture={onClickCapture}>
-    <motion.div className="map-world" style={{ x, y, scale, transformOrigin: '0 0' }}>
+    <motion.div className="map-world" style={{ x, y, scale, transformOrigin: '0 0', '--px': 1 / settled.scale } as MotionStyle}>
       {cards.map(card => {
         const near = onScreen(card, settled, view, 200)
         return <CardView
@@ -353,6 +362,14 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
       })}
     </motion.div>
     <div className="map-fog" aria-hidden="true" />
+    {/* 邻卡上的箭头：和地图一起动，在迷雾上面；大小按落定的缩放还原成屏幕上的大小 */}
+    <motion.div className="map-overlay" style={{ x, y, scale, transformOrigin: '0 0' }}>
+      {arrows.map(arrow => <button key={`${focused?.id}:${arrow.direction}`} type="button" className={`edge-arrow to-${arrow.direction}`}
+        style={{ left: arrow.x, top: arrow.y, transform: `translate(-50%, -50%) scale(${1 / settled.scale})` }}
+        onClick={() => goToCard(arrow.card, 2)} aria-label={`换到${DIRECTION_NAMES[arrow.direction]}的第 ${arrow.card.id} 张卡`}>
+        <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4.5 2.5 8 6l-3.5 3.5" /></svg>
+      </button>)}
+    </motion.div>
     {pointer && markerCard ? <button type="button" className="new-marker" style={{ left: pointer.x, top: pointer.y }}
       onClick={() => { goToCard(markerCard, level === 0 ? 1 : level); setMarker(null) }} aria-label="新长出的卡，点一下移过去">
       <span className="new-arrow" style={{ transform: `rotate(${pointer.angle}deg)` }}>➜</span>
@@ -362,12 +379,6 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
       : level !== 2 ? <p className="map-hint">点一张卡放大过去，放大以后才能挖</p> : null}
     </div>
     <div className="map-toolbar">
-      <div className="dpad" role="group" aria-label="换卡">
-        <button type="button" onClick={() => move('left')} disabled={!focused || !cardToward(cards, focused, 'left')} aria-label="左边的卡">◀</button>
-        <button type="button" onClick={() => move('up')} disabled={!focused || !cardToward(cards, focused, 'up')} aria-label="上面的卡">▲</button>
-        <button type="button" onClick={() => move('down')} disabled={!focused || !cardToward(cards, focused, 'down')} aria-label="下面的卡">▼</button>
-        <button type="button" onClick={() => move('right')} disabled={!focused || !cardToward(cards, focused, 'right')} aria-label="右边的卡">▶</button>
-      </div>
       <div className="zoom" role="group" aria-label="缩放">
         <button type="button" onClick={() => changeLevel(-1)} disabled={level === 0} aria-label="缩小">－</button>
         <span>{level === 2 ? '挖卡' : level === 1 ? '附近' : '全图'}</span>

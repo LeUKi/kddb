@@ -16,12 +16,25 @@ const phone = { width: 390, height: 600 }
 const wide = { width: 900, height: 700 }
 const cards = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 1 }]
 
-test('挖卡这一级让 7×7 的卡占窄的那边九成，有上下限；中间那级更小；总览不比中间大', () => {
-  assert.ok(Math.abs(camera.digScale(phone) * camera.cardPx(7) - 390 * 0.92) < 1)
-  assert.equal(camera.digScale({ width: 2000, height: 2000 }), 1.3)
+test('挖卡这一级画面放得下就是原大；放不下一张 7×7 和两边的箭头才缩小；附近那级固定、更小；总览不比附近大', () => {
+  assert.equal(camera.digScale(wide), 1)
+  assert.equal(camera.digScale({ width: 2000, height: 2000 }), 1)
+  assert.ok(Math.abs(camera.digScale(phone) * camera.cardPx(7) - (390 - camera.EDGE_ROOM * 2)) < 1)
+  assert.equal(camera.midScale(wide), camera.MID_SCALE)
   assert.ok(camera.midScale(phone) < camera.digScale(phone))
   assert.ok(camera.overviewScale(phone, [{ x: 0, y: 0 }]) <= camera.midScale(phone))
   assert.ok(camera.overviewScale(phone, [{ x: -6, y: 0 }, { x: 6, y: 0 }]) < camera.midScale(phone))
+})
+
+test('区块一样大、间距一样：卡在区块正中，画面大小不改屏幕上的间距', () => {
+  assert.equal(camera.BLOCK_PX + camera.BLOCK_GAP, camera.SLOT_PX)
+  for (const size of [5, 6, 7]) assert.ok(camera.cardPx(size) <= camera.BLOCK_PX)
+  const big = { width: 1400, height: 1000 }
+  const step = view => {
+    const at = camera.cameraAt(camera.centerOf({ x: 0, y: 0 }), camera.digScale(view), view)
+    return camera.centerOf({ x: 1, y: 0 }).x * at.scale - camera.centerOf({ x: 0, y: 0 }).x * at.scale
+  }
+  assert.equal(step(wide), step(big))
 })
 
 test('总览放得下所有卡，四周留出边', () => {
@@ -58,4 +71,40 @@ test('NEW 指向：镜头外的卡在屏幕边上，箭头朝它', () => {
   const pointer = camera.edgePointer({ x: -1, y: 1 }, at, phone)
   assert.ok(pointer.x >= 0 && pointer.x <= phone.width && pointer.y >= 0 && pointer.y <= phone.height)
   assert.ok(pointer.angle > 90 && pointer.angle < 180) // 左下
+})
+
+test('滚轮：一串按第一个算；鼠标按行或 120 的倍数，触控板是小步，按住 ctrl 是捏合', () => {
+  const event = fields => ({ ctrlKey: false, deltaMode: 0, deltaX: 0, deltaY: 0, ...fields })
+  assert.equal(camera.wheelKind(event({ deltaMode: 1, deltaY: 3 })), 'mouse') // Firefox
+  assert.equal(camera.wheelKind(event({ deltaY: 100, wheelDeltaY: -120 })), 'mouse') // Chrome Windows
+  assert.equal(camera.wheelKind(event({ deltaY: 4, wheelDeltaY: -120 })), 'mouse') // Chrome、Safari macOS
+  assert.equal(camera.wheelKind(event({ deltaY: 3, wheelDeltaY: -9 })), 'pad')
+  assert.equal(camera.wheelKind(event({ deltaX: 2, deltaY: 6, wheelDeltaY: -18 })), 'pad')
+  assert.equal(camera.wheelKind(event({ ctrlKey: true, deltaY: 2 })), 'pinch')
+  assert.equal(camera.wheelKind(event({ deltaY: 100 })), 'mouse')
+  assert.equal(camera.wheelKind(event({ deltaY: 2.5 })), 'pad')
+})
+
+test('邻卡箭头：有邻卡的方向才有；看得见时在邻卡区块靠这边的边上，看不见时贴着画面边', () => {
+  const big = { width: 1400, height: 1000 }
+  const at = camera.cameraAt(camera.centerOf({ x: 0, y: 0 }), camera.digScale(big), big)
+  const arrows = camera.edgeArrows(cards, { x: 0, y: 0 }, at, big)
+  assert.deepEqual(arrows.map(arrow => arrow.direction).sort(), ['down', 'left', 'right'])
+  const right = arrows.find(arrow => arrow.direction === 'right')
+  const half = camera.BLOCK_PX / 2
+  assert.ok(right.x > camera.SLOT_PX - half && right.x < camera.SLOT_PX - half + 30, String(right.x))
+  assert.equal(right.y, 0)
+  const near = camera.cameraAt(camera.centerOf({ x: 0, y: 0 }), camera.digScale(phone), phone)
+  for (const arrow of camera.edgeArrows(cards, { x: 0, y: 0 }, near, phone, 44)) {
+    const sx = arrow.x * near.scale + near.x
+    const sy = arrow.y * near.scale + near.y
+    assert.ok(sx > 0 && sx < phone.width && sy >= 44 && sy < phone.height, `${arrow.direction} ${sx} ${sy}`)
+  }
+})
+
+test('滚轮放大朝指针下面那张卡', () => {
+  const at = camera.overviewCamera(wide, cards)
+  const target = { x: -1, y: 1 }
+  const point = { x: camera.centerOf(target).x * at.scale + at.x, y: camera.centerOf(target).y * at.scale + at.y }
+  assert.deepEqual(camera.cardNear(cards, at, point), target)
 })

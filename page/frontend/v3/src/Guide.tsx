@@ -41,7 +41,7 @@ export function Guide({ rules, unit, onClose }: { rules: Rules; unit: string; on
   const words: Record<Step, [string, string]> = {
     first: ['点一格，试着挖一下', '放大到一张卡上才能挖；一格用一次机会。'],
     pearl: [`挖到绿宝石，+${money(rules.smallReward)} ${unit}`, '奖励先记在矿洞里。再挖一格试试。'],
-    move: ['末影珍珠！旁边长出了一张新卡', '旧卡挖完以前一直能挖。在地图上拖动或点 ▶ 就能过去，这里点「移到新卡」。'],
+    move: ['末影珍珠！旁边长出了一张新卡', '旧卡挖完以前一直能挖。在地图上拖动、点新卡边上的箭头或直接点它就能过去，这里点「移到新卡」。'],
     tnt: ['到了新卡，再挖一格', '每张卡上都有各种道具，也有 TNT。'],
     done: [`TNT！扣掉 ${rules.tntPercent}%（${money(penalty)} ${unit}）`, `点「见好就收」才领进红包；机会用完、奖池分完会自动领。截止前 2 分钟停止挖掘，没领的作废。`],
   }
