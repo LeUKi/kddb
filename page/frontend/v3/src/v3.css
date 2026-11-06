@@ -54,8 +54,7 @@ body { overflow: hidden; overscroll-behavior: none; }
 .map-card.is-end { background: #2a2637; border-color: #d9c27a; }
 .map-card.is-end.is-focused { border-color: #ffe08a; }
 .map-card.is-end .map-cell.covered { background-image: linear-gradient(135deg, #fff5c114, #2a1f402e), var(--end-stone); }
-.map-card.is-end .thumb-cell { background: #d9cf9a; }
-.map-card.is-end .thumb-cell[class*='kind-'] { opacity: .55; }
+.map-card.is-end .thumb-cell:not([class*='kind-']) { background-image: linear-gradient(135deg, #fff5c114, #2a1f402e), var(--end-stone); }
 .card-left li.is-eye { color: #d7c2ff; }
 .eye-status { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; color: #d7c2ff; font: inherit; background: #9a6bff1f; border: 1px solid #b48cff59; border-radius: 999px; }
 button.eye-status { cursor: pointer; }
@@ -137,15 +136,19 @@ button.eye-status { cursor: pointer; }
 .cell-float { position: absolute; left: 50%; top: 4px; z-index: 3; padding: 1px 5px; color: #b4f0a8; font-size: 12px; font-weight: 700; white-space: nowrap; background: #11171dcc; border-radius: 4px; transform: translateX(-50%); animation: float-up 1.6s var(--ease-out) forwards; pointer-events: none; }
 .cell-float.is-bad { color: #ff9c8a; }
 @keyframes float-up { from { opacity: 0; transform: translate(-50%, 8px); } 15% { opacity: 1; } 75% { opacity: 1; } to { opacity: 0; transform: translate(-50%, -8px); } }
-.thumb-cell { width: 44px; height: 44px; background: #3a3f44; border-radius: 3px; }
-.thumb-cell.kind-emerald { background: #3f7d4f; }
-.thumb-cell.kind-diamond { background: #3e8ea0; }
-.thumb-cell.kind-apple { background: #b38b3a; }
-.thumb-cell.kind-totem { background: #7b8a4c; }
-.thumb-cell.kind-tnt { background: #a64a42; }
-.thumb-cell.kind-pearl { background: #6a5a9a; }
-.thumb-cell.kind-shield { background: #8a7a62; }
-.thumb-cell.kind-spyglass { background: #6c7a86; }
+/*
+ * 缩略图（远处、全图时）：和格子画得一样——没挖的是同样的石头，挖开的是同样的底色和图标，
+ * 只是不带边框、阴影和“谁挖的”，那么小本来也看不清。从格子换成缩略图时看不出来。
+ */
+.thumb-cell { display: grid; place-items: center; width: 44px; height: 44px; background-image: linear-gradient(135deg, #edc38f0f, #0e172526), var(--stone); background-size: 100% 100%; image-rendering: pixelated; border-radius: 2px; }
+.thumb-cell[class*='kind-'] { background: #19232d; }
+.thumb-cell.kind-diamond { background: #20363e; }
+.thumb-cell.kind-apple { background: #3a302e; }
+.thumb-cell.kind-tnt { background: #3b292b; }
+.thumb-cell.kind-totem { background: #2e382e; }
+.thumb-cell.kind-pearl { background: #2c2b3c; }
+.thumb-cell.kind-shield { background: #34312f; }
+.thumb-cell.kind-spyglass { background: #2c323a; }
 .map-fog { position: absolute; inset: 0; z-index: 2; pointer-events: none; box-shadow: inset 0 0 36px 18px #0d1318; }
 .map-banner { position: absolute; left: 50%; top: 10px; z-index: 3; max-width: calc(100% - 24px); padding: 5px 14px; color: #1b1408; font-size: 13px; font-weight: 600; text-align: center; background: linear-gradient(#f1c57f, #d79b4f); border-radius: 999px; transform: translateX(-50%); pointer-events: none; }
 .map-hint { position: absolute; left: 50%; top: 10px; z-index: 3; padding: 4px 12px; color: #d8cfbd; font-size: 13px; white-space: nowrap; background: #11171dcc; border-radius: 999px; transform: translateX(-50%); pointer-events: none; }

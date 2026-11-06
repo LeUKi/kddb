@@ -59,7 +59,7 @@ export const CardView = memo(function CardView({ card, focused, diggable, detail
   if (!detail)
     return <div className={blockClass} style={blockStyle} onClick={pick} role="button" aria-label={`${end ? '末地宝藏' : `第 ${card.id} 张卡`}${hasEye ? '，有末影之眼' : ''}${card.finished ? '，已挖完' : ''}`}>
       <div className={className} style={style}>
-        {card.cells.map((cell, index) => <span key={index} className={`thumb-cell${cell ? ` kind-${cell.kind}` : ''}`} style={wave(index)} />)}
+        {card.cells.map((cell, index) => <span key={index} className={`thumb-cell${cell ? ` kind-${cell.kind}` : ''}`} style={wave(index)}>{cell ? <ItemIcon kind={cell.kind} size={icon} /> : null}</span>)}
       </div>
     </div>
   const peekAt = new Map(peeks.filter(peek => peek.cardId === card.id).map(peek => [peek.index, peek]))

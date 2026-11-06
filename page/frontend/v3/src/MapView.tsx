@@ -51,43 +51,61 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
   const y = useMotionValue(0)
   const scale = useMotionValue(1)
   const [level, setLevel] = useState<Level>(2)
-  /** 镜头停下来（或拖动中每隔一会儿）时的位置：NEW、JP 指向哪里 */
+  /**
+   * 镜头落定的位置：哪些卡画格子、NEW 和 JP 指向哪里。拖动中、飞的途中都不变，落地才换：
+   * 换卡、画格子这些 React 的活不和动画抢时间，手机上吸附、飞过去不掉帧
+   */
   const [settled, setSettled] = useState<Camera>({ x: 0, y: 0, scale: 1 })
   /**
-   * 落定的位置：决定居中的是哪张、哪些卡画格子。拖动中不变，松手吸附时才换：拖过两张卡
-   * 相接的地方时不再同时换聚焦边框、底栏和格子，手机上不卡
+   * 当前卡（聚焦边框、底栏、能挖的那张）：拖到、点到、捏到哪张才换成哪张，飞到了才换；
+   * 缩到全图不变（全图的中心离哪张近跟他看的是哪张没关系）
    */
-  const [focusAt, setFocusAt] = useState<Camera>({ x: 0, y: 0, scale: 1 })
+  const [focusId, setFocusId] = useState<number | null>(null)
+  /** 正要飞过去的那张：起飞前先把它的格子画好，免得飞到了才从缩略图换成格子 */
+  const [warm, setWarm] = useState<number | null>(null)
+  /** 每次飞都换一个号；拖动、捏合、新的一次飞会让还没落地的那次作废 */
+  const flight = useRef(0)
   const landed = useRef(false)
   const cards = useMemo(() => game?.cards ?? [], [game])
 
   const camera = useCallback((): Camera => ({ x: x.get(), y: y.get(), scale: scale.get() }), [x, y, scale])
 
-  const flyTo = useCallback((target: Camera, instant = false) => {
-    // 一起飞就按目标算聚焦和细节：缩放不变时 scale 的动画不会有“结束”
-    setSettled(target)
-    setFocusAt(target)
+  const flyTo = useCallback((target: Camera, instant = false, cardId: number | null = null) => {
+    const id = ++flight.current
+    const land = () => {
+      if (flight.current !== id) return
+      setSettled(target)
+      if (cardId !== null) setFocusId(cardId)
+      setWarm(null)
+    }
     if (instant || reduced) {
       x.set(target.x)
       y.set(target.y)
       scale.set(target.scale)
+      land()
       return
     }
-    const options = { type: 'spring' as const, stiffness: 220, damping: 30, mass: 0.9 }
-    void animate(x, target.x, options)
-    void animate(y, target.y, options)
-    void animate(scale, target.scale, options)
+    if (cardId !== null) setWarm(cardId)
+    // 等一帧再飞：目标那张的格子在这一帧里先画好，飞的途中不再生成东西
+    requestAnimationFrame(() => {
+      if (flight.current !== id) return
+      // 停得差不多就算落地（弹簧最后那点尾巴不等），落地以后才换当前卡、画四周的格子
+      const move = { type: 'spring' as const, stiffness: 220, damping: 30, mass: 0.9, restDelta: 0.5, restSpeed: 10 }
+      const zoom = { ...move, restDelta: 0.002, restSpeed: 0.02 }
+      void Promise.all([animate(x, target.x, move), animate(y, target.y, move), animate(scale, target.scale, zoom)]).then(land)
+    })
   }, [reduced, x, y, scale])
 
   /** 把镜头移到一张卡，用这一级的缩放。 */
   const goToCard = useCallback((card: PublicCard, at: Level = level, instant = false) => {
     if (at === 0) {
+      // 全图：当前卡不变
       setLevel(0)
       flyTo(overviewCamera(view, cards), instant)
       return
     }
     setLevel(at)
-    flyTo(cameraAt(centerOf(card), scaleOf(at, view, cards), view), instant)
+    flyTo(cameraAt(centerOf(card), scaleOf(at, view, cards), view), instant, card.id)
   }, [cards, flyTo, level, view])
 
   // 量画面大小
@@ -109,25 +127,25 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
     if (target) goToCard(target, 2, true)
   }, [cards, game, goToCard, hongbao, view.width])
 
-  // 画面大小变了（拉开抽屉、转屏）：保持这一级，对准原来居中的卡。只差几十像素
-  // 时不动，免得下面那条信息换一行，镜头就跳一下
+  // 画面大小变了（网页窗口打开的途中、拉开抽屉、转屏）：按这一级的缩放重新对准当前卡。
+  // 小的变化也要对准：刚打开时窗口还在变大小，只按第一次量到的算，挖卡那一级会比该有的大
   const aimedAt = useRef<Viewport>({ width: 0, height: 0 })
   useEffect(() => {
     if (!landed.current || view.width === 0) return
     const before = aimedAt.current
-    if (Math.abs(before.width - view.width) < 48 && Math.abs(before.height - view.height) < 48) return
+    if (before.width === view.width && before.height === view.height) return
     aimedAt.current = view
-    const card = nearestCard(cards, camera(), { ...before, width: before.width || view.width, height: before.height || view.height })
+    const card = focused ?? nearestCard(cards, camera(), { ...before, width: before.width || view.width, height: before.height || view.height })
     if (card) goToCard(card, level, true)
     // 只在画面大小变化时
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view.width, view.height])
 
-  const focused = useMemo(() => nearestCard(cards, focusAt, view), [cards, focusAt, view])
-  // 哪些卡画格子：按落定的位置算，晚一拍（不挡着吸附的动画）；居中这张四周一圈先画好，
+  const focused = useMemo(() => cards.find(card => card.id === focusId) ?? null, [cards, focusId])
+  // 哪些卡画格子：按落定的位置和当前卡算，再晚一拍（让给动画）；当前卡四周一圈先画好，
   // 拖到邻卡上不用临时生成格子
-  const cullAt = useDeferredValue(focusAt)
-  const cullFocus = useMemo(() => nearestCard(cards, cullAt, view), [cards, cullAt, view])
+  const cullAt = useDeferredValue(settled)
+  const cullFocus = useDeferredValue(focused)
   useEffect(() => {
     onFocus(focused)
     // 落定以前镜头还在原点，算出来的不是他看的那张，别记
@@ -221,7 +239,6 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
     const now = camera()
     if (level === 0) {
       setSettled(now)
-      setFocusAt(now)
       return
     }
     const card = nearestCard(cards, now, view)
@@ -229,6 +246,7 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
   }, [camera, cards, goToCard, level, view])
 
   const stopCamera = () => {
+    flight.current += 1
     x.stop()
     y.stop()
     scale.stop()
@@ -273,9 +291,12 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
     // 不捕获指针：捕获了，松手那下的 click 会落在画布上，格子和缩放按钮就点不到了。
     // 不用它的 filterTaps：它在捕获阶段拦 click，iPhone 上把轻点也拦了；拖过以后的那次
     // click 由下面的 onClickCapture 拦；没过 threshold 的轻点不会触发 onDrag
-    drag: { from: () => [x.get(), y.get()], threshold: DRAG_SLOP, pointer: { capture: false } },
+    // 触屏上用触摸事件（pointer.touch）：它每次都按“现在屏幕上有哪几根手指”重新算；指针
+    // 事件是按下记一个、抬起删一个，漏收一次抬起（比如手指下面的格子正好换成了缩略图）
+    // 就留下一根“幽灵手指”，单指拖动变成了双指缩放。电脑上没有触摸，照常用指针事件
+    drag: { from: () => [x.get(), y.get()], threshold: DRAG_SLOP, pointer: { capture: false, touch: true } },
     // 缩放锁在全图和挖卡两级之间，不回弹；滚轮（含触控板捏合）还是下面自己处理
-    pinch: { from: () => [scale.get(), 0], scaleBounds: () => ({ min: scaleOf(0, view, cards), max: scaleOf(2, view, cards) }), rubberband: false, pinchOnWheel: false },
+    pinch: { from: () => [scale.get(), 0], scaleBounds: () => ({ min: scaleOf(0, view, cards), max: scaleOf(2, view, cards) }), rubberband: false, pinchOnWheel: false, pointer: { touch: true } },
   })
 
   // 拖动以后的那次 click 不算挖
@@ -325,7 +346,8 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
   const changeLevel = (by: 1 | -1, at?: { x: number; y: number }) => {
     const next = Math.min(2, Math.max(0, level + by)) as Level
     if (next === level) return
-    const card = (by > 0 && at ? cardNear(cards, camera(), at) : nearestCard(cards, camera(), view)) ?? cards[0]
+    // 滚轮放大朝指针下面那张；按钮和键盘就是当前卡
+    const card = (by > 0 && at ? cardNear(cards, camera(), at) : focused ?? nearestCard(cards, camera(), view)) ?? cards[0]
     if (card) goToCard(card, next)
   }
 
@@ -373,12 +395,13 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
       {cards.map(card => {
         const near = onScreen(card, cullAt, view, 200)
           || (!!cullFocus && Math.max(Math.abs(card.x - cullFocus.x), Math.abs(card.y - cullFocus.y)) <= 1)
+        const ready = card.id === warm
         return <CardView
           key={card.id}
           card={card}
           focused={card.id === focused?.id}
           diggable={level === 2 && card.id === focused?.id && !card.finished && !blocked && me?.status === 'playing'}
-          detail={detailScale && near}
+          detail={(detailScale && near) || ready}
           myUid={uid}
           peeks={me?.peeks ?? []}
           pending={pending}

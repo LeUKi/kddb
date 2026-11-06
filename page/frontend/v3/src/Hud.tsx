@@ -128,9 +128,9 @@ export function BottomBar({ card }: { card: PublicCard | null }) {
       <span>奖池还剩 <b><Tween value={game.left} format={money} /></b> {unit}</span>
       <span>{game.stats.players} 人在挖 · {game.stats.claimed} 人已领</span>
       <span>{deadlineWords(game.deadlineAt, game.wrapUpAt, now, game.over)}</span>
-      {eye.kind === 'treasure' ? <button type="button" className="eye-status is-treasure" onClick={() => setFocus({ cardId: eye.card.id, at: Date.now() })}><ItemIcon kind="eye" size={14} />末地宝藏开着</button>
-        : eye.kind === 'eye' ? <button type="button" className="eye-status" onClick={() => setFocus({ cardId: eye.card.id, at: Date.now() })}><ItemIcon kind="eye" size={14} />末影之眼在第 {eye.card.id} 张卡</button>
-          : eye.kind === 'coming' ? <span className="eye-status"><ItemIcon kind="eye" size={14} />再长 {eye.cards} 张卡出末影之眼</span> : null}
+      {eye.kind === 'treasure' ? <button type="button" className="eye-status is-treasure" onClick={() => setFocus({ cardId: eye.card.id, at: Date.now() })}><ItemIcon kind="eye" size={14} />末地宝藏开了，点这里过去</button>
+        : eye.kind === 'eye' ? <button type="button" className="eye-status" onClick={() => setFocus({ cardId: eye.card.id, at: Date.now() })}><ItemIcon kind="eye" size={14} />末影之眼藏在第 {eye.card.id} 张卡里</button>
+          : eye.kind === 'coming' ? <span className="eye-status"><ItemIcon kind="eye" size={14} />{eye.cards === 1 ? '下一张新卡里藏着末影之眼' : `往后第 ${eye.cards} 张新卡里藏着末影之眼`}</span> : null}
       <button type="button" className="feed-toggle" onClick={() => setFeedOpen(open => !open)} aria-expanded={feedOpen}>动态 {feedOpen ? '▾' : '▸'}</button>
     </div>
     {feedOpen ? <ol className="feed">
