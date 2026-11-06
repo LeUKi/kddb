@@ -50,6 +50,11 @@ describe("认人", () => {
     const forged = toBase64url(encoder.encode(JSON.stringify({ ...JSON.parse(new TextDecoder().decode(fromBase64url(b))), sub: "1" })));
     assert.equal(await verifyIdentity(`${h}.${forged}.${s}`, expect), null);
   });
+  it("判定器编号可以是逗号隔开的几个：其中一个就认，空的不算", async () => {
+    assert.equal((await verifyIdentity(await token(), { ...expect, judgeId: "other, test" }))?.sub, "10001");
+    assert.equal(await verifyIdentity(await token(), { ...expect, judgeId: "other," }), null);
+    assert.equal(await verifyIdentity(await token({ judge: "" }), { ...expect, judgeId: "test," }), null);
+  });
   it("nonce 是这里发的才认，两分钟后过期，换个红包不认", async () => {
     const nonce = await makeNonce("k", "hb1", NOW);
     assert.match(nonce, /^[A-Za-z0-9_.~-]{8,128}$/);

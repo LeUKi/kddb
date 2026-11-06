@@ -112,7 +112,8 @@ async function siteKeys(site, fetcher, now) {
  */
 
 /**
- * 验网页的令牌。不对就是 null（不说哪里不对，网页只要知道重新认人）。
+ * 验网页的令牌。不对就是 null（不说哪里不对，网页只要知道重新认人）。judgeId 可以是
+ * 逗号隔开的几个（Stage 上同一份代码可能由几个测试账号各发一份）。
  * @param {string} token
  * @param {{
  *   site: string, page: string, judgeId: string, minJudgeVersion: number,
@@ -138,7 +139,8 @@ export async function verifyIdentity(token, { site, page, judgeId, minJudgeVersi
     const audiences = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
     if (claims.iss !== site || !audiences.includes(page)) return null;
     if (!(claims.exp + 30 > seconds) || (claims.nbf !== undefined && claims.nbf - 30 > seconds)) return null;
-    if (claims.hongbao !== hongbao || claims.judge !== judgeId) return null;
+    const judges = judgeId.split(",").map((id) => id.trim()).filter(Boolean);
+    if (claims.hongbao !== hongbao || !judges.includes(claims.judge)) return null;
     if (!(Number(claims.judgeVersion) >= minJudgeVersion)) return null;
     if (!/^\d{1,15}$/.test(String(claims.sub))) return null;
     return claims;
