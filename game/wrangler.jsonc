@@ -43,9 +43,10 @@
       "vars": {
         "HB_ORIGIN": "https://staging.hb.lafi.sh",
         "PAGE_ORIGIN": "https://kddb-staging.lafi.sh",
-        // Stage 上测试账号发的“矿洞夺宝 v3 · Stage”（2026-11-06）：同一份代码，第一个账号
-        // 当天开红包的次数用完后，第二个账号又发了一份。逗号隔开，哪个都认
-        "JUDGE_ID": "f9cd36e6-66f4-47d9-9427-db1b06bae05b,4fc05cd8-0809-4cb8-b920-d4eeb2925bad",
+        // Stage 上测试账号发的“矿洞夺宝 v3 · Stage”（2026-11-06）：同一份代码，一个账号每天
+        // 只能开 3 个代码判定红包，所以几个测试账号各发了一份（第二批试玩又加了两份）。
+        // 逗号隔开，哪个都认
+        "JUDGE_ID": "f9cd36e6-66f4-47d9-9427-db1b06bae05b,4fc05cd8-0809-4cb8-b920-d4eeb2925bad,c5d7c883-667f-418f-9827-6218ef86e4b3,d1655e2f-f55e-43e6-9fb5-9b93e2491f96",
         "MIN_JUDGE_VERSION": "1",
         "CLAIM_KID": "k1"
       }
