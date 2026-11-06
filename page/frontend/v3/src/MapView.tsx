@@ -2,9 +2,12 @@ import { useAtomValue, useSetAtom } from 'jotai'
 import type { MotionStyle } from 'motion/react'
 import { animate, motion, useMotionValue, useReducedMotion } from 'motion/react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import type { Entrance } from './CardView'
 import { CardView } from './CardView'
 import type { Camera, Direction, Level, Viewport, WheelZoom } from './camera'
-import { cameraAt, cardNear, cardToward, centerOf, edgePointer, fullyOnScreen, nearestCard, nearestLevel, onScreen, overviewCamera, scaleOf, wheelZoom } from './camera'
+import { cameraAt, cardNear, cardToward, cellCenter, centerOf, edgeFacing, edgePointer, entryPoint, fullyOnScreen, nearestCard, nearestLevel, onScreen, overviewCamera, scaleOf, wheelZoom } from './camera'
+import type { Point } from './PearlFlight'
+import { LAND_MS, PearlFlight } from './PearlFlight'
 import { blockedAtom, dig, focusRequestAtom, freshAtom, gameAtom, hongbaoAtom, meAtom, newCardAtom, pendingAtom, settledAtom, uidAtom } from './state'
 import type { PublicCard } from './types'
 
@@ -46,7 +49,6 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
   const [level, setLevel] = useState<Level>(2)
   /** 镜头停下来（或拖动中每隔一会儿）时的位置：决定聚焦哪张、哪些卡画细节 */
   const [settled, setSettled] = useState<Camera>({ x: 0, y: 0, scale: 1 })
-  const [grown, setGrown] = useState<Set<number>>(new Set())
   const landed = useRef(false)
   const cards = useMemo(() => game?.cards ?? [], [game])
 
@@ -139,19 +141,43 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusRequest])
 
-  // 新长出来的卡（谁挖出来的都一样，镜头不动）：长出来的动画；没有整张在画面里时，
-  // 画面边上闪几下“NEW + 箭头”指着它，点一下过去；移过去了就不再提醒
+  // 新长出来的卡（谁挖出来的都一样，镜头不动）：珍珠那格在画面附近时“珍珠传送”飞过去，
+  // 新卡落地后格子从朝着旧卡的那条边翻出来；减少动画时直接出现。每张新卡算一次，
+  // 拖动地图不会让它变
+  const entranceKept = useRef<{ at: number; value: (Entrance & { cardId: number; flight: { from: Point; to: Point } | null }) | null } | null>(null)
+  if (newCard && entranceKept.current?.at !== newCard.at) {
+    const card = cards.find(item => item.id === newCard.cardId)
+    const source = cards.find(item => item.id === newCard.from.cardId)
+    const flies = !!card && !!source && !reduced && onScreen(source, settled, view, 120)
+    const edge = card && source ? edgeFacing(card, source) : null
+    entranceKept.current = {
+      at: newCard.at,
+      value: card && source && edge ? {
+        cardId: card.id,
+        edge,
+        land: flies ? LAND_MS : 0,
+        flight: flies ? { from: cellCenter(source, newCard.from.index), to: entryPoint(card, edge) } : null,
+      } : null,
+    }
+  }
+  const entrance = newCard ? entranceKept.current?.value ?? null : null
+
+  // 没有整张在画面里时，落地后画面边上闪几下“NEW + 箭头”指着它，点一下过去；
+  // 移过去了就不再提醒
   const [marker, setMarker] = useState<number | null>(null)
   useEffect(() => {
     if (!newCard) return
-    setGrown(value => new Set(value).add(newCard.cardId))
     const card = cards.find(item => item.id === newCard.cardId)
-    if (card && !fullyOnScreen(card, camera(), view)) setMarker(card.id)
+    const land = entranceKept.current?.value?.land ?? 0
+    const shown = window.setTimeout(() => setMarker(card && !fullyOnScreen(card, camera(), view) ? card.id : null), land)
     const timer = window.setTimeout(() => {
       setMarker(null)
       setNewCard(null)
-    }, 4000)
-    return () => window.clearTimeout(timer)
+    }, 4000 + land)
+    return () => {
+      window.clearTimeout(shown)
+      window.clearTimeout(timer)
+    }
     // 只在新卡出现时
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [newCard])
@@ -348,11 +374,12 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
           peeks={me?.peeks ?? []}
           pending={pending}
           fresh={fresh}
-          grown={grown.has(card.id)}
+          entrance={entrance?.cardId === card.id ? entrance : null}
           onDig={dig}
           onPick={pick}
         />
       })}
+      {entrance?.flight ? <PearlFlight key={newCard?.at} from={entrance.flight.from} to={entrance.flight.to} /> : null}
     </motion.div>
     <div className="map-fog" aria-hidden="true" />
     {pointer && markerCard ? <button type="button" className="new-marker" style={{ left: pointer.x, top: pointer.y }}

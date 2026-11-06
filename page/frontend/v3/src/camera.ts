@@ -195,3 +195,44 @@ export function wheelZoom(state: WheelZoom | null, event: { deltaMode: number; d
   if (now - next.stepAt < WHEEL_STEP_MS || (next.stepped && Math.abs(next.sum) < WHEEL_MORE_PX)) return { state: next, step: 0 }
   return { state: { ...next, stepAt: now, sum: 0, stepped: true }, step: next.sum < 0 ? 1 : -1 }
 }
+
+/** 一张卡上第 index 格的中心在世界里的位置（珍珠从这里飞出去）。 */
+export function cellCenter(card: Pick<PublicCard, 'x' | 'y' | 'size'>, index: number) {
+  const center = centerOf(card)
+  const side = cellPx(card.size)
+  const left = center.x - CARD_PX / 2 + CARD_BORDER + PAD
+  const top = center.y - CARD_PX / 2 + CARD_BORDER + PAD
+  const col = index % card.size
+  const row = Math.floor(index / card.size)
+  return { x: left + col * (side + GAP) + side / 2, y: top + row * (side + GAP) + side / 2 }
+}
+
+/** 新卡朝着旧卡的那条边（格子从这边开始翻出来）。 */
+export function edgeFacing(card: Pick<PublicCard, 'x' | 'y'>, from: Pick<PublicCard, 'x' | 'y'>): Direction {
+  const dx = from.x - card.x
+  const dy = from.y - card.y
+  if (Math.abs(dx) >= Math.abs(dy)) return dx < 0 ? 'left' : 'right'
+  return dy < 0 ? 'up' : 'down'
+}
+
+/** 入场时第 index 格晚多少毫秒翻出来：离那条边越远越晚，边的中间先出来（箭头形的一波）。 */
+export function entranceWave(size: number, index: number, edge: Direction, step = 45) {
+  const col = index % size
+  const row = Math.floor(index / size)
+  const middle = (size - 1) / 2
+  const horizontal = edge === 'left' || edge === 'right'
+  const along = edge === 'left' ? col : edge === 'right' ? size - 1 - col : edge === 'up' ? row : size - 1 - row
+  const across = Math.abs((horizontal ? row : col) - middle)
+  return Math.round((along + across * 0.35) * step)
+}
+
+/**
+ * 珍珠的落点：新卡朝着旧卡那条边往里一点（格子从这里开始翻出来）。挖卡那一级
+ * 邻卡的中心常在画面外，落在边上才看得见落地。
+ */
+export function entryPoint(card: Pick<PublicCard, 'x' | 'y'>, edge: Direction, inset = 60) {
+  const center = centerOf(card)
+  const [vx, vy] = VECTORS[edge]
+  const reach = CARD_PX / 2 - inset
+  return { x: center.x + vx * reach, y: center.y + vy * reach }
+}

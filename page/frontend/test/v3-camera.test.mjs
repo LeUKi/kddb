@@ -112,6 +112,28 @@ test('整张在画面里才不提醒 NEW：露出一部分也提醒', () => {
   assert.equal(camera.onScreen({ x: 0, y: 1 }, at, big), true)
 })
 
+test('珍珠传送：格子中心、新卡朝着旧卡的边、一波一波翻出来的先后', () => {
+  const card = { x: 0, y: 0, size: 5 }
+  const first = camera.cellCenter(card, 0)
+  const last = camera.cellCenter(card, 24)
+  assert.ok(Math.abs(first.x + last.x) < 1e-9 && Math.abs(first.y + last.y) < 1e-9) // 关于卡中心对称
+  assert.ok(Math.abs(camera.cellCenter(card, 12).x) < 1e-9) // 正中那格在中心
+  assert.equal(camera.edgeFacing({ x: 0, y: 1 }, { x: 0, y: 0 }), 'up')
+  assert.equal(camera.edgeFacing({ x: -1, y: 0 }, { x: 0, y: 0 }), 'right')
+  assert.equal(camera.edgeFacing({ x: 1, y: 1 }, { x: 0, y: 0 }), 'left') // 斜着一样远：先看左右
+  // 从上边进来：第一行正中最先，最后一行角上最晚
+  const waves = Array.from({ length: 25 }, (_, index) => camera.entranceWave(5, index, 'up'))
+  assert.equal(Math.min(...waves), waves[2])
+  assert.equal(waves[2], 0)
+  assert.equal(Math.max(...waves), waves[20])
+  assert.ok(waves[7] > waves[2] && waves[1] > waves[2])
+  // 落点在新卡朝着旧卡那条边往里一点：在卡里，比中心更靠近旧卡
+  const landing = camera.entryPoint({ x: 0, y: 1 }, 'up')
+  const center = camera.centerOf({ x: 0, y: 1 })
+  assert.equal(landing.x, center.x)
+  assert.ok(landing.y < center.y && landing.y > center.y - camera.CARD_PX / 2)
+})
+
 test('滚轮放大朝指针下面那张卡', () => {
   const at = camera.overviewCamera(wide, cards)
   const target = { x: -1, y: 1 }

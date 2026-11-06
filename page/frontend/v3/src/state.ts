@@ -20,7 +20,8 @@ export const pendingAtom = atom<Record<string, true>>({})
 /** 刚开出来的格子（自己的展示，别人的轻闪一下） */
 export const freshAtom = atom<Record<string, { mine: boolean; at: number; result?: DigResult }>>({})
 /** 新长出来的卡，镜头外时在屏幕边上指过去 */
-export const newCardAtom = atom<{ cardId: number; at: number } | null>(null)
+/** 刚长出来的卡，和挖出它的那颗珍珠在哪一格（入场动画从那里飞过去）。 */
+export const newCardAtom = atom<{ cardId: number; at: number; from: { cardId: number; index: number } } | null>(null)
 /** 请地图把镜头移到一张卡（动态、NEW 标记、自己的珍珠） */
 export const focusRequestAtom = atom<{ cardId: number; at: number; dig?: boolean } | null>(null)
 export const toastAtom = atom<{ text: string; tone: 'info' | 'good' | 'bad'; id: number } | null>(null)
@@ -130,7 +131,7 @@ function onLive(message: Live) {
     store.set(freshAtom, value => ({ ...value, [cell]: { mine: false, at: Date.now() } }))
   }
   // 新卡（谁挖出来的都一样）：地图上长出来，不在画面里就在边上提醒，镜头不动
-  if (message.newCard) store.set(newCardAtom, { cardId: message.newCard.id, at: Date.now() })
+  if (message.newCard) store.set(newCardAtom, { cardId: message.newCard.id, at: Date.now(), from: { cardId: message.feed.cardId, index: message.feed.index } })
   if (message.over && store.get(meAtom)?.status === 'playing') void claim(true)
 }
 

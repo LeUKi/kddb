@@ -31,7 +31,21 @@ body { overflow: hidden; overscroll-behavior: none; }
  * 只有旁边的区块显示，居中正在挖的这块不显示。--px 是屏幕上的 1px（随缩放还原）。
  */
 .map-block { position: absolute; display: grid; place-items: center; border-radius: 16px; transition: background-color .18s var(--ease-out), box-shadow .18s var(--ease-out); }
-.map-block.is-grown { animation: card-grow .7s var(--ease-out) both; }
+/* 新卡入场（珍珠传送落地以后，--land 是落地的时刻）：区块淡入，外框带一点回弹落定，
+   格子从朝着旧卡的那条边一波一波翻出来（--wave 是每格晚多少） */
+.map-block.is-grown { animation: block-in .3s var(--ease-out) var(--land, 0ms) both; }
+.map-block.is-grown .map-card { animation: frame-in .45s cubic-bezier(.34, 1.56, .64, 1) var(--land, 0ms) both; }
+.map-block.is-grown :is(.map-cell, .thumb-cell):not(.just-mine, .just-other) { animation: cell-in .38s var(--ease-out) calc(var(--land, 0ms) + var(--wave, 0ms)) both; }
+@keyframes block-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes frame-in { from { transform: scale(.86); } to { transform: none; } }
+@keyframes cell-in { from { opacity: 0; transform: perspective(240px) rotateX(-80deg) scale(.7); } to { opacity: 1; transform: none; } }
+
+/* 珍珠传送：飞的珍珠、紫色拖尾、落地的波纹和像素粒子 */
+.pearl-flight { position: absolute; left: 0; top: 0; pointer-events: none; }
+.pearl-flyer { position: absolute; display: grid; place-items: center; filter: drop-shadow(0 0 10px #b88cff) drop-shadow(0 4px 2px #0008); }
+.pearl-trail { position: absolute; background: #c4a3ff; border-radius: 2px; box-shadow: 0 0 8px #a77bff; }
+.pearl-ripple { position: absolute; border: 4px solid #b48cff; border-radius: 50%; box-shadow: 0 0 24px #9a6bff99, inset 0 0 24px #9a6bff66; }
+.pearl-spark { position: absolute; width: 8px; height: 8px; background: #d9c2ff; box-shadow: 0 0 6px #a77bff; }
 .map-view.level-0 .map-block { background: #ffffff0a; box-shadow: inset 0 0 0 calc(1px * var(--px, 1)) #ffffff26; cursor: pointer; }
 .map-view.level-1 .map-block, .map-view.level-2 .map-block:not(.is-focused) { cursor: pointer; }
 @media (hover: hover) {
@@ -42,7 +56,6 @@ body { overflow: hidden; overscroll-behavior: none; }
 .map-card { position: relative; display: grid; align-content: start; background: #211f20; border: 3px solid #67533e; border-radius: 6px; box-shadow: inset 0 0 0 2px #10151b, 0 3px 0 #31281f, 0 6px 0 #11151b, 0 18px 48px #060b1266; transition: border-color .35s var(--ease-out), box-shadow .35s var(--ease-out), filter .35s var(--ease-out); }
 .map-card.is-focused { border-color: var(--gold); box-shadow: inset 0 0 0 2px #10151b, 0 0 0 3px #e9b56b4d, 0 0 46px #e9b56b40, 0 18px 48px #060b1266; }
 .map-card.is-finished { filter: grayscale(.75) brightness(.55); }
-@keyframes card-grow { from { opacity: 0; transform: scale(.35); } to { opacity: 1; transform: none; } }
 .map-cell { position: relative; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; color: var(--ink); background: #19232d; border: 1px solid #8c89826b; border-bottom: 3px solid #303136; border-radius: 2px; }
 /* 地图上的卡外框一样大，格子跟着卡的大小走（练习里的小卡还是 44） */
 .map-card .map-cell, .map-card .thumb-cell { width: auto; height: auto; }
@@ -172,5 +185,5 @@ body { overflow: hidden; overscroll-behavior: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .map-block, .map-card, .map-block.is-grown, .map-cell.just-mine, .map-cell.just-other, .digging-pick, .cell-float, .new-marker, .toast, .sheen { animation: none !important; transition: none !important; }
+  .map-block, .map-card, .map-block.is-grown, .map-block.is-grown .map-card, .map-block.is-grown .map-cell, .map-block.is-grown .thumb-cell, .map-cell.just-mine, .map-cell.just-other, .digging-pick, .cell-float, .new-marker, .toast, .sheen { animation: none !important; transition: none !important; }
 }
