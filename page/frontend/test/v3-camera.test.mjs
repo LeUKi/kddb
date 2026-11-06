@@ -16,19 +16,20 @@ const phone = { width: 390, height: 600 }
 const wide = { width: 900, height: 700 }
 const cards = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 1 }]
 
-test('挖卡这一级画面放得下就是原大；放不下一张 7×7（加留白）才缩小；附近那级固定、更小；总览不比附近大', () => {
+test('挖卡这一级画面放得下就是原大；放不下一张卡（加留白）才缩小；附近那级固定、更小，画面小时放得下两块多；总览不比附近大', () => {
   assert.equal(camera.digScale(wide), 1)
   assert.equal(camera.digScale({ width: 2000, height: 2000 }), 1)
-  assert.ok(Math.abs(camera.digScale(phone) * camera.cardPx(7) - (390 - camera.MARGIN * 2)) < 1)
+  assert.ok(Math.abs(camera.digScale({ width: 300, height: 600 }) * camera.CARD_PX - (300 - camera.MARGIN * 2)) < 1)
   assert.equal(camera.midScale(wide), camera.MID_SCALE)
   assert.ok(camera.midScale(phone) < camera.digScale(phone))
+  assert.ok(camera.midScale(phone) * camera.SLOT_PX * 2.2 <= phone.width + 0.01)
   assert.ok(camera.overviewScale(phone, [{ x: 0, y: 0 }]) <= camera.midScale(phone))
   assert.ok(camera.overviewScale(phone, [{ x: -6, y: 0 }, { x: 6, y: 0 }]) < camera.midScale(phone))
 })
 
 test('区块一样大、间距一样：卡在区块正中，画面大小不改屏幕上的间距', () => {
   assert.equal(camera.BLOCK_PX + camera.BLOCK_GAP, camera.SLOT_PX)
-  for (const size of [5, 6, 7]) assert.ok(camera.cardPx(size) <= camera.BLOCK_PX)
+  assert.ok(camera.CARD_PX <= camera.BLOCK_PX)
   const big = { width: 1400, height: 1000 }
   const step = view => {
     const at = camera.cameraAt(camera.centerOf({ x: 0, y: 0 }), camera.digScale(view), view)
@@ -93,12 +94,13 @@ test('滚轮都是缩放：一下的第一个事件就换一级；同一下里�
   assert.equal(step(null, 0, 0).step, 0)
 })
 
-test('卡的边框算在宽度里：格子正好铺满内容区，不往右下溢出', () => {
+test('卡的外框都一样大，格子小的卡格子大；边框算在宽度里，格子正好铺满内容区', () => {
+  assert.equal(camera.cellPx(7), 44)
+  assert.ok(camera.cellPx(5) > camera.cellPx(6) && camera.cellPx(6) > camera.cellPx(7))
   for (const size of [5, 6, 7]) {
-    const content = camera.cardPx(size) - (camera.PAD + camera.CARD_BORDER) * 2
-    assert.equal(content, size * camera.CELL + (size - 1) * camera.GAP)
+    const content = camera.CARD_PX - (camera.PAD + camera.CARD_BORDER) * 2
+    assert.ok(Math.abs(content - (size * camera.cellPx(size) + (size - 1) * camera.GAP)) < 1e-9)
   }
-  assert.equal(camera.cardPx(7), 360)
 })
 
 test('滚轮放大朝指针下面那张卡', () => {

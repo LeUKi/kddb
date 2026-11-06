@@ -3,19 +3,22 @@
 import type { PublicCard } from './types'
 
 /**
- * 一格 44，格间 4，卡的内边距 11、边框 3（页面是 border-box，边框算在宽度里，
- * 不算进去格子会往右下溢出）：7×7 的卡 360 宽。每张卡放在一个 376 见方的区块正中，
- * 区块之间固定隔 24：格位 400。
+ * 卡的外框 5×5、6×6、7×7 都一样大（360，和 v2 一样“外框尺寸统一”），格子小的卡
+ * 格子大：7×7 一格 44，6×6 52，5×5 63.2。格间 4，内边距 11、边框 3（页面是
+ * border-box，边框算在宽度里，不算进去格子会往右下溢出）。每张卡放在区块正中，
+ * 区块四周比卡宽 16（392 见方），区块之间固定隔 16：格位 408，卡和卡隔 48。
  */
-export const CELL = 44
+export const CARD_PX = 360
 export const GAP = 4
 export const PAD = 11
 export const CARD_BORDER = 3
-export const SLOT_PX = 400
-export const BLOCK_GAP = 24
-export const BLOCK_PX = SLOT_PX - BLOCK_GAP
+export const BLOCK_PAD = 16
+export const BLOCK_GAP = 16
+export const BLOCK_PX = CARD_PX + BLOCK_PAD * 2
+export const SLOT_PX = BLOCK_PX + BLOCK_GAP
 
-export const cardPx = (size: number) => size * CELL + (size - 1) * GAP + (PAD + CARD_BORDER) * 2
+/** 一格多宽：外框减去边框、内边距和格间距，平分。 */
+export const cellPx = (size: number) => (CARD_PX - (PAD + CARD_BORDER) * 2 - (size - 1) * GAP) / size
 
 export interface Camera { x: number; y: number; scale: number }
 export interface Viewport { width: number; height: number }
@@ -25,20 +28,20 @@ export type Level = 0 | 1 | 2
 
 /** 挖卡这一级，卡和画面边之间至少留这么多。 */
 export const MARGIN = 16
-/** 附近这一级的缩放。 */
-export const MID_SCALE = 0.42
+/** 附近这一级的缩放（画面小时更小，至少放得下两块多）。 */
+export const MID_SCALE = 0.6
 
 /**
  * 挖卡这一级：画面放得下就是原大，区块之间的距离不随画面大小变；窄的那边
- * 放不下一张 7×7 的卡（加两边的留白）时才缩小。
+ * 放不下一张卡（加两边的留白）时才缩小。
  */
 export function digScale(view: Viewport) {
-  return Math.min(1, Math.max(0.5, (Math.min(view.width, view.height) - MARGIN * 2) / cardPx(7)))
+  return Math.min(1, Math.max(0.5, (Math.min(view.width, view.height) - MARGIN * 2) / CARD_PX))
 }
 
-/** 附近这一级：固定的缩放，画面大就多看到几块。 */
+/** 附近这一级：固定的缩放，画面大就多看到几块；画面小时缩到窄的那边放得下两块多。 */
 export function midScale(view: Viewport) {
-  return Math.min(MID_SCALE, digScale(view) * 0.8)
+  return Math.min(MID_SCALE, digScale(view) * 0.8, Math.min(view.width, view.height) / (SLOT_PX * 2.2))
 }
 
 /** 总览：所有卡都放下、四周留安全距离；卡少时不比附近那一级更大。 */
@@ -143,7 +146,7 @@ export function cardToward<T extends Pick<PublicCard, 'x' | 'y'>>(cards: T[], fr
 /** 这张卡在不在屏幕里（留一点边）。 */
 export function onScreen(card: Pick<PublicCard, 'x' | 'y'>, camera: Camera, view: Viewport, margin = 0) {
   const center = centerOf(card)
-  const half = (cardPx(7) / 2) * camera.scale
+  const half = (CARD_PX / 2) * camera.scale
   const sx = center.x * camera.scale + camera.x
   const sy = center.y * camera.scale + camera.y
   return sx + half > -margin && sx - half < view.width + margin && sy + half > -margin && sy - half < view.height + margin

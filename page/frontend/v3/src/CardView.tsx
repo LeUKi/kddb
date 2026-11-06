@@ -1,6 +1,6 @@
 import { memo } from 'react'
 import { ItemIcon } from '../../src/ItemIcon'
-import { BLOCK_PX, cardPx, CELL, GAP, PAD, SLOT_PX } from './camera'
+import { BLOCK_PX, CARD_PX, cellPx, GAP, PAD, SLOT_PX } from './camera'
 import type { DigResult, Peek, PublicCard } from './types'
 import { KIND_NAMES, money } from './types'
 
@@ -25,11 +25,11 @@ export interface CardProps {
 }
 
 /**
- * 一张卡：放在它的区块正中（区块中心在 x·400, y·400，376 见方）。点区块就是换到这张；
+ * 一张卡：外框都一样大，放在它的区块正中（区块中心在 x·408, y·408，392 见方）。点区块就是换到这张；
  * 能挖的那张只有格子能点。
  */
 export const CardView = memo(function CardView({ card, focused, diggable, detail, myUid, peeks, pending, fresh, grown, onDig, onPick }: CardProps) {
-  const px = cardPx(card.size)
+  const side = cellPx(card.size)
   const blockStyle = {
     left: card.x * SLOT_PX - BLOCK_PX / 2,
     top: card.y * SLOT_PX - BLOCK_PX / 2,
@@ -37,12 +37,14 @@ export const CardView = memo(function CardView({ card, focused, diggable, detail
     height: BLOCK_PX,
   }
   const style = {
-    width: px,
-    height: px,
+    width: CARD_PX,
+    height: CARD_PX,
     padding: PAD,
-    gridTemplateColumns: `repeat(${card.size}, ${CELL}px)`,
+    gridTemplateColumns: `repeat(${card.size}, ${side}px)`,
+    gridTemplateRows: `repeat(${card.size}, ${side}px)`,
     gap: GAP,
   }
+  const icon = Math.round(side * 0.6)
   const blockClass = `map-block${focused ? ' is-focused' : ''}${grown ? ' is-grown' : ''}`
   const className = `map-card${focused ? ' is-focused' : ''}${card.finished ? ' is-finished' : ''}${detail ? '' : ' is-thumb'}`
   const pick = diggable ? undefined : () => onPick(card.id)
@@ -64,7 +66,7 @@ export const CardView = memo(function CardView({ card, focused, diggable, detail
       if (cell) {
         const mine = cell.uid === myUid
         return <div key={index} className={`map-cell revealed kind-${cell.kind}${mine ? ' is-mine' : ''}${recent ? (recent.mine ? ' just-mine' : ' just-other') : ''}`} aria-label={`${name}：${KIND_NAMES[cell.kind]}，${cell.name} 挖的`}>
-          <ItemIcon kind={cell.kind} size={26} />
+          <ItemIcon kind={cell.kind} size={icon} />
           <span className="cell-who">{mine ? '我' : cell.name}</span>
           {recent?.mine && recent.result ? <span className={`cell-float${recent.result.amount < 0 ? ' is-bad' : ''}`}>{floatText(recent.result)}</span> : null}
         </div>
@@ -81,8 +83,8 @@ export const CardView = memo(function CardView({ card, focused, diggable, detail
         }}
         aria-label={`${name}${peek ? `，望远镜看到是${KIND_NAMES[peek.kind]}` : ''}，${diggable ? '点按挖开' : '放大以后才能挖'}`}
       >
-        {peek ? <ItemIcon kind={peek.kind} size={22} className="peek-icon" /> : null}
-        {busy ? <ItemIcon kind="pickaxe" size={24} className="digging-pick" /> : null}
+        {peek ? <ItemIcon kind={peek.kind} size={Math.round(icon * 0.85)} className="peek-icon" /> : null}
+        {busy ? <ItemIcon kind="pickaxe" size={Math.round(icon * 0.92)} className="digging-pick" /> : null}
       </button>
     })}
     </div>
