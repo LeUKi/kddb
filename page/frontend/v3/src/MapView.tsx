@@ -3,8 +3,8 @@ import type { MotionStyle } from 'motion/react'
 import { animate, motion, useMotionValue, useReducedMotion } from 'motion/react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { CardView } from './CardView'
-import type { Camera, Direction, Level, Viewport, WheelKind } from './camera'
-import { cameraAt, cardNear, cardToward, centerOf, edgeArrows, edgePointer, nearestCard, nearestLevel, onScreen, overviewCamera, scaleOf, wheelKind } from './camera'
+import type { Camera, Direction, Level, Viewport, WheelZoom } from './camera'
+import { cameraAt, cardNear, cardToward, centerOf, edgeArrows, edgePointer, nearestCard, nearestLevel, onScreen, overviewCamera, scaleOf, wheelZoom } from './camera'
 import { blockedAtom, dig, focusRequestAtom, freshAtom, gameAtom, hongbaoAtom, meAtom, newCardAtom, pendingAtom, settledAtom, uidAtom } from './state'
 import type { PublicCard } from './types'
 
@@ -244,51 +244,36 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
     }
   }
 
-  // —— 滚轮：鼠标滚轮一格一级（朝指针那张放大）；触控板双指滑动平移、捏合缩放 ——
-  // 一串事件（中间停不到 200ms）按第一个算是哪一种，不会一会儿平移一会儿缩放
+  // —— 滚轮：不按 ctrl 的都是缩放，一下换一级、放大时朝指针那张（鼠标和触控板分不清，
+  // 不猜）；按着 ctrl 的是触控板捏合，跟着手指连续缩放，停下吸到最近的一级 ——
   const wheelTimer = useRef<number | undefined>(undefined)
-  const wheelStep = useRef(0)
-  const wheelBurst = useRef<{ kind: WheelKind; last: number } | null>(null)
+  const wheelState = useRef<WheelZoom | null>(null)
   useEffect(() => {
     const element = box.current
     if (!element) return
     const onWheel = (event: WheelEvent) => {
       event.preventDefault()
-      const now = performance.now()
-      const kind = wheelKind(event as WheelEvent & { wheelDeltaY?: number })
-      let burst = wheelBurst.current
-      if (!burst || now - burst.last > 200 || (kind === 'pinch') !== (burst.kind === 'pinch')) burst = wheelBurst.current = { kind, last: now }
-      burst.last = now
       const rect = element.getBoundingClientRect()
       const at = { x: event.clientX - rect.left, y: event.clientY - rect.top }
-      if (burst.kind === 'mouse') {
-        if (event.deltaY === 0 || now - wheelStep.current < 260) return
-        wheelStep.current = now
-        changeLevel(event.deltaY < 0 ? 1 : -1, at)
+      if (!event.ctrlKey) {
+        const { state, step } = wheelZoom(wheelState.current, event, performance.now())
+        wheelState.current = state
+        if (step) changeLevel(step, at)
         return
       }
       x.stop()
       y.stop()
       scale.stop()
-      if (burst.kind === 'pinch') {
-        const current = camera()
-        const nextScale = Math.min(2, Math.max(0.04, current.scale * Math.exp(-event.deltaY * 0.01)))
-        const world = { x: (at.x - current.x) / current.scale, y: (at.y - current.y) / current.scale }
-        scale.set(nextScale)
-        x.set(at.x - world.x * nextScale)
-        y.set(at.y - world.y * nextScale)
-      } else {
-        x.set(x.get() - event.deltaX)
-        y.set(y.get() - event.deltaY)
-      }
-      const pinched = burst.kind === 'pinch'
+      const current = camera()
+      const nextScale = Math.min(2, Math.max(0.04, current.scale * Math.exp(-event.deltaY * 0.01)))
+      const world = { x: (at.x - current.x) / current.scale, y: (at.y - current.y) / current.scale }
+      scale.set(nextScale)
+      x.set(at.x - world.x * nextScale)
+      y.set(at.y - world.y * nextScale)
       window.clearTimeout(wheelTimer.current)
       wheelTimer.current = window.setTimeout(() => {
-        const nextLevel = nearestLevel(scale.get(), view, cards)
         const card = nearestCard(cards, camera(), view)
-        if (!card) return
-        if (pinched || nextLevel !== level) goToCard(card, nextLevel)
-        else snap()
+        if (card) goToCard(card, nearestLevel(scale.get(), view, cards))
       }, 180)
     }
     element.addEventListener('wheel', onWheel, { passive: false })

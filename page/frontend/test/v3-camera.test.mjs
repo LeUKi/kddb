@@ -73,16 +73,32 @@ test('NEW 指向：镜头外的卡在屏幕边上，箭头朝它', () => {
   assert.ok(pointer.angle > 90 && pointer.angle < 180) // 左下
 })
 
-test('滚轮：一串按第一个算；鼠标按行或 120 的倍数，触控板是小步，按住 ctrl 是捏合', () => {
-  const event = fields => ({ ctrlKey: false, deltaMode: 0, deltaX: 0, deltaY: 0, ...fields })
-  assert.equal(camera.wheelKind(event({ deltaMode: 1, deltaY: 3 })), 'mouse') // Firefox
-  assert.equal(camera.wheelKind(event({ deltaY: 100, wheelDeltaY: -120 })), 'mouse') // Chrome Windows
-  assert.equal(camera.wheelKind(event({ deltaY: 4, wheelDeltaY: -120 })), 'mouse') // Chrome、Safari macOS
-  assert.equal(camera.wheelKind(event({ deltaY: 3, wheelDeltaY: -9 })), 'pad')
-  assert.equal(camera.wheelKind(event({ deltaX: 2, deltaY: 6, wheelDeltaY: -18 })), 'pad')
-  assert.equal(camera.wheelKind(event({ ctrlKey: true, deltaY: 2 })), 'pinch')
-  assert.equal(camera.wheelKind(event({ deltaY: 100 })), 'mouse')
-  assert.equal(camera.wheelKind(event({ deltaY: 2.5 })), 'pad')
+test('滚轮都是缩放：一下的第一个事件就换一级；同一下里同方向再攒够、隔够了再换；停一下重新算', () => {
+  const step = (state, deltaY, now, deltaMode = 0) => camera.wheelZoom(state, { deltaMode, deltaY }, now)
+  let r = step(null, 4, 0) // macOS 慢慢滚一格只有几像素，也要动
+  assert.equal(r.step, -1)
+  r = step(r.state, 4, 100)
+  assert.equal(r.step, 0) // 同一下里，隔得太近
+  r = step(r.state, 30, 200)
+  assert.equal(r.step, 0)
+  r = step(r.state, 30, 300)
+  assert.equal(r.step, 0) // 隔够了，但同一下里还没攒够 80
+  r = step(r.state, 30, 400)
+  assert.equal(r.step, -1)
+  r = step(r.state, -10, 500)
+  assert.equal(r.step, 0) // 反方向：重新攒，也还没隔够
+  r = step(r.state, -3, 900) // 停过一下，是新的一下
+  assert.equal(r.step, 1)
+  assert.equal(step(null, -1, 0, 1).step, 1) // Firefox 按行滚
+  assert.equal(step(null, 0, 0).step, 0)
+})
+
+test('卡的边框算在宽度里：格子正好铺满内容区，不往右下溢出', () => {
+  for (const size of [5, 6, 7]) {
+    const content = camera.cardPx(size) - (camera.PAD + camera.CARD_BORDER) * 2
+    assert.equal(content, size * camera.CELL + (size - 1) * camera.GAP)
+  }
+  assert.equal(camera.cardPx(7), 360)
 })
 
 test('邻卡箭头：有邻卡的方向才有；看得见时在邻卡区块靠这边的边上，看不见时贴着画面边', () => {

@@ -3,17 +3,19 @@
 import type { PublicCard } from './types'
 
 /**
- * 一格 44，格间 4，卡边 14：7×7 的卡 360 宽。每张卡放在一个 376 见方的区块正中，
+ * 一格 44，格间 4，卡的内边距 11、边框 3（页面是 border-box，边框算在宽度里，
+ * 不算进去格子会往右下溢出）：7×7 的卡 360 宽。每张卡放在一个 376 见方的区块正中，
  * 区块之间固定隔 24：格位 400。
  */
 export const CELL = 44
 export const GAP = 4
-export const PAD = 14
+export const PAD = 11
+export const CARD_BORDER = 3
 export const SLOT_PX = 400
 export const BLOCK_GAP = 24
 export const BLOCK_PX = SLOT_PX - BLOCK_GAP
 
-export const cardPx = (size: number) => size * CELL + (size - 1) * GAP + PAD * 2
+export const cardPx = (size: number) => size * CELL + (size - 1) * GAP + (PAD + CARD_BORDER) * 2
 
 export interface Camera { x: number; y: number; scale: number }
 export interface Viewport { width: number; height: number }
@@ -186,18 +188,26 @@ export function edgeArrows<T extends Pick<PublicCard, 'x' | 'y'>>(cards: T[], fr
   return out
 }
 
-export type WheelKind = 'mouse' | 'pad' | 'pinch'
+/** 滚轮缩放：一下（中间停不到 200ms 的一串事件）的状态。 */
+export interface WheelZoom { last: number; stepAt: number; sum: number; stepped: boolean }
+export const WHEEL_IDLE_MS = 200
+export const WHEEL_STEP_MS = 260
+export const WHEEL_MORE_PX = 80
 
 /**
- * 一串滚轮事件是鼠标滚轮（一格换一级）、触控板双指滑动（平移）还是捏合（缩放）。
- * 只看一串的第一个：同一下滚动里一会儿算这个一会儿算那个，地图就又动又缩。
- * 鼠标：按行滚（Firefox）；或者旧的 wheelDeltaY 是 120 的整数倍（Chrome、Safari 一格 120，
- * 触控板是 deltaY 的 3 倍、很少正好 120 的倍数）；没有 wheelDeltaY 时看整数的大步。
+ * 滚轮换缩放级别。浏览器分不清鼠标滚轮和触控板双指滑动，所以不按设备分：
+ * 不按 ctrl 的滚轮都是缩放（触控板捏合是按着 ctrl 的滚轮，另算），平移靠拖动和箭头。
+ * 一下的第一个事件就换一级；同一下里同方向再攒够 80px、离上次换级过了 260ms，再换一级。
+ * 返回 1 放大、-1 缩小、0 不动。
  */
-export function wheelKind(event: { ctrlKey: boolean; deltaMode: number; deltaX: number; deltaY: number; wheelDeltaY?: number }): WheelKind {
-  if (event.ctrlKey) return 'pinch'
-  if (event.deltaMode !== 0) return 'mouse'
-  if (typeof event.wheelDeltaY === 'number' && event.wheelDeltaY !== 0)
-    return event.deltaX === 0 && event.wheelDeltaY % 120 === 0 ? 'mouse' : 'pad'
-  return event.deltaX === 0 && Math.abs(event.deltaY) >= 40 && Number.isInteger(event.deltaY) ? 'mouse' : 'pad'
+export function wheelZoom(state: WheelZoom | null, event: { deltaMode: number; deltaY: number }, now: number): { state: WheelZoom; step: 1 | -1 | 0 } {
+  const unit = event.deltaMode === 1 ? 40 : event.deltaMode === 2 ? 800 : 1
+  const px = event.deltaY * unit
+  const fresh = !state || now - state.last > WHEEL_IDLE_MS
+  const next: WheelZoom = fresh ? { last: now, stepAt: state?.stepAt ?? -Infinity, sum: 0, stepped: false } : { ...state, last: now }
+  if (px === 0) return { state: next, step: 0 }
+  if (Math.sign(px) !== Math.sign(next.sum)) next.sum = 0
+  next.sum += px
+  if (now - next.stepAt < WHEEL_STEP_MS || (next.stepped && Math.abs(next.sum) < WHEEL_MORE_PX)) return { state: next, step: 0 }
+  return { state: { ...next, stepAt: now, sum: 0, stepped: true }, step: next.sum < 0 ? 1 : -1 }
 }
