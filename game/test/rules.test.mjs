@@ -29,11 +29,12 @@ describe("规则和金额", () => {
   it("参数按判定器的写法读，没填、乱填用默认，超出的收住", () => {
     assert.deepEqual(rulesOf({}), {
       difficulty: "hard", boardSpec: "random", compositionVariation: "slight",
-      smallReward: 10, bigMultiplier: 5, totemBonus: 3, tntPercent: 25, initialChances: 7, appleCap: 0,
+      smallReward: 10, bigMultiplier: 5, totemBonus: 3, tntPercent: 25, initialChances: 20, appleCap: 0,
     });
-    const odd = rulesOf({ difficulty: "x", initialChances: 99, tntPercent: 300, appleCap: 50 });
+    const odd = rulesOf({ difficulty: "x", initialChances: 150, tntPercent: 300, appleCap: 50 });
     assert.equal(odd.difficulty, "hard");
-    assert.equal(odd.initialChances, 20);
+    assert.equal(odd.initialChances, 99);
+    assert.equal(rulesOf({ initialChances: 99 }).initialChances, 99);
     assert.equal(odd.tntPercent, 100);
     assert.equal(odd.appleCap, 50);
   });
@@ -51,7 +52,17 @@ describe("生成卡", () => {
     assert.deepEqual(game().cards[1].deck, game().cards[1].deck);
     assert.notDeepEqual(game().cards[1].deck, game({ seed: "seed-b" }).cards[1].deck);
   });
-  it("格子数对得上，每张卡一颗珍珠，TNT 按难度", () => {
+  it("珍珠：7×7 两颗，6×6 一到两颗（两种都会有），5×5 一颗", () => {
+    const pearls = (boardSpec, seed) => game({ seed, params: { boardSpec } }).cards[1].deck.filter((kind) => kind === "pearl").length;
+    const seeds = Array.from({ length: 24 }, (_, index) => `pearl-${index}`);
+    for (const seed of seeds) assert.equal(pearls("7", seed), 2);
+    for (const seed of seeds) assert.equal(pearls("5", seed), 1);
+    const six = new Set(seeds.map((seed) => pearls("6", seed)));
+    assert.deepEqual([...six].sort(), [1, 2]);
+    const card = game({ params: { boardSpec: "7" } }).cards[1];
+    assert.equal(card.deck.length, 49);
+  });
+  it("格子数对得上，5×5 一颗珍珠，TNT 按难度", () => {
     for (const [difficulty, tnt] of [["easy", 3], ["hard", 4], ["hell", 8]]) {
       const card = game({ params: { difficulty, compositionVariation: "fixed" } }).cards[1];
       assert.equal(card.deck.length, 25);
@@ -100,7 +111,7 @@ describe("挖", () => {
     const second = dig(g, p, { cardId: 1, index: 1, now: later() });
     assert.equal(second.ok && second.result.amount, 50);
     assert.equal(p.points, 60);
-    assert.equal(p.chances, 5);
+    assert.equal(p.chances, 18); // 默认 20 次
     assert.equal(g.used, 60);
     assert.equal(budgetLeft(g), 9940);
     const card = publicCard(g.cards[1]);
@@ -142,7 +153,7 @@ describe("挖", () => {
     stack(g, 1, { 0: "totem", 1: "shield", 2: "shield" });
     const p = newPlayer(g, 10001, "小明");
     dig(g, p, { cardId: 1, index: 0, now: later() });
-    assert.equal(p.chances, 9);
+    assert.equal(p.chances, 22); // 20 - 1 + 3
     dig(g, p, { cardId: 1, index: 1, now: later() });
     const twice = dig(g, p, { cardId: 1, index: 2, now: later() });
     assert.equal(twice.ok && twice.result.amount, 10);
@@ -199,7 +210,7 @@ describe("挖", () => {
       const out = dig(g, p, { cardId, index, now: later() });
       assert.deepEqual(out, { ok: false, message });
     }
-    assert.equal(p.chances, 6);
+    assert.equal(p.chances, 19);
     g.cards[1].finished = true;
     assert.deepEqual(dig(g, p, { cardId: 1, index: 3, now: later() }), { ok: false, message: "这张卡已经挖完了" });
   });

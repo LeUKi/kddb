@@ -72,7 +72,7 @@ export const FEED_LIMIT = 30;
 const COMPOSITIONS = /** @type {const} */ ({
   5: { emerald: 11, diamond: 3, apple: 1, totem: 2, tnt: 4, pearl: 1, shield: 2, spyglass: 1 },
   6: { emerald: 14, diamond: 4, apple: 2, totem: 3, tnt: 6, pearl: 1, shield: 3, spyglass: 3 },
-  7: { emerald: 20, diamond: 6, apple: 2, totem: 4, tnt: 8, pearl: 1, shield: 4, spyglass: 4 },
+  7: { emerald: 20, diamond: 6, apple: 2, totem: 4, tnt: 8, pearl: 2, shield: 4, spyglass: 4 },
 });
 const TNT_COUNTS = /** @type {const} */ ({
   easy: { 5: 3, 6: 4, 7: 6 },
@@ -109,7 +109,7 @@ export function rulesOf(/** @type {Record<string, unknown>} */ params) {
     bigMultiplier: 5,
     totemBonus: 3,
     tntPercent: Math.min(100, integer(params.tntPercent, 25)),
-    initialChances: Math.min(20, integer(params.initialChances, 7)),
+    initialChances: Math.min(99, integer(params.initialChances, 20)),
     appleCap: params.appleCap == null ? 0 : integer(params.appleCap, 0),
   });
 }
@@ -187,6 +187,8 @@ export function newCard(/** @type {Game} */ game, /** @type {number} */ id, /** 
   const composition = { ...COMPOSITIONS[size], tnt: TNT_COUNTS[rules.difficulty][size] };
   if (rules.compositionVariation === "slight")
     for (const kind of /** @type {const} */ (["diamond", "totem", "tnt", "shield"])) composition[kind] += int(-1, 1);
+  // 珍珠：5×5 一颗，6×6 随机一到两颗，7×7 两颗（地图会分叉，人少也能长出几张卡）
+  if (size === 6) composition.pearl = int(1, 2);
   composition.emerald = size * size - KINDS.filter((kind) => kind !== "emerald")
     .reduce((sum, kind) => sum + composition[kind], 0);
   return /** @type {Card} */ ({
