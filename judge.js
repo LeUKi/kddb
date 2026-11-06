@@ -81,21 +81,6 @@ export const hongbao = {
   note: "[打开矿洞夺宝，点格子开始挖宝](#附带网页)\n\n矿洞卡铺成一张地图，大家一起挖，挖到末影珍珠会在旁边长出一张新卡，旧卡挖完以前一直能挖。每挖一格用 1 次机会，双铁镐加 3 次；挖到的奖励先记在矿洞里，点「见好就收」才领到红包里，机会用完也会自动领取。截止前要领取：截止前 2 分钟停止挖掘，开着网页的人会自动领取，没领的奖励作废。难度和奖励规则见网页「怎么玩」，TNT 只扣还没领的奖励。",
 };
 
-/** @typedef {'easy'|'hard'|'hell'} Difficulty */
-
-/**
- * 至少能完整发出一个钻石（小奖的 5 倍）。
- * 用除法检查，避免大金额乘 5 超出安全整数。
- * @param {import("./judge").Params} values
- * @param {{total:number}} pool
- * @returns {import("./judge").ParamProblem[]}
- */
-export function check(values, pool) {
-  return Number(values.smallReward ?? 10) > Math.floor(pool.total / 5)
-    ? [{ key: "smallReward", message: "总奖池至少需要小奖金额的 5 倍，才能容纳一份钻石奖励" }]
-    : [];
-}
-
 /**
  * 游戏站签凭证用的公钥，按钥匙编号查。私钥只在游戏站 Worker 的 secret 里。
  * 换钥匙：加一把新的、发新版本，旧的留到用它签的红包都结束。
