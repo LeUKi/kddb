@@ -23,17 +23,17 @@ export interface Viewport { width: number; height: number }
 /** 三级缩放：0 总览，1 附近，2 挖卡。 */
 export type Level = 0 | 1 | 2
 
-/** 挖卡这一级，卡和画面边之间给邻卡箭头留的地方。 */
-export const EDGE_ROOM = 30
+/** 挖卡这一级，卡和画面边之间至少留这么多。 */
+export const MARGIN = 16
 /** 附近这一级的缩放。 */
 export const MID_SCALE = 0.42
 
 /**
  * 挖卡这一级：画面放得下就是原大，区块之间的距离不随画面大小变；窄的那边
- * 放不下一张 7×7 的卡和两边的箭头时才缩小。
+ * 放不下一张 7×7 的卡（加两边的留白）时才缩小。
  */
 export function digScale(view: Viewport) {
-  return Math.min(1, Math.max(0.5, (Math.min(view.width, view.height) - EDGE_ROOM * 2) / cardPx(7)))
+  return Math.min(1, Math.max(0.5, (Math.min(view.width, view.height) - MARGIN * 2) / cardPx(7)))
 }
 
 /** 附近这一级：固定的缩放，画面大就多看到几块。 */
@@ -158,34 +158,6 @@ export function edgePointer(card: Pick<PublicCard, 'x' | 'y'>, camera: Camera, v
   const halfH = view.height / 2 - inset
   const k = Math.min(halfW / Math.max(Math.abs(sx), 1e-6), halfH / Math.max(Math.abs(sy), 1e-6), 1)
   return { x: view.width / 2 + sx * k, y: view.height / 2 + sy * k, angle: (Math.atan2(sy, sx) * 180) / Math.PI }
-}
-
-/** 邻卡箭头：扁的长条，屏幕上的大小。 */
-export const ARROW = { long: 88, thick: 22, inset: 4 }
-
-export interface EdgeArrow<T> { direction: Direction; card: T; x: number; y: number }
-
-/**
- * 挖卡那一级，居中这张卡四个方向上的邻卡各一个箭头，放在邻卡区块靠这边的边上；
- * 邻卡在画面外时贴着画面边（top 留给上面的提示条）。返回世界坐标，和地图一起动。
- */
-export function edgeArrows<T extends Pick<PublicCard, 'x' | 'y'>>(cards: T[], from: Pick<PublicCard, 'x' | 'y'>, camera: Camera, view: Viewport, top = 0): EdgeArrow<T>[] {
-  const out: EdgeArrow<T>[] = []
-  for (const direction of ['up', 'right', 'down', 'left'] as const) {
-    const card = cardToward(cards, from, direction)
-    if (!card) continue
-    const [vx, vy] = VECTORS[direction]
-    const center = centerOf(card)
-    const inward = BLOCK_PX / 2 - (ARROW.thick / 2 + ARROW.inset) / camera.scale
-    const sx = (center.x - vx * inward) * camera.scale + camera.x
-    const sy = (center.y - vy * inward) * camera.scale + camera.y
-    const halfW = (vx !== 0 ? ARROW.thick : ARROW.long) / 2 + ARROW.inset
-    const halfH = (vy !== 0 ? ARROW.thick : ARROW.long) / 2 + ARROW.inset
-    const x = Math.min(Math.max(sx, halfW), view.width - halfW)
-    const y = Math.min(Math.max(sy, halfH + top), view.height - halfH)
-    out.push({ direction, card, x: (x - camera.x) / camera.scale, y: (y - camera.y) / camera.scale })
-  }
-  return out
 }
 
 /** 滚轮缩放：一下（中间停不到 200ms 的一串事件）的状态。 */

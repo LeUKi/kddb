@@ -4,12 +4,11 @@ import { animate, motion, useMotionValue, useReducedMotion } from 'motion/react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { CardView } from './CardView'
 import type { Camera, Direction, Level, Viewport, WheelZoom } from './camera'
-import { cameraAt, cardNear, cardToward, centerOf, edgeArrows, edgePointer, nearestCard, nearestLevel, onScreen, overviewCamera, scaleOf, wheelZoom } from './camera'
+import { cameraAt, cardNear, cardToward, centerOf, edgePointer, nearestCard, nearestLevel, onScreen, overviewCamera, scaleOf, wheelZoom } from './camera'
 import { blockedAtom, dig, focusRequestAtom, freshAtom, gameAtom, hongbaoAtom, meAtom, newCardAtom, pendingAtom, settledAtom, uidAtom } from './state'
 import type { PublicCard } from './types'
 
 const DRAG_SLOP = 6
-const DIRECTION_NAMES: Record<Direction, string> = { up: '上面', right: '右边', down: '下面', left: '左边' }
 const lastSeenKey = (hongbao: string) => `kddb:v3:last:${hongbao}`
 
 function readLastSeen(hongbao: string) {
@@ -22,8 +21,8 @@ function readLastSeen(hongbao: string) {
 
 /**
  * 地图（docs/V3_MAP.md §6）：拖动平移、松手吸附到最近的卡、三级缩放（捏合、滚轮、
- * 按钮、+/-）、方向键和邻卡上的箭头、四周的迷雾、居中的卡边框亮。镜头只改一个
- * transform；挖卡那一级才能挖，点别的区块就换过去。
+ * 按钮、+/-）、方向键、四周的迷雾、居中的卡边框亮。镜头只改一个 transform；
+ * 挖卡那一级才能挖，点别的区块就换过去；全图那一级不能拖。
  */
 export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => void }) {
   const game = useAtomValue(gameAtom)
@@ -124,6 +123,13 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
       }
   }, [focused, hongbao, onFocus])
 
+  // 全图那一级不能拖：长出新卡时重新放下所有卡
+  useEffect(() => {
+    if (landed.current && level === 0 && view.width > 0) flyTo(overviewCamera(view, cards))
+    // 只在卡的数量变化时
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cards.length])
+
   // 别处请求把镜头移过去（动态、NEW 标记、自己的珍珠）
   useEffect(() => {
     if (!focusRequest) return
@@ -207,6 +213,8 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
       g.dragging = true
       box.current?.setPointerCapture(event.pointerId)
     }
+    // 全图那一级不能拖：只记下拖过（松手那下不算点区块）
+    if (level === 0) return
     x.set(g.camera.x + dx)
     y.set(g.camera.y + dy)
     const now = performance.now()
@@ -319,7 +327,6 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
     : me?.status === 'claimed' ? '已经领取，凭证还没交上：点上面的「再交一次」'
       : blocked
   const detailScale = settled.scale >= 0.4
-  const arrows = level === 2 && focused ? edgeArrows(cards, focused, settled, view, banner ? 44 : 0) : []
   const markerCard = marker === null ? null : cards.find(card => card.id === marker) ?? null
   const pointer = markerCard ? edgePointer(markerCard, settled, view) : null
 
@@ -347,14 +354,6 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
       })}
     </motion.div>
     <div className="map-fog" aria-hidden="true" />
-    {/* 邻卡上的箭头：和地图一起动，在迷雾上面；大小按落定的缩放还原成屏幕上的大小 */}
-    <motion.div className="map-overlay" style={{ x, y, scale, transformOrigin: '0 0' }}>
-      {arrows.map(arrow => <button key={`${focused?.id}:${arrow.direction}`} type="button" className={`edge-arrow to-${arrow.direction}`}
-        style={{ left: arrow.x, top: arrow.y, transform: `translate(-50%, -50%) scale(${1 / settled.scale})` }}
-        onClick={() => goToCard(arrow.card, 2)} aria-label={`换到${DIRECTION_NAMES[arrow.direction]}的第 ${arrow.card.id} 张卡`}>
-        <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4.5 2.5 8 6l-3.5 3.5" /></svg>
-      </button>)}
-    </motion.div>
     {pointer && markerCard ? <button type="button" className="new-marker" style={{ left: pointer.x, top: pointer.y }}
       onClick={() => { goToCard(markerCard, level === 0 ? 1 : level); setMarker(null) }} aria-label="新长出的卡，点一下移过去">
       <span className="new-arrow" style={{ transform: `rotate(${pointer.angle}deg)` }}>➜</span>

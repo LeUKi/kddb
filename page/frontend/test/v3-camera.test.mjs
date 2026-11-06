@@ -16,10 +16,10 @@ const phone = { width: 390, height: 600 }
 const wide = { width: 900, height: 700 }
 const cards = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 1 }]
 
-test('挖卡这一级画面放得下就是原大；放不下一张 7×7 和两边的箭头才缩小；附近那级固定、更小；总览不比附近大', () => {
+test('挖卡这一级画面放得下就是原大；放不下一张 7×7（加留白）才缩小；附近那级固定、更小；总览不比附近大', () => {
   assert.equal(camera.digScale(wide), 1)
   assert.equal(camera.digScale({ width: 2000, height: 2000 }), 1)
-  assert.ok(Math.abs(camera.digScale(phone) * camera.cardPx(7) - (390 - camera.EDGE_ROOM * 2)) < 1)
+  assert.ok(Math.abs(camera.digScale(phone) * camera.cardPx(7) - (390 - camera.MARGIN * 2)) < 1)
   assert.equal(camera.midScale(wide), camera.MID_SCALE)
   assert.ok(camera.midScale(phone) < camera.digScale(phone))
   assert.ok(camera.overviewScale(phone, [{ x: 0, y: 0 }]) <= camera.midScale(phone))
@@ -99,23 +99,6 @@ test('卡的边框算在宽度里：格子正好铺满内容区，不往右下�
     assert.equal(content, size * camera.CELL + (size - 1) * camera.GAP)
   }
   assert.equal(camera.cardPx(7), 360)
-})
-
-test('邻卡箭头：有邻卡的方向才有；看得见时在邻卡区块靠这边的边上，看不见时贴着画面边', () => {
-  const big = { width: 1400, height: 1000 }
-  const at = camera.cameraAt(camera.centerOf({ x: 0, y: 0 }), camera.digScale(big), big)
-  const arrows = camera.edgeArrows(cards, { x: 0, y: 0 }, at, big)
-  assert.deepEqual(arrows.map(arrow => arrow.direction).sort(), ['down', 'left', 'right'])
-  const right = arrows.find(arrow => arrow.direction === 'right')
-  const half = camera.BLOCK_PX / 2
-  assert.ok(right.x > camera.SLOT_PX - half && right.x < camera.SLOT_PX - half + 30, String(right.x))
-  assert.equal(right.y, 0)
-  const near = camera.cameraAt(camera.centerOf({ x: 0, y: 0 }), camera.digScale(phone), phone)
-  for (const arrow of camera.edgeArrows(cards, { x: 0, y: 0 }, near, phone, 44)) {
-    const sx = arrow.x * near.scale + near.x
-    const sy = arrow.y * near.scale + near.y
-    assert.ok(sx > 0 && sx < phone.width && sy >= 44 && sy < phone.height, `${arrow.direction} ${sx} ${sy}`)
-  }
 })
 
 test('滚轮放大朝指针下面那张卡', () => {

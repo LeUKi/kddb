@@ -43,7 +43,7 @@ export const CardView = memo(function CardView({ card, focused, diggable, detail
     gridTemplateColumns: `repeat(${card.size}, ${CELL}px)`,
     gap: GAP,
   }
-  const blockClass = `map-block${focused ? ' is-focused' : ''}${grown ? ' is-grown' : ''}${diggable ? '' : ' is-pickable'}`
+  const blockClass = `map-block${focused ? ' is-focused' : ''}${grown ? ' is-grown' : ''}`
   const className = `map-card${focused ? ' is-focused' : ''}${card.finished ? ' is-finished' : ''}${detail ? '' : ' is-thumb'}`
   const pick = diggable ? undefined : () => onPick(card.id)
   if (!detail)
