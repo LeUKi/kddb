@@ -9,91 +9,55 @@ export const meta = {
   page: "https://hbweb-kddb.lafi.sh/v3/",
 };
 
-/** @type {import("./judge").ParamDeclaration[]} */
+/**
+ * v3 的参数（docs/V3_MAP.md §5，2026-11-06 用户定）：只留发红包的人心里有数的几样。
+ * 绿宝石值多少按奖池、预计人数和每人机会算；TNT 扣多少跟着难度；卡的规格每张随机、
+ * 配比小幅浮动、金苹果一次最多加 10 颗绿宝石，都不用填。
+ * @type {import("./judge").ParamDeclaration[]}
+ */
 export const params = [
   {
-    key: "difficulty",
-    label: "游戏难度",
-    hint: "选择难度会填入初始机会、TNT扣除和道具配比；之后仍可手动调整",
-    type: "choice",
-    options: [
-      {
-        value: "easy",
-        label: "简单",
-        hint: "30次机会、TNT扣15%、固定配比；TNT数按5×5/6×6/7×7为3/4/6",
-        set: { initialChances: 30, tntPercent: 15, compositionVariation: "fixed" },
-      },
-      {
-        value: "hard",
-        label: "困难",
-        hint: "20次机会、TNT扣25%、小幅浮动；TNT数按5×5/6×6/7×7为4/6/8",
-        set: { initialChances: 20, tntPercent: 25, compositionVariation: "slight" },
-      },
-      {
-        value: "hell",
-        label: "地狱",
-        hint: "10次机会、TNT扣75%、小幅浮动；TNT数按5×5/6×6/7×7为8/12/17",
-        set: { initialChances: 10, tntPercent: 75, compositionVariation: "slight" },
-      },
-    ],
-    default: "hard",
-  },
-  {
-    key: "boardSpec",
-    label: "卡片规格",
-    hint: "每卡随机为 5×5、6×6、7×7 等概率抽一种；卡片外框尺寸统一",
-    type: "choice",
-    options: [
-      { value: "5", label: "5×5" },
-      { value: "6", label: "6×6" },
-      { value: "7", label: "7×7" },
-      { value: "random", label: "每卡随机" },
-    ],
-    default: "random",
-  },
-  {
-    key: "smallReward",
-    label: "绿宝石奖励",
-    hint: "钻石奖励为此金额的 5 倍；金额越大奖池消耗越快",
-    type: "money",
-    default: 10,
+    key: "players",
+    label: "预计人数",
+    hint: "大概多少人来挖。每颗绿宝石值多少按奖池、人数和每人机会算出来，大约八成奖池能发出去；钻石是绿宝石的 5 倍",
+    type: "integer",
+    default: 20,
     min: 1,
-  },
-  {
-    key: "appleCap",
-    label: "金苹果上限",
-    hint: "金苹果一次最多加这么多（翻倍或零余额时的小奖都算）；不填为不限制",
-    type: "money",
-    required: false,
+    max: 2000,
   },
   {
     key: "initialChances",
-    label: "初始机会",
-    hint: "选难度时自动填入，之后可改为1–99次；双铁镐仍额外增加3次",
+    label: "每人机会",
+    hint: "每人开局能挖几格；挖到双铁镐另加 3 次",
     type: "integer",
     default: 20,
     min: 1,
     max: 99,
   },
   {
-    key: "tntPercent",
-    label: "TNT 扣除比例（%）",
-    hint: "选难度时自动填入，之后可改为1–100%；TNT格数由难度决定",
-    type: "integer",
-    default: 25,
-    min: 1,
-    max: 100,
-  },
-  {
-    key: "compositionVariation",
-    label: "道具配比",
-    hint: "选难度时自动填入，之后可改；浮动仅调整钻石、双铁镐、TNT、盾牌各±1",
+    key: "level",
+    label: "难度",
+    hint: "TNT 有多少、踩中扣掉多少还没领的奖励",
     type: "choice",
     options: [
-      { value: "fixed", label: "固定" },
-      { value: "slight", label: "小幅浮动" },
+      { value: "easy", label: "简单", hint: "TNT 少，踩中扣 15%" },
+      { value: "normal", label: "普通", hint: "TNT 中等，踩中扣 25%" },
+      { value: "tough", label: "困难", hint: "TNT 多，踩中扣 50%" },
     ],
-    default: "slight",
+    default: "normal",
+  },
+  {
+    key: "interval",
+    label: "挖掘间隔",
+    hint: "每人两次挖掘至少隔多久。间隔长，一局玩得久，大家更容易在地图上碰面",
+    type: "choice",
+    options: [
+      { value: "1", label: "1 秒" },
+      { value: "3", label: "3 秒" },
+      { value: "10", label: "10 秒" },
+      { value: "30", label: "30 秒" },
+    ],
+    default: "1",
   },
   {
     key: "eyeEvery",

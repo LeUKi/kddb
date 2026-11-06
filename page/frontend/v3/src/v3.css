@@ -11,6 +11,13 @@ body { overflow: hidden; overscroll-behavior: none; }
 .earned small { color: var(--muted); font-size: 13px; font-weight: 400; }
 .chances { display: flex; align-items: center; gap: 6px; padding: 6px 10px; background: #242d34; border: 1px solid #56636b; border-radius: 8px; }
 .chances strong { font-size: 20px; font-variant-numeric: tabular-nums; }
+/* 挖掘间隔拉长时（3 秒以上）：机会旁边倒数几秒，下面一条走完就能挖；地图上的格子暗一些 */
+.chances { position: relative; overflow: hidden; }
+.cooling-text { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cooling-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--gold); transform-origin: left center; transition: transform .2s linear; }
+.map-view.is-cooling .map-cell.covered:enabled { filter: brightness(.72) saturate(.7); cursor: progress; }
+.map-view.is-cooling .map-cell.covered:enabled:hover { border-color: inherit; filter: brightness(.8) saturate(.7); }
+.rules-money { margin: 0; color: var(--ink); font-size: 14px; }
 .has-shield { margin-left: 2px; }
 .claim { margin-left: auto; }
 .claim-button { padding: 9px 16px; color: #1b1408; font-weight: 650; background: linear-gradient(#f1c57f, #d79b4f); border: 0; border-radius: 8px; box-shadow: 0 2px 0 #8a5d2a, 0 6px 16px #e9b56b33; }

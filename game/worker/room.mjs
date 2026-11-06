@@ -69,7 +69,7 @@ export class MineRoom {
       throw new RoomError(409, "红包还没开放");
     const game = createGame({
       seed: this.tools.seed(),
-      rules: rulesOf(info.params ?? {}),
+      rules: rulesOf(info.params ?? {}, amountOf(info.pool)),
       pool: amountOf(info.pool),
       openedAt: Date.parse(info.openedAt),
       deadlineAt: info.deadlineAt ? Date.parse(info.deadlineAt) : null,
@@ -107,15 +107,14 @@ export class MineRoom {
   async state(/** @type {Info} */ info, /** @type {number} */ uid, /** @type {string} */ name, /** @type {number} */ now) {
     const game = await this.gameFor(info);
     const player = await this.playerOf(game, uid, name);
-    return { game: publicGame(game), me: privatePlayer(player), blocked: this.blocked(info, game, player, now) };
+    return { game: publicGame(game), me: privatePlayer(player, game, now), blocked: this.blocked(info, game, player, now) };
   }
 
   /** 现在为什么不能挖（能挖时 null）：红包结束、暂停也算。 */
   blocked(/** @type {Info} */ info, /** @type {Game} */ game, /** @type {Player} */ player, /** @type {number} */ now) {
     if (info.status !== "active") return "红包已经结束了";
     if (info.paused) return "红包暂停了，稍后再试";
-    const reason = digBlocked(game, player, now);
-    return reason === "挖得太快了，稍等一下" ? null : reason;
+    return digBlocked(game, player, now, { cooling: false });
   }
 
   /**
@@ -125,10 +124,10 @@ export class MineRoom {
   async dig(/** @type {Info} */ info, /** @type {number} */ uid, /** @type {string} */ name, /** @type {{ cardId: number, index: number }} */ at, /** @type {number} */ now) {
     const game = await this.gameFor(info);
     const player = await this.playerOf(game, uid, name);
-    if (info.status !== "active") return { answer: { ok: false, message: "红包已经结束了", me: privatePlayer(player) }, broadcast: null };
-    if (info.paused) return { answer: { ok: false, message: "红包暂停了，稍后再试", me: privatePlayer(player) }, broadcast: null };
+    if (info.status !== "active") return { answer: { ok: false, message: "红包已经结束了", me: privatePlayer(player, game, now) }, broadcast: null };
+    if (info.paused) return { answer: { ok: false, message: "红包暂停了，稍后再试", me: privatePlayer(player, game, now) }, broadcast: null };
     const out = dig(game, player, { cardId: at.cardId, index: at.index, now });
-    if (!out.ok) return { answer: { ok: false, message: out.message, me: privatePlayer(player) }, broadcast: null };
+    if (!out.ok) return { answer: { ok: false, message: out.message, me: privatePlayer(player, game, now) }, broadcast: null };
     const { cards, ...meta } = game;
     /** @type {Record<string, unknown>} */
     const entries = {
@@ -151,7 +150,7 @@ export class MineRoom {
     };
     // 挖的人直接拿到这次的变化（update），不等推送
     return {
-      answer: { ok: true, result: out.result, me: privatePlayer(player), claimNow: out.claimNow, update: broadcast },
+      answer: { ok: true, result: out.result, me: privatePlayer(player, game, now), claimNow: out.claimNow, update: broadcast },
       broadcast,
     };
   }

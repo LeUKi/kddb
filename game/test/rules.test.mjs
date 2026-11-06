@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   amountOf, budgetLeft, claim, createGame, dig, digBlocked, formatPoints,
-  MIN_INTERVAL_MS, newPlayer, placeFor, privatePlayer, publicCard, publicGame,
-  rulesOf, WRAP_UP_MS,
+  averageUnits, coolingOf, MIN_INTERVAL_MS, newPlayer, placeFor, POOL_TARGET, privatePlayer, publicCard, publicGame,
+  rewardFor, rulesOf, WRAP_UP_MS,
 } from "../shared/rules.mjs";
 
 const T0 = Date.parse("2026-11-06T12:00:00+08:00");
@@ -11,7 +11,8 @@ const DAY = 24 * 3600 * 1000;
 
 /** @param {Partial<{ pool: number, params: Record<string, unknown>, seed: string }>} [options] */
 function game({ pool = 10000, params = {}, seed = "seed-a" } = {}) {
-  return createGame({ seed, rules: rulesOf({ boardSpec: "5", ...params }), pool, openedAt: T0, deadlineAt: T0 + DAY });
+  // 绿宝石按 10 分写死（新判定器是按奖池和人数算的，见“参数”那一组）
+  return createGame({ seed, rules: rulesOf({ boardSpec: "5", smallReward: 10, ...params }), pool, openedAt: T0, deadlineAt: T0 + DAY });
 }
 
 /** 把第 id 张卡的牌换成给定的（没写的格子是绿宝石），方便测一格一格的结果。 */
@@ -26,20 +27,46 @@ let clock = T0;
 const later = () => (clock += MIN_INTERVAL_MS);
 
 describe("规则和金额", () => {
-  it("参数按判定器的写法读，没填、乱填用默认，超出的收住", () => {
-    assert.deepEqual(rulesOf({}), {
-      difficulty: "hard", boardSpec: "random", compositionVariation: "slight",
-      smallReward: 10, bigMultiplier: 5, totemBonus: 3, tntPercent: 25, initialChances: 20, appleCap: 0, eyeEvery: 3,
-    });
-    assert.equal(rulesOf({ eyeEvery: 0 }).eyeEvery, 0);
-    assert.equal(rulesOf({ eyeEvery: 50 }).eyeEvery, 20);
-    assert.equal(rulesOf({ eyeEvery: "x" }).eyeEvery, 3);
-    const odd = rulesOf({ difficulty: "x", initialChances: 150, tntPercent: 300, appleCap: 50 });
-    assert.equal(odd.difficulty, "hard");
+  it("新判定器四个参数：没填、乱填用默认，超出的收住；绿宝石按奖池和人数算", () => {
+    const rules = rulesOf({}, 2000);
+    assert.equal(rules.difficulty, "normal");
+    assert.equal(rules.players, 20);
+    assert.equal(rules.initialChances, 20);
+    assert.equal(rules.eyeEvery, 3);
+    assert.equal(rules.digInterval, 1);
+    assert.equal(rules.boardSpec, "random");
+    assert.equal(rules.compositionVariation, "slight");
+    assert.equal(rules.tntPercent, 25);
+    assert.equal(rules.smallReward, rewardFor(2000, 20, 20, "normal"));
+    assert.equal(rules.appleCap, rules.smallReward * 10);
+    const odd = rulesOf({ level: "x", players: 9999, initialChances: 150, eyeEvery: 50, interval: 7 }, 2000);
+    assert.equal(odd.difficulty, "normal");
+    assert.equal(odd.players, 2000);
     assert.equal(odd.initialChances, 99);
-    assert.equal(rulesOf({ initialChances: 99 }).initialChances, 99);
-    assert.equal(odd.tntPercent, 100);
-    assert.equal(odd.appleCap, 50);
+    assert.equal(odd.eyeEvery, 20);
+    assert.equal(odd.digInterval, 1);
+    assert.equal(rulesOf({ eyeEvery: 0 }).eyeEvery, 0);
+    assert.equal(rulesOf({ interval: "10" }).digInterval, 10);
+    assert.deepEqual([rulesOf({ level: "easy" }).tntPercent, rulesOf({ level: "tough" }).tntPercent], [15, 50]);
+  });
+  it("绿宝石：大约八成奖池够预计人数把机会挖完；人多、机会多就少，至少 1 分", () => {
+    const units = averageUnits("normal");
+    assert.ok(units > 0.9 && units < 1.1, String(units));
+    const reward = rewardFor(100000, 20, 20, "normal");
+    const spent = reward * 20 * 20 * units;
+    assert.ok(spent <= 100000 * POOL_TARGET && spent > 100000 * POOL_TARGET * 0.95, String(spent));
+    assert.ok(rewardFor(100000, 40, 20, "normal") < reward);
+    assert.equal(rewardFor(100, 2000, 99, "tough"), 1);
+    assert.ok(averageUnits("tough") < averageUnits("easy")); // TNT 多，宝物少
+  });
+  it("旧判定器的参数照旧用：difficulty、smallReward、tntPercent、appleCap（null 不限）", () => {
+    const old = rulesOf({ difficulty: "hard", smallReward: 10, tntPercent: 25, appleCap: null, boardSpec: "random", compositionVariation: "slight", initialChances: 7 }, 2000);
+    assert.equal(old.difficulty, "hard");
+    assert.equal(old.smallReward, 10);
+    assert.equal(old.appleCap, 0);
+    assert.equal(old.players, undefined);
+    assert.equal(rulesOf({ difficulty: "hell" }).tntPercent, 75);
+    assert.equal(rulesOf({ appleCap: 50 }).appleCap, 50);
   });
   it("红包信息的金额字符串和分来回换", () => {
     assert.equal(amountOf("100.00"), 10000);
@@ -273,6 +300,18 @@ describe("挖", () => {
 });
 
 describe("什么时候不能挖", () => {
+  it("挖掘间隔：参数拉长以后要等够；还要等几秒说出来，也给本人", () => {
+    const g = game({ params: { interval: 10 } });
+    const p = newPlayer(g, 10001, "小明");
+    const now = later();
+    assert.ok(dig(g, p, { cardId: 1, index: 0, now }).ok);
+    assert.equal(coolingOf(g, p, now + 4000), 6000);
+    assert.equal(digBlocked(g, p, now + 4000), "还要等 6 秒才能再挖");
+    assert.equal(dig(g, p, { cardId: 1, index: 1, now: now + 9999 }).ok, false);
+    assert.equal(privatePlayer(p, g, now + 4000).coolingMs, 6000);
+    assert.ok(dig(g, p, { cardId: 1, index: 1, now: now + 10000 }).ok);
+    clock = now + 10000;
+  });
   it("挖得太快、机会用完、领过了、快截止了", () => {
     const g = game({ params: { initialChances: 1 } });
     const p = newPlayer(g, 10001, "小明");
@@ -282,6 +321,7 @@ describe("什么时候不能挖", () => {
     const fresh = newPlayer(g, 10002, "小红");
     fresh.lastDigAt = now;
     assert.equal(digBlocked(g, fresh, now + MIN_INTERVAL_MS - 1), "挖得太快了，稍等一下");
+    assert.equal(digBlocked(g, fresh, now + MIN_INTERVAL_MS - 1, { cooling: false }), null);
     assert.equal(digBlocked(g, p, now + 5000), "机会用完了，请领取");
     claim(g, p);
     assert.equal(digBlocked(g, p, now + 5000), "你已经领取了，不能再挖这个红包");

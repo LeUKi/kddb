@@ -9,6 +9,7 @@ import { cameraAt, cardNear, cardToward, cellCenter, centerOf, edgeFacing, edgeP
 import type { Flight, Point } from './PearlFlight'
 import { landMs, PearlFlight } from './PearlFlight'
 import { isTreasure } from './eye'
+import { useCooling } from './Hud'
 import { blockedAtom, dig, focusRequestAtom, freshAtom, gameAtom, hongbaoAtom, meAtom, newCardAtom, pendingAtom, settledAtom, uidAtom } from './state'
 import type { PublicCard } from './types'
 
@@ -41,6 +42,7 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
   const focusRequest = useAtomValue(focusRequestAtom)
   const settled_ = useAtomValue(settledAtom)
   const reduced = useReducedMotion() ?? false
+  const cooling = useCooling()
 
   const box = useRef<HTMLDivElement>(null)
   const [view, setView] = useState<Viewport>({ width: 0, height: 0 })
@@ -372,7 +374,7 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
   const jpCard = useMemo(() => [...cards].reverse().find(card => isTreasure(card) && !card.finished) ?? null, [cards])
   const jpPointer = jpCard && jpCard.id !== jpHold && !fullyOnScreen(jpCard, settled, view) ? edgePointer(jpCard, settled, view) : null
 
-  return <div className={`map-view level-${level}`}>
+  return <div className={`map-view level-${level}${cooling.seconds ? ' is-cooling' : ''}`}>
     <div className="map-canvas" ref={box}
     onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}
     onClickCapture={onClickCapture}>

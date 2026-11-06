@@ -4,7 +4,11 @@
 
 /** @typedef {'emerald'|'diamond'|'apple'|'totem'|'tnt'|'pearl'|'shield'|'spyglass'|'eye'} Kind */
 /** @typedef {3|5|6|7} Size */
-/** @typedef {'easy'|'hard'|'hell'} Difficulty */
+/**
+ * 难度：新判定器的参数是 level（easy 简单 / normal 普通 / tough 困难）；旧的 difficulty
+ * （easy / hard / hell）照旧认，开着的旧局存的也是这几个，hard 就是普通。
+ * @typedef {'easy'|'normal'|'tough'|'hard'|'hell'} Difficulty
+ */
 /** @typedef {Record<Kind, number>} Composition */
 /**
  * @typedef {{
@@ -18,6 +22,8 @@
  *   initialChances: number,
  *   appleCap: number,
  *   eyeEvery: number,
+ *   players?: number,
+ *   digInterval?: number,
  * }} Rules
  */
 /** @typedef {{ uid: number, name: string, at: number }} OpenCell */
@@ -64,8 +70,9 @@
 export const SLOT = 7;
 /** 截止前 2 分钟停止挖掘，开着网页的人自动领取（§2）。 */
 export const WRAP_UP_MS = 2 * 60 * 1000;
-/** 每人两次挖掘至少隔 1 秒，只防脚本（§4）。 */
+/** 每人两次挖掘至少隔 1 秒，只防脚本（§4）；参数“挖掘间隔”可以拉长（秒）。 */
 export const MIN_INTERVAL_MS = 1000;
+export const DIG_INTERVALS = /** @type {const} */ ([1, 3, 10, 30]);
 /** 动态留最近这么多条。 */
 export const FEED_LIMIT = 30;
 
@@ -81,9 +88,18 @@ const END_COMPOSITION = /** @type {const} */ ({ emerald: 5, diamond: 3, apple: 1
 export const EYE_EVERY = 3
 const TNT_COUNTS = /** @type {const} */ ({
   easy: { 5: 3, 6: 4, 7: 6 },
+  normal: { 5: 4, 6: 6, 7: 8 },
+  tough: { 5: 6, 6: 9, 7: 12 },
+  // 旧判定器的难度
   hard: { 5: 4, 6: 6, 7: 8 },
   hell: { 5: 8, 6: 12, 7: 17 },
 });
+/** 踩中 TNT 扣还没领的奖励的百分之几（旧判定器可以自己填 tntPercent）。 */
+const TNT_PERCENT = /** @type {const} */ ({ easy: 15, normal: 25, tough: 50, hard: 25, hell: 75 });
+/** 按预计人数算绿宝石时，打算发出去的那部分奖池（留些给 TNT 扣回、末地宝藏和挖得多的人）。 */
+export const POOL_TARGET = 0.8
+/** 没填预计人数时按这么多人算。 */
+export const PLAYERS = 20
 export const KINDS = /** @type {Kind[]} */ (["emerald", "diamond", "apple", "totem", "tnt", "pearl", "shield", "spyglass", "eye"]);
 export const KIND_NAMES = /** @type {Record<Kind, string>} */ ({
   emerald: "绿宝石",
@@ -97,29 +113,62 @@ export const KIND_NAMES = /** @type {Record<Kind, string>} */ ({
   eye: "末影之眼",
 });
 
-/** 判定器参数（红包信息里的 params，金额是分）→ 规则。 */
-export function rulesOf(/** @type {Record<string, unknown>} */ params) {
+/**
+ * 判定器参数（红包信息里的 params，金额是分）和奖池（分）→ 规则。
+ * 新判定器只有四个参数：预计人数 players、每人机会 initialChances、难度 level、末地宝藏
+ * eyeEvery；绿宝石值多少按奖池、人数和机会算（rewardFor），TNT 扣多少跟着难度，金苹果
+ * 一次最多加 10 颗绿宝石，卡的规格每张随机，配比小幅浮动。旧判定器的参数（difficulty、
+ * smallReward、tntPercent、appleCap、boardSpec、compositionVariation）写了就照旧用。
+ */
+export function rulesOf(/** @type {Record<string, unknown>} */ params, /** @type {number} */ pool = 0) {
   const integer = (/** @type {unknown} */ value, /** @type {number} */ fallback) =>
     Number.isSafeInteger(Number(value)) && Number(value) > 0 ? Number(value) : fallback;
-  const difficulty = /** @type {Difficulty} */ (
-    ["easy", "hard", "hell"].includes(String(params.difficulty)) ? params.difficulty : "hard"
-  );
+  const level = ["easy", "normal", "tough"].includes(String(params.level)) ? String(params.level) : null;
+  const legacy = ["easy", "hard", "hell"].includes(String(params.difficulty)) ? String(params.difficulty) : null;
+  const difficulty = /** @type {Difficulty} */ (level ?? legacy ?? "normal");
   const boardSpec = /** @type {Rules['boardSpec']} */ (
     ["5", "6", "7", "random"].includes(String(params.boardSpec)) ? String(params.boardSpec) : "random"
   );
+  const players = Math.min(2000, integer(params.players, PLAYERS));
+  const initialChances = Math.min(99, integer(params.initialChances, 20));
+  const smallReward = params.smallReward == null
+    ? rewardFor(pool, players, initialChances, difficulty)
+    : integer(params.smallReward, 10);
   return /** @type {Rules} */ ({
     difficulty,
     boardSpec,
     compositionVariation: params.compositionVariation === "fixed" ? "fixed" : "slight",
-    smallReward: integer(params.smallReward, 10),
+    smallReward,
     bigMultiplier: 5,
     totemBonus: 3,
-    tntPercent: Math.min(100, integer(params.tntPercent, 25)),
-    initialChances: Math.min(99, integer(params.initialChances, 20)),
-    appleCap: params.appleCap == null ? 0 : integer(params.appleCap, 0),
+    tntPercent: params.tntPercent == null ? TNT_PERCENT[difficulty] : Math.min(100, integer(params.tntPercent, 25)),
+    initialChances,
+    // 旧判定器的金苹果上限：没填（null）是不限；新判定器一次最多加 10 颗绿宝石
+    appleCap: "appleCap" in params ? (params.appleCap == null ? 0 : integer(params.appleCap, 0)) : smallReward * 10,
     eyeEvery: params.eyeEvery == null || params.eyeEvery === "" || !Number.isSafeInteger(Number(params.eyeEvery))
       ? EYE_EVERY : Math.min(20, Math.max(0, Number(params.eyeEvery))),
+    ...(params.smallReward == null ? { players } : {}),
+    digInterval: DIG_INTERVALS.includes(/** @type {1} */ (Number(params.interval))) ? Number(params.interval) : 1,
   });
+}
+
+/**
+ * 每挖一格平均值几颗绿宝石：5×5、6×6、7×7 一样多，按基准配比（6×6 的珍珠算 1.5 颗）
+ * 只数绿宝石和钻石；金苹果翻倍和 TNT 扣回大致抵掉。
+ */
+export function averageUnits(/** @type {Difficulty} */ difficulty) {
+  let total = 0;
+  for (const size of /** @type {const} */ ([5, 6, 7])) {
+    const composition = { ...COMPOSITIONS[size], tnt: TNT_COUNTS[difficulty][size], pearl: size === 6 ? 1.5 : COMPOSITIONS[size].pearl };
+    const others = KINDS.filter((kind) => kind !== "emerald").reduce((sum, kind) => sum + composition[kind], 0);
+    total += (size * size - others + composition.diamond * 5) / (size * size);
+  }
+  return total / 3;
+}
+
+/** 绿宝石值多少分：大约 POOL_TARGET 的奖池够预计人数每人把机会挖完；至少 1 分。 */
+export function rewardFor(/** @type {number} */ pool, /** @type {number} */ players, /** @type {number} */ chances, /** @type {Difficulty} */ difficulty) {
+  return Math.max(1, Math.floor((pool * POOL_TARGET) / (players * chances * averageUnits(difficulty))));
 }
 
 /** "100.00" → 10000；红包信息的金额是两位小数的字符串。 */
@@ -316,14 +365,26 @@ export function newPlayer(/** @type {Game} */ game, /** @type {number} */ uid, /
   });
 }
 
-/** 现在还能不能挖；能挖时 null，不能时一句话。 */
-export function digBlocked(/** @type {Game} */ game, /** @type {Player} */ player, /** @type {number} */ now) {
+/** 两次挖掘之间至少隔多少毫秒（旧局没有这个参数，是 1 秒）。 */
+export const intervalOf = (/** @type {Game} */ game) => (game.rules.digInterval ?? 1) * 1000;
+
+/** 还要等多少毫秒才能再挖（0 是现在就能挖）。 */
+export function coolingOf(/** @type {Game} */ game, /** @type {Player} */ player, /** @type {number} */ now) {
+  return Math.max(0, player.lastDigAt + intervalOf(game) - now);
+}
+
+/**
+ * 现在还能不能挖；能挖时 null，不能时一句话。cooling: false 时不算间隔：“现在能不能挖”
+ * 的状态里不说它，它几秒就过去，网页自己倒计时。
+ */
+export function digBlocked(/** @type {Game} */ game, /** @type {Player} */ player, /** @type {number} */ now, { cooling = true } = {}) {
   if (player.status === "claimed") return "你已经领取了，不能再挖这个红包";
   if (game.over) return "奖池已经分完，游戏结束了，请领取";
   if (game.deadlineAt !== null && now >= game.deadlineAt - WRAP_UP_MS)
     return "快截止了，已经停止挖掘，请领取";
   if (player.chances <= 0) return "机会用完了，请领取";
-  if (now - player.lastDigAt < MIN_INTERVAL_MS) return "挖得太快了，稍等一下";
+  const left = cooling ? coolingOf(game, player, now) : 0;
+  if (left > 0) return intervalOf(game) <= MIN_INTERVAL_MS ? "挖得太快了，稍等一下" : `还要等 ${Math.ceil(left / 1000)} 秒才能再挖`;
   return null;
 }
 
@@ -505,9 +566,11 @@ export function publicGame(/** @type {Game} */ game) {
 }
 
 /** 只给他自己看的。 */
-export function privatePlayer(/** @type {Player} */ player) {
+/** 只给本人看的；带上 game 和 now 时多一项 coolingMs：还要等多少毫秒（网页拿它倒计时，不受两边时钟差影响）。 */
+export function privatePlayer(/** @type {Player} */ player, /** @type {Game|null} */ game = null, now = 0) {
   return {
     chances: player.chances, shield: player.shield, peeks: player.peeks,
     points: player.points, digs: player.digs, status: player.status, lastResult: player.lastResult,
+    ...(game ? { coolingMs: coolingOf(game, player, now) } : {}),
   };
 }

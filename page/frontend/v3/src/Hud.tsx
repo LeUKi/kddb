@@ -2,7 +2,7 @@ import { useAtomValue, useSetAtom } from 'jotai'
 import { animate, useReducedMotion } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
 import { ItemIcon } from '../../src/ItemIcon'
-import { blockedAtom, claim, claimingAtom, focusRequestAtom, gameAtom, hongbaoAtom, meAtom, settledAtom } from './state'
+import { blockedAtom, claim, claimingAtom, focusRequestAtom, gameAtom, hongbaoAtom, meAtom, readyAtAtom, settledAtom } from './state'
 import type { Kind, PublicCard } from './types'
 import { KIND_NAMES, KINDS, money } from './types'
 import { eyeStatus, isTreasure } from './eye'
@@ -39,6 +39,28 @@ export function Tween({ value, format = String }: { value: number; format?: (val
   return <>{format(shown)}</>
 }
 
+/**
+ * 挖掘间隔拉长时（3 秒以上）还要等多久：seconds 是剩下的整秒（能挖时 0），left 是剩下的
+ * 比例。间隔 1 秒时总是 0，什么都不显示。冷却时每 200 毫秒更新一次。
+ */
+export function useCooling() {
+  const readyAt = useAtomValue(readyAtAtom)
+  const interval = useAtomValue(gameAtom)?.rules.digInterval ?? 1
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    setNow(Date.now())
+    if (interval <= 1 || readyAt <= Date.now()) return
+    const timer = window.setInterval(() => {
+      const at = Date.now()
+      setNow(at)
+      if (at >= readyAt) window.clearInterval(timer)
+    }, 200)
+    return () => window.clearInterval(timer)
+  }, [interval, readyAt])
+  if (interval <= 1 || now >= readyAt) return { seconds: 0, left: 0 }
+  return { seconds: Math.ceil((readyAt - now) / 1000), left: Math.min(1, (readyAt - now) / (interval * 1000)) }
+}
+
 /** 上面一条：我的奖励、机会、盾牌，和领取。 */
 export function TopBar({ onRules }: { onRules: () => void }) {
   const me = useAtomValue(meAtom)
@@ -46,6 +68,7 @@ export function TopBar({ onRules }: { onRules: () => void }) {
   const claiming = useAtomValue(claimingAtom)
   const settled = useAtomValue(settledAtom)
   const blocked = useAtomValue(blockedAtom)
+  const cooling = useCooling()
   const unit = hongbao?.unit ?? 'LDC'
   if (!me) return null
   const claimed = me.status === 'claimed'
@@ -54,10 +77,14 @@ export function TopBar({ onRules }: { onRules: () => void }) {
       <span>{settled ? '已领到' : '矿洞里的奖励'}</span>
       <strong><Tween value={settled ? Math.round(Number(settled.amount) * 100) : me.points} format={money} /> <small>{settled?.unit ?? unit}</small></strong>
     </div>
-    <div className="chances" aria-label={`剩余机会 ${me.chances} 次${me.shield ? '，有盾牌' : ''}`}>
+    <div className={`chances${cooling.seconds ? ' is-cooling' : ''}`} aria-label={`剩余机会 ${me.chances} 次${me.shield ? '，有盾牌' : ''}${cooling.seconds ? `，还要等 ${cooling.seconds} 秒` : ''}`}>
       <ItemIcon kind="pickaxe" size={22} />
       <strong><Tween value={me.chances} /></strong>
       {me.shield ? <ItemIcon kind="shield" size={20} className="has-shield" /> : null}
+      {cooling.seconds ? <>
+        <span className="cooling-text">{cooling.seconds} 秒</span>
+        <span className="cooling-bar" style={{ transform: `scaleX(${cooling.left})` }} aria-hidden="true" />
+      </> : null}
     </div>
     <div className="claim">
       {settled ? <span className="claim-done">领取完成</span>
@@ -156,6 +183,8 @@ export function Rules({ onClose, onPractice }: { onClose: () => void; onPractice
         <li><b>截止前要领取</b>：截止前 2 分钟停止挖掘，开着网页的人自动领取，没领的作废。</li>
         <li>末影珍珠会在这张卡旁边长出一张新卡；旧卡挖完以前一直能挖。</li>
       </ul>
+      {rules?.players ? <p className="rules-money">这个红包按大约 {rules.players} 人、每人 {rules.initialChances} 次机会算：绿宝石 {money(rules.smallReward)} {unit}，钻石 {money(rules.smallReward * rules.bigMultiplier)} {unit}。</p> : null}
+      {rules && (rules.digInterval ?? 1) > 1 ? <p className="rules-money">每人两次挖掘至少隔 {rules.digInterval} 秒。</p> : null}
       {rules ? <dl className="rule-items">
         <dt><ItemIcon kind="emerald" size={18} /> 绿宝石</dt><dd>+{money(rules.smallReward)} {unit}</dd>
         <dt><ItemIcon kind="diamond" size={18} /> 钻石</dt><dd>+{money(rules.smallReward * rules.bigMultiplier)} {unit}</dd>

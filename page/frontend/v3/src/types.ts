@@ -22,10 +22,14 @@ export interface FeedItem {
 }
 export interface Stats { digs: number; players: number; claimed: number; claimedPoints: number }
 export interface Rules {
-  difficulty: 'easy' | 'hard' | 'hell'; smallReward: number; tntPercent: number
+  difficulty: 'easy' | 'normal' | 'tough' | 'hard' | 'hell'; smallReward: number; tntPercent: number
   initialChances: number; appleCap: number; totemBonus: number; bigMultiplier: number
   /** 每几张普通卡一颗末影之眼；0 不开；旧局没有 */
   eyeEvery?: number
+  /** 按大约多少人算的绿宝石（新判定器）；旧局没有 */
+  players?: number
+  /** 每人两次挖掘至少隔几秒；旧局没有，是 1 */
+  digInterval?: number
 }
 export interface PublicGame {
   seq: number; rules: Rules; pool: number; left: number
@@ -40,6 +44,8 @@ export interface DigResult {
 export interface Me {
   chances: number; shield: boolean; peeks: Peek[]; points: number; digs: number
   status: 'playing' | 'claimed'; lastResult: DigResult | null
+  /** 还要等多少毫秒才能再挖（游戏站算好的，不受时钟差影响） */
+  coolingMs?: number
 }
 export interface State { game: PublicGame; me: Me; blocked: string | null }
 

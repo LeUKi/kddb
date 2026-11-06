@@ -13,6 +13,8 @@ export const problemAtom = atom('')
 export const gameAtom = atom<PublicGame | null>(null)
 export const meAtom = atom<Me | null>(null)
 export const blockedAtom = atom<string | null>(null)
+/** 什么时候（本机时间，毫秒）能再挖：游戏站给的 coolingMs 加上收到的时刻 */
+export const readyAtAtom = atom(0)
 export const hongbaoAtom = atom<HbHongbao | null>(null)
 export const uidAtom = atom<number | null>(null)
 /** 自己正在挖的格子："卡号:格" */
@@ -83,8 +85,13 @@ export async function signIn() {
 
 function apply(game: PublicGame, me: Me, blocked: string | null) {
   store.set(gameAtom, game)
-  store.set(meAtom, me)
+  setMe(me)
   store.set(blockedAtom, blocked)
+}
+
+function setMe(me: Me) {
+  store.set(meAtom, me)
+  if (me.coolingMs !== undefined) store.set(readyAtAtom, Date.now() + me.coolingMs)
 }
 
 /** 整张重读：连上推送时、漏了推送时。 */
@@ -144,10 +151,16 @@ export async function dig(cardId: number, index: number) {
     toast(blocked)
     return
   }
+  // 挖掘间隔拉长了（3 秒以上）：没到时间就不发，告诉他还要等几秒
+  const wait = store.get(readyAtAtom) - Date.now()
+  if ((store.get(gameAtom)?.rules.digInterval ?? 1) > 1 && wait > 0) {
+    toast(`还要等 ${Math.ceil(wait / 1000)} 秒才能再挖`)
+    return
+  }
   store.set(pendingAtom, value => ({ ...value, [cell]: true }))
   try {
     const answer = await api.dig(cardId, index)
-    store.set(meAtom, answer.me)
+    setMe(answer.me)
     if (!answer.ok) {
       toast(answer.message)
       void refresh()
@@ -180,7 +193,7 @@ export async function claim(auto = false) {
   store.set(claimingAtom, 'working')
   try {
     const answer = await api.claim()
-    store.set(meAtom, answer.me)
+    setMe(answer.me)
     if (!answer.ok) {
       toast(answer.message, 'bad')
       store.set(claimingAtom, 'idle')

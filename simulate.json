@@ -9,13 +9,11 @@
   "now": "2026-11-06T09:30:00+08:00",
   "seed": "028ac4e5be632d90bc60d406d166a031f854787b644eddb54aa1f5f16220d56a",
   "params": {
-    "difficulty": "hard",
-    "boardSpec": "random",
-    "compositionVariation": "slight",
+    "players": 20,
     "initialChances": 20,
-    "eyeEvery": 3,
-    "smallReward": 10,
-    "tntPercent": 25
+    "level": "normal",
+    "interval": "1",
+    "eyeEvery": 3
   },
   "submissions": [
     {
