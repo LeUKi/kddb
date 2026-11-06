@@ -70,3 +70,9 @@
 修复覆盖 hello 时钟偏移、快进时先发 clock、重开后的新时间锚、模拟时间域的 cooldownUntil 与 identity.expiresAt。上游同时新增了源码测试与设计说明；本项目没有运行整个上游主站测试集，也没有自行改写官方 CLI。使用本项目实际浏览器核对后，游戏状态显示剩余 7 至 1 秒并在到期后解锁，其他玩家接棒提前解锁。另修正游戏前端状态文字动画滞留旧秒数的问题。
 
 同步后官方测试／部署检查均 69／69，前端 63／63、类型和生产构建通过，官方三张截图命令通过。一次 check 出现 889ms 墙钟提醒，独立复跑最慢 20ms；原始日志均保留在 `artifacts/v2/`。详细证据和验证范围见 [VALIDATION.md](VALIDATION.md)。
+
+## 2026-11-06 同步
+
+从红包站仓库的 `kit/` 同步到提交 `ac382cc`：`AGENTS.md`、`judge.d.ts`、`page/hb.d.ts`、`runtime/`、`cli/`（新增 `cli/lib/signer.mjs`，本地模拟器签身份令牌和 `X-Hb-Token`，并回答 `/api/hongbao/test`）。`ac382cc` 修了官方开发包的一处导入成环（11-02 起 `npm test` 一启动就报 `SLOW_MS` 未初始化），这里同步的是修好的版本。
+
+验证：`npm test` 73 / 73 通过，`npm run check` “可以去网站部署了”。判定器、测试、网页都没改。

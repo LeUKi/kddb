@@ -7,6 +7,13 @@
 // runs in the sandbox.
 import { sha256Text } from "./hash.mjs";
 import { formatAmount } from "./money.mjs";
+import {
+  allowedBy,
+  fixedAddresses,
+  isParamEntry,
+  readAddress,
+  readEntry,
+} from "./network.mjs";
 
 export const PARAM_TYPES = Object.freeze([
   "text",
@@ -17,6 +24,8 @@ export const PARAM_TYPES = Object.freeze([
   "choice",
   "list",
   "table",
+  "key",
+  "url",
 ]);
 
 /** What a table's columns may be. */
@@ -40,6 +49,14 @@ export const PARAM_LIMITS = Object.freeze({
   /** What check() may say at once. */
   checkProblems: 20,
   checkMessageCharacters: 100,
+  /** 密钥 (docs/judge-key-design.md): how many, how long, a prefix. */
+  keys: 3,
+  keyValueCharacters: 500,
+  keyPrefixCharacters: 20,
+  /** 地址参数 (docs/judge-address-design.md §3). */
+  urls: 3,
+  /** meta.page's path after an 地址参数. */
+  pagePathCharacters: 200,
 });
 
 export const META_LIMITS = Object.freeze({
@@ -69,6 +86,8 @@ const TYPE_WORDS = {
   choice: "选项",
   list: "列表",
   table: "表格",
+  key: "密钥",
+  url: "地址",
 };
 
 const isObject = (value) =>
@@ -110,7 +129,11 @@ const SHARED = [
   "type",
   "default",
   "required",
+  "revealAtEnd",
+  // revealAtEnd as it was first written.
   "secret",
+  // 怎么填 ↗ (docs/judge-address-design.md §3).
+  "guide",
 ];
 const OWN = {
   text: ["minLength", "maxLength"],
@@ -121,7 +144,68 @@ const OWN = {
   choice: ["options"],
   list: ["minItems", "maxItems", "maxLength"],
   table: ["columns", "minRows", "maxRows"],
+  key: ["to", "header", "prefix"],
+  url: [],
 };
+
+/** A header a key may go out in: a token, none the gateway sets itself. */
+const HEADER = /^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/;
+const GATEWAY_HEADERS = [
+  "host",
+  "user-agent",
+  "content-length",
+  "content-type",
+  "cookie",
+  "connection",
+  "transfer-encoding",
+  "upgrade",
+];
+
+/**
+ * A 密钥 (docs/judge-key-design.md): where it goes (`to`, one address
+ * prefix), in which header, after what; never shown, so no default and no
+ * revealAtEnd. Its problem, or null.
+ */
+function keyProblem(item) {
+  if (item.revealAtEnd !== undefined || item.secret !== undefined)
+    return "密钥本来就不公开，不用写 revealAtEnd";
+  if (item.default !== undefined)
+    return "密钥不能写 default，由发红包的人自己填";
+  // { param }: the 地址参数 it names, checked against the list (readParams).
+  if (!isParamEntry(item.to)) {
+    if (typeof item.to !== "string")
+      return 'to 要写密钥发给哪个地址，比如 "https://api.openai.com/v1/"，或者 { param: "地址参数的 key" }';
+    const to = readEntry(item.to);
+    if ("problem" in to) return `to ${to.problem}`;
+  }
+  if (item.header !== undefined) {
+    if (typeof item.header !== "string" || !HEADER.test(item.header))
+      return "header 要是请求头的名字，比如 Authorization";
+    const lower = item.header.toLowerCase();
+    if (GATEWAY_HEADERS.includes(lower) || lower.startsWith("x-hb-"))
+      return `header 不能是 ${item.header}`;
+  }
+  if (
+    item.prefix !== undefined &&
+    (typeof item.prefix !== "string" ||
+      /[\r\n]/.test(item.prefix) ||
+      characters(item.prefix) > PARAM_LIMITS.keyPrefixCharacters)
+  )
+    return `prefix 要是一行文字，最多 ${PARAM_LIMITS.keyPrefixCharacters} 个字，比如 "Bearer "`;
+  return null;
+}
+
+/**
+ * An 地址参数 (docs/judge-address-design.md §3): shown from opening and
+ * filled by the sender, so no revealAtEnd and no default.
+ */
+function urlProblem(item) {
+  if (item.revealAtEnd !== undefined || item.secret !== undefined)
+    return "地址要公开，领的人要看得到判定器会请求哪里，不能写 revealAtEnd";
+  if (item.default !== undefined)
+    return "地址不能写 default，由发红包的人自己填";
+  return null;
+}
 
 /** A value's own limits (text, integer or money): problem, or null. */
 function limitsProblem(item, type) {
@@ -270,6 +354,16 @@ function itemProblem(item) {
     (item.required !== undefined && typeof item.required !== "boolean"
       ? "required 要是 true 或 false"
       : null) ??
+    (item.guide !== undefined
+      ? ((problem) => (problem ? `guide ${problem}` : null))(
+          pageProblem(item.guide),
+        )
+      : null) ??
+    (item.type === "key" ? keyProblem(item) : null) ??
+    (item.type === "url" ? urlProblem(item) : null) ??
+    (item.revealAtEnd !== undefined && typeof item.revealAtEnd !== "boolean"
+      ? "revealAtEnd 要是 true 或 false"
+      : null) ??
     (item.secret !== undefined && typeof item.secret !== "boolean"
       ? "secret 要是 true 或 false"
       : null) ??
@@ -313,6 +407,11 @@ function itemProblem(item) {
 function tidy(item) {
   const kept = { ...item, label: item.label.trim() };
   if (item.hint !== undefined) kept.hint = item.hint.trim();
+  if (item.guide !== undefined) kept.guide = new URL(item.guide.trim()).href;
+  if (item.type === "key")
+    kept.to = isParamEntry(item.to)
+      ? { param: item.to.param }
+      : readEntry(item.to).prefix;
   if (item.type === "table")
     kept.columns = item.columns.map((column) => ({
       ...column,
@@ -363,6 +462,16 @@ export function readParams(value) {
     }
     list.push(kept);
   }
+  if (keyParams(list).length > PARAM_LIMITS.keys)
+    problems.push(`params 里的密钥最多 ${PARAM_LIMITS.keys} 项`);
+  if (list.filter((item) => item.type === "url").length > PARAM_LIMITS.urls)
+    problems.push(`params 里的地址最多 ${PARAM_LIMITS.urls} 项`);
+  // A 密钥 to an 地址参数: that one is declared, as an address.
+  for (const item of keyParams(list)) {
+    if (typeof item.to === "string") continue;
+    const problem = addressParamProblem(list, item.to.param);
+    if (problem) problems.push(`params（${item.key}）的 to：${problem}`);
+  }
   // 选项联动: what an option sets is another param, as that one takes it.
   for (const item of list) {
     if (item.type !== "choice") continue;
@@ -372,6 +481,8 @@ export function readParams(value) {
         const target = list.find((other) => other.key === key);
         if (key === item.key) problems.push(`${where}：不能改自己`);
         else if (!target) problems.push(`${where}：没有参数 ${key}`);
+        else if (target.type === "key")
+          problems.push(`${where}：不能改密钥 ${key}`);
         else {
           const checked = readValue(target, value, target.label);
           if ("problem" in checked)
@@ -472,8 +583,11 @@ function emptyOf(item) {
   return null;
 }
 
-/** One item's value: `{ value }` (as the code gets it) or `{ problem }`. */
-function readValue(item, given, name) {
+/**
+ * One item's value: `{ value }` (as the code gets it) or `{ problem }`.
+ * `local`: an 地址参数 may be the kit's http://localhost (readAddress).
+ */
+function readValue(item, given, name, { local = false } = {}) {
   const required = item.required !== false;
   if (item.type === "switch") {
     if (given === undefined || given === null) return { value: false };
@@ -552,6 +666,13 @@ function readValue(item, given, name) {
     return item.options.some((option) => option.value === given)
       ? { value: given }
       : { problem: `请选择${name}` };
+  if (item.type === "url") {
+    if (typeof given !== "string") return { problem: `${name}要是地址` };
+    const read = readAddress(given, { local });
+    return "problem" in read
+      ? { problem: `${name}${read.problem}` }
+      : { value: read.address };
+  }
   return scalarOf(item, given, name);
 }
 
@@ -560,22 +681,29 @@ function readValue(item, given, name) {
  * `{ values }`, as submission.params gets them — every declared key, an
  * item left out taking its default, then its empty value — or
  * `{ problems }`, `[{ key, message }]`, the first one of each item; a key
- * of "" is about all of them.
+ * of "" is about all of them. `local`: the kit's `--live` (readValue).
  */
-export function paramValues(list, given) {
+export function paramValues(list, given, { local = false } = {}) {
   if (given !== undefined && given !== null && !isObject(given))
     return { problems: [{ key: "", message: "params 要是一个对象" }] };
   const input = given ?? {};
   const problems = [];
-  for (const key of Object.keys(input))
-    if (!list.some((item) => item.key === key))
+  for (const key of Object.keys(input)) {
+    const item = list.find((each) => each.key === key);
+    if (!item)
       problems.push({ key, message: `这个判定器没有 ${key} 这个参数` });
+    // 密钥 (docs/judge-key-design.md): never among the params the code gets.
+    else if (item.type === "key")
+      problems.push({ key, message: `${item.label}是密钥，不放在参数里` });
+  }
   const values = {};
   for (const item of list) {
+    if (item.type === "key") continue;
     const read = readValue(
       item,
       input[item.key] === undefined ? item.default : input[item.key],
       item.label,
+      { local },
     );
     if ("problem" in read)
       problems.push({ key: item.key, message: read.problem });
@@ -591,9 +719,164 @@ export function paramValues(list, given) {
   return { values };
 }
 
-/** The keys kept secret until the 红包 is over (§3 保密参数). */
+/**
+ * 结束后公开 (§3; docs/judge-key-design.md §0): revealAtEnd, or secret as
+ * it was first written.
+ */
+export const revealsAtEnd = (item) =>
+  item.revealAtEnd === true || item.secret === true;
+
+/** The keys kept back until the 红包 is over (结束后公开). */
 export const secretKeys = (list) =>
-  list.filter((item) => item.secret === true).map((item) => item.key);
+  list.filter(revealsAtEnd).map((item) => item.key);
+
+/** The 密钥 among the params (docs/judge-key-design.md). */
+export const keyParams = (list) => list.filter((item) => item.type === "key");
+
+/** A 密钥 as a sender typed it: `{ value }`, trimmed, or `{ problem }`. */
+export function readKeyValue(item, given) {
+  if (typeof given !== "string" || given.trim() === "")
+    return { problem: `请填写${item.label}` };
+  const value = given.trim();
+  if (/[\r\n]/.test(value)) return { problem: `${item.label}只能是一行` };
+  if (characters(value) > PARAM_LIMITS.keyValueCharacters)
+    return {
+      problem: `${item.label}最多 ${PARAM_LIMITS.keyValueCharacters} 个字`,
+    };
+  return { value };
+}
+
+/**
+ * What `{ param: key }` must name (docs/judge-address-design.md §3): a
+ * declared 地址参数. Its problem, or null.
+ */
+function addressParamProblem(list, key) {
+  const target = list.find((item) => item.key === key);
+  if (!target) return `没有参数 ${key}`;
+  if (target.type !== "url") return `${key} 要是地址参数（type: "url"）`;
+  return null;
+}
+
+/** The 地址参数 among the params (docs/judge-address-design.md). */
+export const addressParams = (list) =>
+  list.filter((item) => item.type === "url");
+
+/** Whether `network` has `{ param: key }`. */
+const inNetwork = (network, key) =>
+  (network ?? []).some(
+    (entry) => typeof entry !== "string" && entry.param === key,
+  );
+
+/**
+ * Each `{ param }` in `network` an 地址参数 (docs/judge-address-design.md
+ * §3): problems, one line each.
+ */
+export function networkParamProblems(list, network) {
+  return (network ?? []).flatMap((entry, index) => {
+    if (typeof entry?.param !== "string") return [];
+    const problem = addressParamProblem(list, entry.param);
+    return problem ? [`network 第 ${index + 1} 个：${problem}`] : [];
+  });
+}
+
+/**
+ * Each 密钥's `to` within one of `network`'s addresses (it goes out only
+ * there) — or, an 地址参数, that one in `network` too: problems, one line
+ * each, as the deploy and npm run check write them.
+ */
+export function keyNetworkProblems(list, network) {
+  const fixed = fixedAddresses(network);
+  return keyParams(list).flatMap((item) => {
+    if (typeof item.to !== "string") {
+      const named = `{ param: "${item.to.param}" }`;
+      if (inNetwork(network, item.to.param)) return [];
+      return [
+        network?.length
+          ? `params（${item.key}）的 to：network 里没有 ${named}`
+          : `params（${item.key}）是密钥，要导出 network，并把 ${named} 写进去`,
+      ];
+    }
+    if (allowedBy(fixed, item.to)) return [];
+    return [
+      network?.length
+        ? `params（${item.key}）的 to：${item.to} 不在 network 里`
+        : `params（${item.key}）是密钥，要导出 network，并把 ${item.to} 写进去`,
+    ];
+  });
+}
+
+/**
+ * Reminders about 地址参数 (docs/judge-address-design.md §3), not
+ * problems: one used nowhere. One asked needs no 密钥 to know its 红包:
+ * the site's token goes with each request to it (§12).
+ */
+export function addressReminders(declarations, network) {
+  const list = declarations.params;
+  const page = declarations.meta?.page;
+  return addressParams(list)
+    .filter(
+      (item) =>
+        !inNetwork(network, item.key) &&
+        !keyParams(list).some(
+          (key) => typeof key.to !== "string" && key.to.param === item.key,
+        ) &&
+        !(typeof page === "object" && page?.param === item.key),
+    )
+    .map(
+      (item) =>
+        `地址参数 ${item.key} 没用上：判定器请求它会被拦下（附带网页从 hongbao.params 读它的，不用管这条）`,
+    );
+}
+
+const KEY_LIKE = /api[_-]?key|apikey|token|secret|密钥|令牌|口令牌/i;
+
+/**
+ * Text params that look like a 密钥 in a 判定器 that goes online — the
+ * code reads them, and they are shown: their keys, for a reminder to use
+ * type "key" instead.
+ */
+export function keyLikeParams(list, network) {
+  if (!network?.length) return [];
+  return list
+    .filter(
+      (item) =>
+        (item.type === "text" || item.type === "textarea") &&
+        (KEY_LIKE.test(item.key) || KEY_LIKE.test(item.label)),
+    )
+    .map((item) => item.key);
+}
+
+/**
+ * Where a 密钥 goes (docs/judge-address-design.md §2): its `to`, or the
+ * 地址参数 it names as this 红包's params have it; null when not filled.
+ */
+export function keyTarget(item, params) {
+  if (typeof item.to === "string") return item.to;
+  const address = params?.[item.to.param];
+  return typeof address === "string" && address !== "" ? address : null;
+}
+
+/**
+ * The headers 密钥 add to a request to `address` (both gateways): those
+ * whose `to` it is under, with a value given. `[name, value]` pairs.
+ * `params`: the 红包's, for a `to` that is an 地址参数.
+ */
+export function keyHeaders(list, values, address, params) {
+  return keyParams(list)
+    .filter((item) => {
+      const to = keyTarget(item, params);
+      return (
+        to !== null &&
+        typeof values?.[item.key] === "string" &&
+        values[item.key] !== "" &&
+        allowedBy([to], address)
+      );
+    })
+    .map((item) => [
+      item.header ?? "Authorization",
+      `${item.prefix ?? "Bearer "}${values[item.key]}`,
+    ]);
+}
 
 /**
  * What check(params, hongbao) answered: `{ problems }` — `[{ key,
@@ -819,6 +1102,45 @@ export function pageProblem(value) {
 }
 
 /**
+ * `meta.page` as `{ param, path }` (docs/judge-address-design.md §3): the
+ * 附带网页 under an 地址参数, `path` after it. Its problem, or null; that
+ * `param` is an 地址参数 is checked with the params (readDeclarations).
+ */
+function pagePathProblem(page) {
+  const extra = unknownField(page, ["param", "path"], "");
+  if (extra) return `${extra}：只能写 param 和 path`;
+  if (typeof page.param !== "string" || !KEY.test(page.param))
+    return 'param 要写地址参数的 key，比如 { param: "server" }';
+  if (page.path === undefined) return null;
+  if (typeof page.path !== "string") return 'path 要是字符串，比如 "play/"';
+  if (characters(page.path) > PARAM_LIMITS.pagePathCharacters)
+    return `path 最多 ${PARAM_LIMITS.pagePathCharacters} 个字`;
+  if (page.path.startsWith("/")) return "path 不以 / 开头，接在地址后面";
+  if (/[?#\\\s]/.test(page.path)) return "path 不能带 ?、#、\\ 和空白";
+  if (page.path.split("/").some((part) => part === "." || part === ".."))
+    return "path 不能带 . 和 ..";
+  return null;
+}
+
+/**
+ * The 附带网页 a 判定器 carries for one 红包 (judge-page §4;
+ * docs/judge-address-design.md §2): `meta.page`, or the 地址参数 it names
+ * with `path` after it; null without one, or while that is not filled.
+ * `local`: the kit's own http://localhost, taken as it is.
+ */
+export function pageOf(meta, values, { local = false } = {}) {
+  const page = meta?.page;
+  if (page === undefined || page === null) return null;
+  if (typeof page === "string") return page;
+  const address = values?.[page.param];
+  if (typeof address !== "string" || address === "") return null;
+  const joined = `${address}${page.path ?? ""}`;
+  if (local && /^http:\/\/(localhost|127\.0\.0\.1)[:/]/.test(joined))
+    return joined;
+  return pageProblem(joined) ? null : new URL(joined).href;
+}
+
+/**
  * judge.js's `meta` export (§1): `{ meta }` (null when none) or `{ problems }`.
  * `page` (judge-page §4) is kept as the URL standard writes it back.
  */
@@ -841,7 +1163,9 @@ export function readMeta(value) {
     if (description) problems.push(description);
   }
   if (value.page !== undefined) {
-    const page = pageProblem(value.page);
+    const page = isObject(value.page)
+      ? pagePathProblem(value.page)
+      : pageProblem(value.page);
     if (page) problems.push(`meta.page：${page}`);
   }
   if (problems.length > 0) return { problems };
@@ -851,15 +1175,26 @@ export function readMeta(value) {
       ...(value.description !== undefined
         ? { description: value.description.trim() }
         : {}),
-      ...(value.page !== undefined
-        ? { page: new URL(value.page.trim()).href }
-        : {}),
+      ...(value.page === undefined
+        ? {}
+        : isObject(value.page)
+          ? {
+              page: {
+                param: value.page.param,
+                ...(value.page.path ? { path: value.page.path } : {}),
+              },
+            }
+          : { page: new URL(value.page.trim()).href }),
     },
   };
 }
 
-/** “范围（整数，1–100，默认 100）”: one line of npm run check's preview. */
-export function paramLine(item) {
+/**
+ * “范围（整数，1–100，默认 100）”: one line of npm run check's preview.
+ * `params` and `network`, for what an 地址参数 is used for and where a 密钥
+ * to one goes.
+ */
+export function paramLine(item, { params = [], network = null } = {}) {
   const parts = [TYPE_WORDS[item.type]];
   const span = (low, high, show = String) =>
     low !== undefined && high !== undefined
@@ -907,8 +1242,20 @@ export function paramLine(item) {
               : item.default
       }`,
     );
+  if (item.type === "key")
+    parts.push(
+      "发红包的人自己填",
+      "不公开",
+      typeof item.to === "string"
+        ? `只发给 ${item.to}`
+        : `只发给${params.find((other) => other.key === item.to.param)?.label ?? item.to.param}`,
+    );
+  if (item.type === "url") {
+    parts.push("发红包的人自己填");
+    if (inNetwork(network, item.key)) parts.push("判定器会请求它");
+  }
   if (item.required === false && item.type !== "switch") parts.push("选填");
-  if (item.secret) parts.push("保密");
+  if (revealsAtEnd(item)) parts.push("结束后公开");
   return `${item.label}（${parts.join("，")}）`;
 }
 
@@ -936,6 +1283,10 @@ export function readDeclarations(answer) {
   };
   const meta = read("meta", readMeta)?.meta ?? null;
   const params = read("params", readParams)?.list ?? [];
+  if (typeof meta?.page === "object" && !unreadable.has("params")) {
+    const problem = addressParamProblem(params, meta.page.param);
+    if (problem) problems.push(`meta.page：${problem}`);
+  }
   const hongbao = read("hongbao", readHongbaoRules)?.rules ?? null;
   if (answer?.check === false) problems.push("check 要是一个函数");
   if (answer?.setup === false) problems.push("setup 要是一个函数");
@@ -963,7 +1314,7 @@ function textsOf(value) {
 }
 
 /**
- * The secret params (§3 保密参数) whose value shows in a view (judge-page
+ * The params shown only at the end (§3 结束后公开) whose value shows in a view (judge-page
  * §2): a text of two characters or more found in its summary or any text
  * in its data. Numbers are left out: a guess shown is not a leak.
  */
@@ -971,7 +1322,7 @@ export function secretsInView(list, values, view) {
   if (view === null || view === undefined) return [];
   const shown = textsOf(view);
   return list
-    .filter((item) => item.secret && Object.hasOwn(values, item.key))
+    .filter((item) => revealsAtEnd(item) && Object.hasOwn(values, item.key))
     .filter((item) =>
       textsOf(values[item.key])
         .map((text) => text.trim())
@@ -1003,12 +1354,12 @@ export function splitParams(list, values) {
   const secret = {};
   for (const item of list)
     if (Object.hasOwn(values, item.key))
-      (item.secret ? secret : shown)[item.key] = values[item.key];
+      (revealsAtEnd(item) ? secret : shown)[item.key] = values[item.key];
   return { shown, secret };
 }
 
 /**
- * 参数封存值 (§3 保密参数): SHA-256 of the secret params as JSON with sorted
+ * 参数封存值 (§3 结束后公开): SHA-256 of those params as JSON with sorted
  * keys, a newline and the salt, in hex — published at opening, checked by
  * anyone once the params and the salt are out.
  */

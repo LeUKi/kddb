@@ -2,7 +2,9 @@
 // on this computer to build a 附带网页 against. Two servers: the 红包 page
 // itself (cli/page/host.html and the SDK it serves) on 127.0.0.1, and the
 // page's folder on localhost — another site, as online — where
-// https://hb.lafi.sh/sdk/v1.js is pointed at the first. Submissions are
+// https://hb.lafi.sh/sdk/v1.js is pointed at the first; a page under an
+// 地址参数 (docs/judge-address-design.md §8) is the service at that
+// address, passed through the second the same way. Submissions are
 // judged by judge.js as npm run simulate judges them (runtime/scenario.mjs):
 // setup() first, then state, each person's pending and the pool carried
 // forward.
@@ -16,15 +18,24 @@ import {
   endScenario,
   judgeNext,
   LIMITS,
+  pageOf,
   setupSeed,
+  splitParams,
   startScenario,
   TEST_DEFAULTS,
   TEST_HONGBAO_ID,
   TEST_SEED,
   unclaimedOf,
 } from "../../runtime/index.mjs";
-import { KitError, readText } from "./files.mjs";
+import {
+  KitError,
+  keyLines,
+  localAddressLines,
+  readLocalKeys,
+  readText,
+} from "./files.mjs";
 import { openSandbox } from "./sandbox.mjs";
+import { INFO_PATH, localInfo, localSigner, SENDER_ID } from "./signer.mjs";
 import { outcome, paidNow, paramsOf, printLedger } from "./simulate.mjs";
 import { readSimulation } from "./simulation.mjs";
 import { failureText, say, yuan } from "./words.mjs";
@@ -253,6 +264,10 @@ async function openGame({ sandbox, plan, params, hostUrl, cooldown }) {
       unclaimed: yuan(unclaimedOf(scenario)),
       deadlineAt: iso(plan.hongbao.endsAt),
       judged: game.judged,
+      // Those everyone sees; once over, those 结束后公开 too (§5).
+      params: ended()
+        ? params
+        : splitParams(sandbox.declarations.params, params).shown,
     },
     view: viewOf(),
     // Newest first, as the 红包 page shows them.
@@ -286,7 +301,7 @@ async function openGame({ sandbox, plan, params, hostUrl, cooldown }) {
     );
   };
 
-  game.submit = async (who, input) => {
+  const submitNow = async (who, input) => {
     if (who === GUEST)
       return {
         result: { judged: false, reason: "login" },
@@ -380,6 +395,15 @@ async function openGame({ sandbox, plan, params, hostUrl, cooldown }) {
       logs: "answer" in judged ? (judged.answer.logs ?? []) : [],
     };
   };
+  // One at a time, as the site judges a 红包's submissions: two at once both
+  // started from the same state, and the later one's write lost the other's
+  // (2026-11-02, two players digging at once).
+  let line = Promise.resolve();
+  game.submit = (who, input) => {
+    const turn = line.then(() => submitNow(who, input));
+    line = turn.catch(() => {});
+    return turn;
+  };
 
   /**
    * hb.me()'s part of protocol 5 and hb.myView(): this person's 待结算,
@@ -454,6 +478,52 @@ async function servePage(folder, sdkUrl, request, response) {
     .end(body);
 }
 
+/**
+ * A page under an 地址参数: each request passed to the service at `target`
+ * (its origin), the site's SDK pointed at the simulator in what it answers
+ * as HTML, so the page and its own interface stay one site, as online.
+ */
+async function proxyPage(target, sdkUrl, request, response) {
+  const address = new URL(request.url, target);
+  const body =
+    request.method === "GET" || request.method === "HEAD"
+      ? undefined
+      : await new Promise((done, failed) => {
+          const chunks = [];
+          request.on("data", (chunk) => chunks.push(chunk));
+          request.on("end", () => done(Buffer.concat(chunks)));
+          request.on("error", failed);
+        });
+  const headers = { ...request.headers };
+  for (const name of ["host", "connection", "accept-encoding"])
+    delete headers[name];
+  let answer;
+  try {
+    answer = await fetch(address, {
+      method: request.method,
+      headers,
+      body,
+      redirect: "manual",
+    });
+  } catch {
+    response
+      .writeHead(502, { "content-type": "text/plain; charset=utf-8" })
+      .end(`连不上 ${target}：先把服务跑起来（比如 npx wrangler dev）`);
+    return;
+  }
+  let out = Buffer.from(await answer.arrayBuffer());
+  if ((answer.headers.get("content-type") ?? "").includes("text/html"))
+    out = Buffer.from(out.toString("utf8").replaceAll(SITE_SDK, sdkUrl));
+  const back = Object.fromEntries(answer.headers);
+  for (const name of [
+    "content-encoding",
+    "content-length",
+    "transfer-encoding",
+  ])
+    delete back[name];
+  response.writeHead(answer.status, back).end(out);
+}
+
 const json = (response, value, status = 200, headers = {}) =>
   response
     .writeHead(status, {
@@ -496,21 +566,8 @@ export async function startPage({
         .join("\n"),
     );
   const folder = join(root, "page");
-  if (!existsSync(join(folder, "index.html")))
-    throw new KitError("找不到 page/index.html");
   const plan = await planOf(root);
-  const sandbox = await openSandbox(code, { live });
-  const fail = async (problem) => {
-    await sandbox.close();
-    throw new KitError(problem);
-  };
-  if ("problems" in sandbox.network)
-    await fail(sandbox.network.problems.join("\n"));
-  if (sandbox.declarations.problems.length > 0)
-    await fail(sandbox.declarations.problems.join("\n"));
-  const params = await paramsOf(plan.params, plan.hongbao, sandbox);
-  if ("problem" in params) await fail(params.problem);
-
+  const keys = live ? await readLocalKeys(root) : {};
   const signer = await localSigner();
   const [host, sdk] = await Promise.all([
     readFile(new URL("../page/host.html", import.meta.url), "utf8"),
@@ -519,6 +576,11 @@ export async function startPage({
   let hostUrl = "";
   let pageOrigin = "";
   let game;
+  // Opened once the simulator's address is known (the token's issuer):
+  // nothing asks the servers before startPage returns.
+  let sandbox;
+  let params;
+  let served = null;
   const reopen = async () => {
     game = await openGame({
       sandbox,
@@ -543,7 +605,9 @@ export async function startPage({
               "__CONFIG__",
               JSON.stringify({
                 hostUrl,
-                pageUrl: `${pageOrigin}/`,
+                pageUrl: served
+                  ? `${pageOrigin}${new URL(served).pathname}`
+                  : `${pageOrigin}/`,
                 pageOrigin,
                 people: [...plan.people, GUEST],
                 guest: GUEST,
@@ -595,6 +659,22 @@ export async function startPage({
         return json(response, { keys: [signer.publicKey] }, 200, {
           "access-control-allow-origin": "*",
         });
+      // 红包信息 (docs/judge-address-design.md §13.4), as the simulator
+      // plays the 红包: ended once fast-forwarded to its deadline.
+      if (request.method === "GET" && url.pathname === INFO_PATH)
+        return json(
+          response,
+          localInfo({
+            code,
+            declarations: sandbox.declarations.params,
+            values: params.values,
+            ended: game.state().hongbao.status === "ended",
+            hongbao: plan.hongbao,
+            unclaimed: unclaimedOf(game.scenario),
+          }),
+          200,
+          { "access-control-allow-origin": "*" },
+        );
       if (request.method === "POST" && url.pathname === "/api/identity") {
         const { who, nonce } = await bodyOf(request);
         if (typeof who !== "string" || who === GUEST)
@@ -606,11 +686,13 @@ export async function startPage({
           name: who,
           level: TEST_DEFAULTS.user.level,
         };
-        const identity = await signer.sign({
+        const identity = await signer.identity({
           iss: hostUrl,
-          aud: pageOrigin,
+          // A page on its own service: that service's origin, as online.
+          aud: served ? new URL(served).origin : pageOrigin,
           user,
           hongbao: TEST_HONGBAO_ID,
+          sender: SENDER_ID,
           nonce: typeof nonce === "string" ? nonce : undefined,
         });
         print(`${who} 的身份令牌签给了网页（10 分钟）`);
@@ -645,9 +727,15 @@ export async function startPage({
     }
   });
   const pageServer = createServer((request, response) =>
-    servePage(folder, `${hostUrl}/sdk/v1.js`, request, response).catch(() =>
-      response.writeHead(500).end(),
-    ),
+    (served
+      ? proxyPage(
+          new URL(served).origin,
+          `${hostUrl}/sdk/v1.js`,
+          request,
+          response,
+        )
+      : servePage(folder, `${hostUrl}/sdk/v1.js`, request, response)
+    ).catch(() => response.writeHead(500).end()),
   );
   try {
     const hostPort = await listen(hostServer, port, "127.0.0.1");
@@ -658,21 +746,73 @@ export async function startPage({
     );
     hostUrl = `http://127.0.0.1:${hostPort}`;
     pageOrigin = `http://localhost:${pagePort}`;
-    await reopen();
   } catch (error) {
     hostServer.close();
     pageServer.close();
-    await sandbox.close();
     if (error?.code === "EADDRINUSE")
       throw new KitError(
         `端口 ${port} 或 ${port + 1} 被占用了：换一个，比如 npm run page -- --port 8740`,
       );
     throw error;
   }
+  sandbox = await openSandbox(code, {
+    live,
+    keys,
+    params: plan.params,
+    // What the judgment's requests carry (judge-address §12.5).
+    token: { iss: `${hostUrl}/judge`, sender: SENDER_ID, ...signer.key },
+  });
+  if (live)
+    for (const line of keyLines(
+      sandbox.declarations.params,
+      keys,
+      sandbox.values,
+    ))
+      print(line);
+  const fail = async (problem) => {
+    await sandbox.close();
+    hostServer.close();
+    pageServer.close();
+    throw new KitError(problem);
+  };
+  if ("problems" in sandbox.network)
+    await fail(sandbox.network.problems.join("\n"));
+  if (sandbox.declarations.problems.length > 0)
+    await fail(sandbox.declarations.problems.join("\n"));
+  params = await paramsOf(plan.params, plan.hongbao, sandbox);
+  if ("problem" in params) await fail(params.problem);
+  for (const line of localAddressLines(
+    sandbox.declarations.params,
+    params.values,
+  ))
+    print(line);
+  // meta.page under an 地址参数: the service there, not page/.
+  const pageRef = sandbox.declarations.meta?.page;
+  served =
+    typeof pageRef === "object"
+      ? pageOf(sandbox.declarations.meta, params.values, { local: true })
+      : null;
+  if (typeof pageRef === "object" && !served)
+    await fail(
+      `meta.page 放在地址参数 ${pageRef.param} 下：simulate.json 的 params 里要填 ${pageRef.param}`,
+    );
+  if (!served && !existsSync(join(folder, "index.html")))
+    await fail("找不到 page/index.html");
+
+  try {
+    await reopen();
+  } catch (error) {
+    hostServer.close();
+    pageServer.close();
+    await sandbox.close();
+    throw error;
+  }
   return {
     hostUrl,
     pageUrl: pageOrigin,
-    network: sandbox.network.list ?? null,
+    network: sandbox.addresses,
+    /** The service a page under an 地址参数 is passed through to. */
+    served,
     /** --play: simulate.json's submissions, judged in order. */
     play: async (say = print) => {
       for (const { who, input } of plan.submissions ?? []) {
@@ -712,7 +852,9 @@ export async function pageCommand({
   const page = await startPage({ root, ...options, print });
   print(`模拟器：${page.hostUrl}`);
   print(
-    `网页：${options.folder ? `${options.folder.replace(/\/$/, "")}/` : ""}page/index.html（从 ${page.pageUrl} 打开）`,
+    page.served
+      ? `网页：${page.served}（经 ${page.pageUrl} 打开；身份令牌的 aud 是 ${new URL(page.served).origin}，sender 是 ${SENDER_ID}，红包信息在 ${page.hostUrl}${INFO_PATH}）`
+      : `网页：${options.folder ? `${options.folder.replace(/\/$/, "")}/` : ""}page/index.html（从 ${page.pageUrl} 打开）`,
   );
   if (page.network)
     print(
@@ -729,60 +871,6 @@ export async function pageCommand({
   });
   await page.close();
   return { exitCode: 0 };
-}
-
-const base64Url = (bytes) =>
-  Buffer.from(bytes)
-    .toString("base64")
-    .replaceAll("+", "-")
-    .replaceAll("/", "_")
-    .replaceAll("=", "");
-
-/**
- * 认人 on the fake page: a P-256 key made for this run, signing tokens as
- * the site does (ES256 JWT, ten minutes); its public half is published at
- * /api/page-identity/keys on the fake page.
- */
-async function localSigner() {
-  const { privateKey, publicKey } = await crypto.subtle.generateKey(
-    { name: "ECDSA", namedCurve: "P-256" },
-    true,
-    ["sign", "verify"],
-  );
-  const kid = `local-${crypto.randomUUID().slice(0, 8)}`;
-  const { x, y } = await crypto.subtle.exportKey("jwk", publicKey);
-  const part = (value) =>
-    base64Url(new TextEncoder().encode(JSON.stringify(value)));
-  return {
-    publicKey: { kty: "EC", crv: "P-256", x, y, kid, alg: "ES256", use: "sig" },
-    async sign({ iss, aud, user, hongbao, nonce }) {
-      const issuedAt = Math.floor(Date.now() / 1000);
-      const expires = issuedAt + 600;
-      const signing = `${part({ alg: "ES256", typ: "JWT", kid })}.${part({
-        iss,
-        aud,
-        sub: user.id,
-        username: user.username,
-        name: user.name,
-        level: user.level,
-        hongbao,
-        iat: issuedAt,
-        exp: expires,
-        jti: crypto.randomUUID(),
-        ...(nonce ? { nonce } : {}),
-      })}`;
-      const signature = await crypto.subtle.sign(
-        { name: "ECDSA", hash: "SHA-256" },
-        privateKey,
-        new TextEncoder().encode(signing),
-      );
-      return {
-        token: `${signing}.${base64Url(new Uint8Array(signature))}`,
-        expiresAt: new Date(expires * 1000).toISOString(),
-        user,
-      };
-    },
-  };
 }
 
 /**

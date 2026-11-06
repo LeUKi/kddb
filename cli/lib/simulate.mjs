@@ -20,9 +20,24 @@ import {
   sha256Text,
   startScenario,
   TEST_HONGBAO_ID,
+  unclaimedOf,
 } from "../../runtime/index.mjs";
-import { KitError, readProjectFile, readText } from "./files.mjs";
+import {
+  KitError,
+  keyLines,
+  localAddressLines,
+  readLocalKeys,
+  readProjectFile,
+  readText,
+} from "./files.mjs";
 import { openSandbox } from "./sandbox.mjs";
+import {
+  INFO_PATH,
+  localInfo,
+  localSigner,
+  SENDER_ID,
+  serveKeys,
+} from "./signer.mjs";
 import { readSimulation } from "./simulation.mjs";
 import {
   failureText,
@@ -165,10 +180,13 @@ export function paidNow(judged) {
   return settled && settled.amount > 0 ? settled.amount : null;
 }
 
-/** simulate.json's params against what judge.js declares, and its check(). */
+/**
+ * simulate.json's params against what judge.js declares, and its check().
+ * An 地址参数 may be the kit's own http://localhost (judge-address §8).
+ */
 export async function paramsOf(given, hongbao, sandbox) {
   const { declarations } = sandbox;
-  const read = paramValues(declarations.params, given);
+  const read = paramValues(declarations.params, given, { local: true });
   if ("problems" in read) {
     const [first] = read.problems;
     return {
@@ -227,25 +245,50 @@ export async function simulateCommand({
   print(`${hongbao.title}：总奖池 ${yuan(hongbao.total)}`);
   print(`种子 ${seed}`);
 
-  const sandbox = await openSandbox(code, { live: options.live });
+  const keys = options.live ? await readLocalKeys(dir) : {};
+  // Going out: X-Hb-Token signed with a key of this run, its public half
+  // published while it runs (docs/judge-address-design.md §12.5).
+  const signer = options.live ? await localSigner() : null;
+  // 红包信息 too (judge-address §13.4), once its params are known; its
+  // 奖池还剩 as the run has it when asked.
+  let info = () => null;
+  const published = signer
+    ? await serveKeys(signer, { info: () => info() })
+    : null;
+  const sandbox = await openSandbox(code, {
+    live: options.live,
+    keys,
+    params: read.plan.params,
+    token:
+      signer && published
+        ? { iss: `${published.origin}/judge`, sender: SENDER_ID, ...signer.key }
+        : null,
+  });
+  const close = async () => {
+    await sandbox.close();
+    await published?.close();
+  };
   if ("problems" in sandbox.network) {
     for (const problem of sandbox.network.problems) print(`✗ ${problem}`);
     print("先改好 judge.js 的 network，模拟没跑");
-    await sandbox.close();
+    await close();
     return { exitCode: 1 };
   }
   const { declarations } = sandbox;
+  if (options.live)
+    for (const line of keyLines(declarations.params, keys, sandbox.values))
+      print(line);
   if (declarations.problems.length > 0) {
     for (const problem of declarations.problems) print(`✗ ${problem}`);
     print("先改好上面的问题，模拟没跑");
-    await sandbox.close();
+    await close();
     return { exitCode: 1 };
   }
   // 协议第三版: the params, as the site would take them from a sender.
   const params = await paramsOf(read.plan.params, hongbao, sandbox);
   if ("problem" in params) {
     print(`✗ ${params.problem}`);
-    await sandbox.close();
+    await close();
     return { exitCode: 1 };
   }
   // 协议第四版: setup(params, hongbao) opens it, as on the site.
@@ -259,7 +302,7 @@ export async function simulateCommand({
     say(print, `✗ setup 出错：${failureText(opened.failure, opened.detail)}`);
     printLogs(print, opened.logs);
     print("线上红包会开放不了，模拟没跑");
-    await sandbox.close();
+    await close();
     return { exitCode: 1 };
   }
   if (opened && declarations.setup) {
@@ -275,11 +318,26 @@ export async function simulateCommand({
     ...(opened && !opened.state.keep ? { state: opened.state.value } : {}),
     ...(opened && !opened.view.keep ? { view: opened.view.value } : {}),
   });
-  if (sandbox.network.list)
+  for (const line of localAddressLines(declarations.params, params.values))
+    print(line);
+  info = () =>
+    localInfo({
+      code,
+      declarations: declarations.params,
+      values: params.values,
+      ended: false,
+      hongbao,
+      unclaimed: unclaimedOf(scenario),
+    });
+  if (published && sandbox.tokened.length > 0)
+    print(
+      `判定器发给 ${sandbox.tokened.join("、")} 的请求带 X-Hb-Token：iss 是 ${published.origin}/judge，公钥在 ${published.origin}/api/page-identity/keys，sender 是 ${SENDER_ID}；红包信息在 ${published.origin}${INFO_PATH}`,
+    );
+  if (sandbox.addresses)
     print(
       options.live
-        ? `联网：${sandbox.network.list.join("、")}（--live：从这台电脑真的发出去）`
-        : `联网：${sandbox.network.list.join("、")}（请求拿 simulate.json 里写的 fetch 当返回；加 --live 真的发出去）`,
+        ? `联网：${sandbox.addresses.join("、")}（--live：从这台电脑真的发出去）`
+        : `联网：${sandbox.addresses.join("、")}（请求拿 simulate.json 里写的 fetch 当返回；加 --live 真的发出去）`,
     );
   const judged = [];
   let failed = 0;
@@ -310,7 +368,7 @@ export async function simulateCommand({
       }
     }
   } finally {
-    await sandbox.close();
+    await close();
   }
   if (slow) print(SLOW_NOTE);
   if (failed > 0) print(`出错 ${failed} 次：线上连续出错 5 次会暂停领取`);
