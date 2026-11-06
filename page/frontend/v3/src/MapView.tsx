@@ -4,6 +4,7 @@ import { animate, motion, useMotionValue, useReducedMotion } from 'motion/react'
 import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Entrance } from './CardView'
 import { CardView } from './CardView'
+import { useGesture } from '@use-gesture/react'
 import type { Camera, Direction, Level, Viewport, WheelZoom } from './camera'
 import { cameraAt, cardNear, cardToward, cellCenter, centerOf, edgeFacing, edgePointer, entryPoint, fullyOnScreen, nearestCard, nearestLevel, onScreen, overviewCamera, scaleOf, wheelZoom } from './camera'
 import type { Flight, Point } from './PearlFlight'
@@ -206,18 +207,14 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [newCard])
 
-  /** 捏合缩放锁在全图和挖卡两级之间，不能缩得比全图小、放得比挖卡大。 */
-  const clampScale = (next: number) => Math.min(scaleOf(2, view, cards), Math.max(scaleOf(0, view, cards), next))
-
-  // —— 拖动、捏合 ——
-  const pointers = useRef(new Map<number, { x: number; y: number }>())
-  const gesture = useRef<{ startX: number; startY: number; camera: Camera; dragging: boolean; pinch?: { distance: number; mid: { x: number; y: number } } } | null>(null)
+  // —— 拖动、捏合：交给 @use-gesture/react（多指、缩放中心、轻点和拖动的区分、指针捕获
+  // 都是它处理的）；镜头只改 x、y、scale 三个 motion 值，拖动中不触发 React 渲染 ——
   const justDragged = useRef(0)
-  const lastSettle = useRef(0)
 
-  const local = (event: { clientX: number; clientY: number }) => {
+  /** 屏幕坐标 → 地图画布里的坐标。 */
+  const toLocal = (clientX: number, clientY: number) => {
     const rect = box.current!.getBoundingClientRect()
-    return { x: event.clientX - rect.left, y: event.clientY - rect.top }
+    return { x: clientX - rect.left, y: clientY - rect.top }
   }
 
   const snap = useCallback(() => {
@@ -231,73 +228,55 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
     if (card) goToCard(card, nearestLevel(now.scale, view, cards) === 0 ? 1 : level)
   }, [camera, cards, goToCard, level, view])
 
-  const onPointerDown = (event: React.PointerEvent) => {
-    const at = local(event)
-    pointers.current.set(event.pointerId, at)
+  const stopCamera = () => {
     x.stop()
     y.stop()
     scale.stop()
-    if (pointers.current.size === 2) {
-      const [a, b] = [...pointers.current.values()]
-      gesture.current = { startX: at.x, startY: at.y, camera: camera(), dragging: true, pinch: { distance: Math.hypot(a.x - b.x, a.y - b.y), mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } } }
-    } else {
-      gesture.current = { startX: at.x, startY: at.y, camera: camera(), dragging: false }
-    }
   }
 
-  const onPointerMove = (event: React.PointerEvent) => {
-    if (!pointers.current.has(event.pointerId) || !gesture.current) return
-    const at = local(event)
-    pointers.current.set(event.pointerId, at)
-    const g = gesture.current
-    if (g.pinch && pointers.current.size >= 2) {
-      const [a, b] = [...pointers.current.values()]
-      const distance = Math.hypot(a.x - b.x, a.y - b.y)
-      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
-      const nextScale = clampScale(g.camera.scale * (distance / g.pinch.distance))
-      const world = { x: (g.pinch.mid.x - g.camera.x) / g.camera.scale, y: (g.pinch.mid.y - g.camera.y) / g.camera.scale }
-      scale.set(nextScale)
-      x.set(mid.x - world.x * nextScale)
-      y.set(mid.y - world.y * nextScale)
-      return
-    }
-    const dx = at.x - g.startX
-    const dy = at.y - g.startY
-    if (!g.dragging && Math.hypot(dx, dy) < DRAG_SLOP) return
-    if (!g.dragging) {
-      g.dragging = true
-      box.current?.setPointerCapture(event.pointerId)
-    }
-    // 全图那一级不能拖：只记下拖过（松手那下不算点区块）
-    if (level === 0) return
-    x.set(g.camera.x + dx)
-    y.set(g.camera.y + dy)
-    const now = performance.now()
-    if (now - lastSettle.current > 160) {
-      lastSettle.current = now
-      setSettled(camera())
-    }
-  }
-
-  const onPointerUp = (event: React.PointerEvent) => {
-    pointers.current.delete(event.pointerId)
-    const g = gesture.current
-    if (!g) return
-    if (g.pinch) {
-      if (pointers.current.size > 0) return
-      gesture.current = null
-      justDragged.current = performance.now()
-      const nextLevel = nearestLevel(scale.get(), view, cards)
-      const card = nearestCard(cards, camera(), view)
-      if (card) goToCard(card, nextLevel)
-      return
-    }
-    gesture.current = null
-    if (g.dragging) {
-      justDragged.current = performance.now()
-      snap()
-    }
-  }
+  useGesture({
+    onDragStart: stopCamera,
+    onDrag: ({ pinching, cancel, offset: [ox, oy], last }) => {
+      if (pinching) return cancel()
+      // 全图那一级不能拖：松手那下也不算点区块
+      if (level !== 0) {
+        x.set(ox)
+        y.set(oy)
+      }
+      if (last) {
+        justDragged.current = performance.now()
+        snap()
+      }
+    },
+    onPinchStart: stopCamera,
+    onPinch: ({ origin: [ox, oy], offset: [next], first, last, memo }) => {
+      // 手指中点下面的那一点（世界坐标）一直跟着手指中点：两指一起挪也是平移
+      const at = toLocal(ox, oy)
+      let anchor = memo as { x: number; y: number } | undefined
+      if (first || !anchor) {
+        const now = camera()
+        anchor = { x: (at.x - now.x) / now.scale, y: (at.y - now.y) / now.scale }
+      }
+      scale.set(next)
+      x.set(at.x - anchor.x * next)
+      y.set(at.y - anchor.y * next)
+      if (last) {
+        justDragged.current = performance.now()
+        const card = nearestCard(cards, camera(), view)
+        if (card) goToCard(card, nearestLevel(next, view, cards))
+      }
+      return anchor
+    },
+  }, {
+    target: box,
+    eventOptions: { passive: false },
+    // 不捕获指针：捕获了，松手那下的 click 会落在画布上，格子和缩放按钮就点不到了。
+    // 不用它的 filterTaps：它在捕获阶段拦 click，iPhone 上把轻点也拦了；拖过以后的那次
+    // click 由下面的 onClickCapture 拦；没过 threshold 的轻点不会触发 onDrag
+    drag: { from: () => [x.get(), y.get()], threshold: DRAG_SLOP, pointer: { capture: false } },
+    // 缩放锁在全图和挖卡两级之间，不回弹；滚轮（含触控板捏合）还是下面自己处理
+    pinch: { from: () => [scale.get(), 0], scaleBounds: () => ({ min: scaleOf(0, view, cards), max: scaleOf(2, view, cards) }), rubberband: false, pinchOnWheel: false },
+  })
 
   // 拖动以后的那次 click 不算挖
   const onClickCapture = (event: React.MouseEvent) => {
@@ -328,7 +307,7 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
       y.stop()
       scale.stop()
       const current = camera()
-      const nextScale = clampScale(current.scale * Math.exp(-event.deltaY * 0.01))
+      const nextScale = Math.min(scaleOf(2, view, cards), Math.max(scaleOf(0, view, cards), current.scale * Math.exp(-event.deltaY * 0.01)))
       const world = { x: (at.x - current.x) / current.scale, y: (at.y - current.y) / current.scale }
       scale.set(nextScale)
       x.set(at.x - world.x * nextScale)
@@ -389,9 +368,7 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
   const jpPointer = jpCard && jpCard.id !== jpHold && !fullyOnScreen(jpCard, settled, view) ? edgePointer(jpCard, settled, view) : null
 
   return <div className={`map-view level-${level}${cooling.seconds ? ' is-cooling' : ''}`}>
-    <div className="map-canvas" ref={box}
-    onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}
-    onClickCapture={onClickCapture}>
+    <div className="map-canvas" ref={box} onClickCapture={onClickCapture}>
     <motion.div className="map-world" style={{ x, y, scale, transformOrigin: '0 0', '--px': 1 / settled.scale } as MotionStyle}>
       {cards.map(card => {
         const near = onScreen(card, cullAt, view, 200)
@@ -424,8 +401,8 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
       <span>JP</span>
       <span className="new-arrow" style={{ transform: `rotate(${jpPointer.angle}deg)` }}>➜</span>
     </button> : null}
-    {/* 缩放：地图右下角竖着一列，半透明；按下不算拖地图 */}
-    <div className="zoom zoom-float" role="group" aria-label="缩放" onPointerDown={event => event.stopPropagation()}>
+    {/* 缩放：地图右下角竖着一列，半透明 */}
+    <div className="zoom zoom-float" role="group" aria-label="缩放">
       <button type="button" onClick={() => changeLevel(1)} disabled={level === 2} aria-label="放大">＋</button>
       <span>{level === 2 ? '挖卡' : level === 1 ? '附近' : '全图'}</span>
       <button type="button" onClick={() => changeLevel(-1)} disabled={level === 0} aria-label="缩小">－</button>

@@ -95,7 +95,11 @@ button.eye-status { cursor: pointer; }
   .map-view.level-0 .map-block:hover { background: #ffffff17; box-shadow: inset 0 0 0 calc(1.5px * var(--px, 1)) #ffffff59; }
 }
 /* 边框 3px 要和 camera.ts 的 CARD_BORDER 一样 */
-.map-card { position: relative; display: grid; align-content: start; background: #211f20; border: 3px solid #67533e; border-radius: 6px; box-shadow: inset 0 0 0 2px #10151b, 0 3px 0 #31281f, 0 6px 0 #11151b, 0 18px 48px #060b1266; transition: border-color .35s var(--ease-out), filter .35s var(--ease-out); }
+/*
+ * 卡和格子都不用带模糊的阴影（只用实心的错位投影）：手机上拖到新卡露出来时要现画，
+ * 模糊阴影最费；每张卡自己一块排版和样式，改一张不牵动别的。
+ */
+.map-card { position: relative; display: grid; align-content: start; background: #211f20; border: 3px solid #67533e; border-radius: 6px; box-shadow: inset 0 0 0 2px #10151b, 0 3px 0 #31281f, 0 6px 0 #11151b; contain: layout style; transition: border-color .35s var(--ease-out), filter .35s var(--ease-out); }
 .map-card.is-focused { border-color: var(--gold); }
 /* 居中这张的光晕：画好放着，只变透明度 */
 .map-card::after { content: ''; position: absolute; inset: -3px; border-radius: 8px; box-shadow: 0 0 0 3px #e9b56b4d, 0 0 46px #e9b56b40; opacity: 0; transition: opacity .35s var(--ease-out); pointer-events: none; }
@@ -104,14 +108,13 @@ button.eye-status { cursor: pointer; }
 .map-cell { position: relative; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; color: var(--ink); background: #19232d; border: 1px solid #8c89826b; border-bottom: 3px solid #303136; border-radius: 2px; }
 /* 地图上的卡外框一样大，格子跟着卡的大小走（练习里的小卡还是 44） */
 .map-card .map-cell, .map-card .thumb-cell { width: auto; height: auto; }
-.map-cell.covered { background-image: linear-gradient(135deg, #edc38f0f, #0e172526), var(--stone); background-size: 100% 100%; image-rendering: pixelated; box-shadow: inset 0 2px 0 #c5bbb22b, 0 2px 3px #0006; }
+.map-cell.covered { background-image: linear-gradient(135deg, #edc38f0f, #0e172526), var(--stone); background-size: 100% 100%; image-rendering: pixelated; box-shadow: inset 0 2px 0 #c5bbb22b, 0 2px 0 #0006; }
 .map-cell.covered:enabled { cursor: pointer; }
 .map-cell.covered:enabled:hover { border-color: #e3c08a; filter: brightness(1.18); }
 .map-cell.covered:enabled:active { filter: brightness(.85); }
 /* 不能挖的格子不接点击：点它就是点它的区块（换到这张卡） */
 .map-cell.covered:disabled { cursor: inherit; pointer-events: none; }
-.map-cell.revealed { grid-template-rows: 1fr auto; padding-top: 3px; border-color: #4c5155; border-bottom-color: #171c22; box-shadow: inset 0 2px 6px #060b1266; }
-.map-cell.revealed .item-icon { filter: drop-shadow(0 2px 0 #0005); }
+.map-cell.revealed { grid-template-rows: 1fr auto; padding-top: 3px; border-color: #4c5155; border-bottom-color: #171c22; box-shadow: inset 0 2px 0 #060b1266; }
 .map-cell.kind-diamond { background: #20363e; border-color: #496772; }
 .map-cell.kind-apple { background: #3a302e; border-color: #827049; }
 .map-cell.kind-tnt { background: #3b292b; border-color: #75504a; }
