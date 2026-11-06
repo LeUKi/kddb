@@ -24,10 +24,10 @@
   "vars": {
     "HB_ORIGIN": "https://hb.lafi.sh",
     "PAGE_ORIGIN": "https://hbweb-kddb.lafi.sh",
-    // 红包站上“矿洞夺宝”判定器的编号；v3 发成第几版，MIN_JUDGE_VERSION 就填几
-    // （只认 v3 起的版本：v2 的红包不会来这里）。发版前改成实际的版本号。
+    // 红包站上“矿洞夺宝”判定器的编号；v3 是第 5 版（2026-11-06 发布），只认第 5 版起的
+    // （v2 的红包不会来这里）
     "JUDGE_ID": "c9635560-890f-4cb7-97e0-9a1c9bf10013",
-    "MIN_JUDGE_VERSION": "0",
+    "MIN_JUDGE_VERSION": "5",
     "CLAIM_KID": "k1"
   },
   "env": {
