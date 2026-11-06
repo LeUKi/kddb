@@ -7,3 +7,7 @@ shots/
 game/.dev.vars*
 game/dist/
 game/.wrangler/
+
+# 构建产物
+page/frontend/dist-v3/
+page/frontend/dist-v3-kit/

@@ -42,7 +42,9 @@
         "PAGE_ORIGIN": "http://localhost:8731",
         "JUDGE_ID": "test",
         "MIN_JUDGE_VERSION": "0",
-        "CLAIM_KID": "k1"
+        "CLAIM_KID": "k1",
+        // 本地开局用固定的种子，好按 game/shared/rules.mjs 算出哪格是什么来试
+        "LOCAL_SEED": "local-seed-1"
       }
     }
   }

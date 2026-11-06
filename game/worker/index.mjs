@@ -15,7 +15,7 @@ import { MineRoom, RoomError } from "./room.mjs";
 /**
  * @typedef {{
  *   HB_ORIGIN: string, PAGE_ORIGIN: string, JUDGE_ID: string, MIN_JUDGE_VERSION: string,
- *   CLAIM_KID: string, CLAIM_KEY: string, TICKET_KEY: string,
+ *   CLAIM_KID: string, CLAIM_KEY: string, TICKET_KEY: string, LOCAL_SEED?: string,
  *   MINE: DurableObjectNamespace<MineObject>, ASSETS: Fetcher,
  * }} Env
  */
@@ -76,7 +76,8 @@ export class MineObject extends DurableObject {
     /** @type {Env} */
     this.env = env;
     this.room = new MineRoom(/** @type {import("./room.mjs").Storage} */ (/** @type {unknown} */ (ctx.storage)), {
-      seed: () => [...crypto.getRandomValues(new Uint8Array(32))].map((byte) => byte.toString(16).padStart(2, "0")).join(""),
+      // LOCAL_SEED 只在本地联调里有（wrangler.jsonc 的 env.local），线上每局随机
+      seed: () => env.LOCAL_SEED || [...crypto.getRandomValues(new Uint8Array(32))].map((byte) => byte.toString(16).padStart(2, "0")).join(""),
       sign: async (fields) => signVoucher({ ...fields, kid: env.CLAIM_KID }, JSON.parse(env.CLAIM_KEY)),
     });
   }

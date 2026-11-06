@@ -7,7 +7,9 @@
     "dev": "node ../dev/server.mjs",
     "build": "tsc --noEmit && node build.mjs",
     "test": "node --test test/*.test.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:v3": "tsc --noEmit -p tsconfig.v3.json && node build-v3.mjs",
+    "typecheck:v3": "tsc --noEmit -p tsconfig.v3.json"
   },
   "dependencies": {
     "@tanstack/react-router": "^1.132.0",

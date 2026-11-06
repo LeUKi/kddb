@@ -1,0 +1,50 @@
+// 游戏站给网页的数据（game/shared/rules.mjs 的 publicGame、privatePlayer）。
+export type Kind = 'emerald' | 'diamond' | 'apple' | 'totem' | 'tnt' | 'pearl' | 'shield' | 'spyglass'
+export const KINDS: Kind[] = ['emerald', 'diamond', 'apple', 'totem', 'tnt', 'pearl', 'shield', 'spyglass']
+export const KIND_NAMES: Record<Kind, string> = {
+  emerald: '绿宝石', diamond: '钻石', apple: '附魔金苹果', totem: '双铁镐',
+  tnt: 'TNT', pearl: '末影珍珠', shield: '盾牌', spyglass: '望远镜',
+}
+
+export interface OpenCell { kind: Kind; uid: number; name: string; at: number }
+export interface PublicCard {
+  id: number; x: number; y: number; size: 5 | 6 | 7
+  cells: (OpenCell | null)[]
+  left: Record<Kind, number>
+  finished: boolean
+}
+export interface FeedItem {
+  seq: number; uid: number; name: string; kind: Kind; cardId: number; index: number
+  text: string; at: number; newCardId: number | null
+}
+export interface Stats { digs: number; players: number; claimed: number; claimedPoints: number }
+export interface Rules {
+  difficulty: 'easy' | 'hard' | 'hell'; smallReward: number; tntPercent: number
+  initialChances: number; appleCap: number; totemBonus: number; bigMultiplier: number
+}
+export interface PublicGame {
+  seq: number; rules: Rules; pool: number; left: number
+  deadlineAt: number | null; wrapUpAt: number | null; over: boolean
+  stats: Stats; cards: PublicCard[]; feed: FeedItem[]
+}
+export interface Peek { cardId: number; index: number; kind: Kind }
+export interface DigResult {
+  kind: Kind; cardId: number; index: number; amount: number
+  blocked: boolean; text: string; newCardId: number | null
+}
+export interface Me {
+  chances: number; shield: boolean; peeks: Peek[]; points: number; digs: number
+  status: 'playing' | 'claimed'; lastResult: DigResult | null
+}
+export interface State { game: PublicGame; me: Me; blocked: string | null }
+
+/** 实时推送（game/worker/room.mjs 的 broadcast）。 */
+export type Live =
+  | { type: 'dig'; seq: number; card: PublicCard; newCard: PublicCard | null; feed: FeedItem; left: number; over: boolean; stats: Stats }
+  | { type: 'claim'; name: string; points: number; stats: Stats }
+
+/** 10000 → "100.00"。 */
+export function money(points: number) {
+  const abs = Math.abs(points)
+  return `${points < 0 ? '-' : ''}${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, '0')}`
+}

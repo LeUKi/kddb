@@ -139,18 +139,20 @@ export class MineRoom {
     };
     if (out.newCard) entries[`card:${out.newCard.id}`] = out.newCard;
     await this.storage.put(entries);
+    const broadcast = {
+      type: "dig",
+      seq: game.seq,
+      card: publicCard(cards[at.cardId]),
+      newCard: out.newCard ? publicCard(out.newCard) : null,
+      feed: out.feed,
+      left: game.pool - game.used,
+      over: game.over,
+      stats: game.stats,
+    };
+    // 挖的人直接拿到这次的变化（update），不等推送
     return {
-      answer: { ok: true, result: out.result, me: privatePlayer(player), claimNow: out.claimNow },
-      broadcast: {
-        type: "dig",
-        seq: game.seq,
-        card: publicCard(cards[at.cardId]),
-        newCard: out.newCard ? publicCard(out.newCard) : null,
-        feed: out.feed,
-        left: game.pool - game.used,
-        over: game.over,
-        stats: game.stats,
-      },
+      answer: { ok: true, result: out.result, me: privatePlayer(player), claimNow: out.claimNow, update: broadcast },
+      broadcast,
     };
   }
 
