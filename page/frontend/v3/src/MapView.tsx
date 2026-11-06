@@ -4,7 +4,7 @@ import { animate, motion, useMotionValue, useReducedMotion } from 'motion/react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { CardView } from './CardView'
 import type { Camera, Direction, Level, Viewport, WheelZoom } from './camera'
-import { cameraAt, cardNear, cardToward, centerOf, edgePointer, nearestCard, nearestLevel, onScreen, overviewCamera, scaleOf, wheelZoom } from './camera'
+import { cameraAt, cardNear, cardToward, centerOf, edgePointer, fullyOnScreen, nearestCard, nearestLevel, onScreen, overviewCamera, scaleOf, wheelZoom } from './camera'
 import { blockedAtom, dig, focusRequestAtom, freshAtom, gameAtom, hongbaoAtom, meAtom, newCardAtom, pendingAtom, settledAtom, uidAtom } from './state'
 import type { PublicCard } from './types'
 
@@ -139,17 +139,18 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusRequest])
 
-  // 新长出来的卡：长出来的动画；在镜头外时，屏幕边上闪几下“NEW”
+  // 新长出来的卡（谁挖出来的都一样，镜头不动）：长出来的动画；没有整张在画面里时，
+  // 画面边上闪几下“NEW + 箭头”指着它，点一下过去；移过去了就不再提醒
   const [marker, setMarker] = useState<number | null>(null)
   useEffect(() => {
     if (!newCard) return
     setGrown(value => new Set(value).add(newCard.cardId))
     const card = cards.find(item => item.id === newCard.cardId)
-    if (card && !onScreen(card, camera(), view)) setMarker(card.id)
+    if (card && !fullyOnScreen(card, camera(), view)) setMarker(card.id)
     const timer = window.setTimeout(() => {
       setMarker(null)
       setNewCard(null)
-    }, 3600)
+    }, 4000)
     return () => window.clearTimeout(timer)
     // 只在新卡出现时
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -328,7 +329,7 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
       : blocked
   const detailScale = settled.scale >= 0.4
   const markerCard = marker === null ? null : cards.find(card => card.id === marker) ?? null
-  const pointer = markerCard ? edgePointer(markerCard, settled, view) : null
+  const pointer = markerCard && !fullyOnScreen(markerCard, settled, view) ? edgePointer(markerCard, settled, view) : null
 
   return <div className={`map-view level-${level}`}>
     <div className="map-canvas" ref={box}

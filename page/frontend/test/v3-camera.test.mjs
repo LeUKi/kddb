@@ -103,6 +103,15 @@ test('卡的外框都一样大，格子小的卡格子大；边框算在宽度�
   }
 })
 
+test('整张在画面里才不提醒 NEW：露出一部分也提醒', () => {
+  const big = { width: 1400, height: 1000 }
+  const at = camera.cameraAt(camera.centerOf({ x: 0, y: 0 }), camera.digScale(big), big)
+  assert.equal(camera.fullyOnScreen({ x: 0, y: 0 }, at, big), true)
+  assert.equal(camera.fullyOnScreen({ x: 1, y: 0 }, at, big), true) // 1400 宽放得下右边那张
+  assert.equal(camera.fullyOnScreen({ x: 0, y: 1 }, at, big), false) // 1000 高只露出一部分
+  assert.equal(camera.onScreen({ x: 0, y: 1 }, at, big), true)
+})
+
 test('滚轮放大朝指针下面那张卡', () => {
   const at = camera.overviewCamera(wide, cards)
   const target = { x: -1, y: 1 }

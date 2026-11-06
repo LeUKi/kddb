@@ -128,8 +128,9 @@ function onLive(message: Live) {
   if (!mine) {
     const cell = key(message.feed.cardId, message.feed.index)
     store.set(freshAtom, value => ({ ...value, [cell]: { mine: false, at: Date.now() } }))
-    if (message.newCard) store.set(newCardAtom, { cardId: message.newCard.id, at: Date.now() })
   }
+  // 新卡（谁挖出来的都一样）：地图上长出来，不在画面里就在边上提醒，镜头不动
+  if (message.newCard) store.set(newCardAtom, { cardId: message.newCard.id, at: Date.now() })
   if (message.over && store.get(meAtom)?.status === 'playing') void claim(true)
 }
 
@@ -153,11 +154,6 @@ export async function dig(cardId: number, index: number) {
     }
     onLive({ ...(answer as unknown as { update: Live }).update })
     store.set(freshAtom, value => ({ ...value, [cell]: { mine: true, at: Date.now(), result: answer.result } }))
-    if (answer.result.newCardId) {
-      const cardIdNew = answer.result.newCardId
-      // 自己挖到珍珠：放完自己的展示，镜头移过去
-      window.setTimeout(() => store.set(focusRequestAtom, { cardId: cardIdNew, at: Date.now() }), 900)
-    }
     if (answer.claimNow) window.setTimeout(() => void claim(true), 1200)
   } catch (error) {
     toast(error instanceof ApiError ? error.message : '没挖成，稍后再试', 'bad')

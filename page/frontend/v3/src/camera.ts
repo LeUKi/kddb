@@ -152,6 +152,15 @@ export function onScreen(card: Pick<PublicCard, 'x' | 'y'>, camera: Camera, view
   return sx + half > -margin && sx - half < view.width + margin && sy + half > -margin && sy - half < view.height + margin
 }
 
+/** 整张卡都在画面里（NEW 提醒用：只露出一部分也要提醒）。 */
+export function fullyOnScreen(card: Pick<PublicCard, 'x' | 'y'>, camera: Camera, view: Viewport) {
+  const center = centerOf(card)
+  const half = (CARD_PX / 2) * camera.scale
+  const sx = center.x * camera.scale + camera.x
+  const sy = center.y * camera.scale + camera.y
+  return sx - half >= 0 && sx + half <= view.width && sy - half >= 0 && sy + half <= view.height
+}
+
 /** 屏幕外的卡在屏幕边上的哪个位置、箭头朝哪（NEW 标记用）。 */
 export function edgePointer(card: Pick<PublicCard, 'x' | 'y'>, camera: Camera, view: Viewport, inset = 44) {
   const center = centerOf(card)

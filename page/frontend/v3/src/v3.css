@@ -90,9 +90,10 @@ body { overflow: hidden; overscroll-behavior: none; }
 .map-hint { position: absolute; left: 50%; top: 10px; z-index: 3; padding: 4px 12px; color: #d8cfbd; font-size: 13px; white-space: nowrap; background: #11171dcc; border-radius: 999px; transform: translateX(-50%); pointer-events: none; }
 
 /* NEW：新卡在镜头外时，屏幕边上闪几下，指过去 */
-.new-marker { position: absolute; z-index: 4; display: flex; align-items: center; gap: 4px; padding: 5px 10px; color: #1b1408; font-weight: 800; font-size: 13px; background: linear-gradient(#f1c57f, #d79b4f); border: 0; border-radius: 999px; box-shadow: 0 0 18px #e9b56b99; transform: translate(-50%, -50%); animation: marker-flash .6s ease-in-out 5 alternate; }
+.new-marker { position: absolute; z-index: 4; display: flex; align-items: center; gap: 4px; padding: 5px 10px; color: #1b1408; font-weight: 800; font-size: 13px; background: linear-gradient(#f1c57f, #d79b4f); border: 0; border-radius: 999px; box-shadow: 0 0 18px #e9b56b99; transform: translate(-50%, -50%); animation: marker-flash .6s ease-in-out 6 alternate, marker-out .4s ease-in 3.6s forwards; }
 .new-arrow { display: inline-block; }
 @keyframes marker-flash { from { opacity: 1; } to { opacity: .35; } }
+@keyframes marker-out { to { opacity: 0; } }
 
 /* 缩放按钮：地图下面一行 */
 .map-toolbar { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 6px 14px; background: #161d23; border-top: 1px solid #2c343b; }
