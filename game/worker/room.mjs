@@ -23,6 +23,7 @@ import {
  *   id: string, status: 'active'|'ended'|'draft', paused?: boolean,
  *   params?: Record<string, unknown>, unit?: string, pool?: string,
  *   openedAt?: string, deadlineAt?: string|null,
+ *   scope?: import("./scope.mjs").Scope|null,
  * }} Info
  */
 /** @typedef {import("../shared/rules.mjs").Game} Game */

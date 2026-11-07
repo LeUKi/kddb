@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   amountOf, budgetLeft, claim, createGame, crystalPercent, dig, digBlocked, formatPoints,
-  averageUnits, coolingOf, MIN_INTERVAL_MS, newPlayer, placeFor, POOL_TARGET, privatePlayer, publicCard, publicGame,
+  averageUnits, coolingOf, MIN_INTERVAL_MS, newEndCard, newPlayer, placeFor, POOL_TARGET, privatePlayer, publicCard, publicGame,
   rewardFor, rulesOf, summaryOf, topWith, WRAP_UP_MS,
 } from "../shared/rules.mjs";
 
@@ -224,7 +224,12 @@ describe("挖", () => {
     assert.equal(out.result.amount, 0);
     assert.match(out.feed.text, /末地宝藏开了/);
     assert.ok(Math.max(Math.abs(out.newCard.x - card.x), Math.abs(out.newCard.y - card.y)) >= 2);
-    assert.deepEqual([...out.newCard.deck].sort(), ["apple", "crystal", "diamond", "diamond", "diamond", "emerald", "emerald", "emerald", "emerald"]);
+    // 新局的宝藏卡随机配：末影水晶 1–2、双铁镐 1–2、钻石 1–2、金苹果 0–1，其余绿宝石
+    const count = (kind) => out.newCard.deck.filter((item) => item === kind).length;
+    assert.equal(out.newCard.deck.length, 9);
+    for (const [kind, [low, high]] of Object.entries({ crystal: [1, 2], totem: [1, 2], diamond: [1, 2], apple: [0, 1] }))
+      assert.ok(count(kind) >= low && count(kind) <= high, `${kind} ${count(kind)}`);
+    assert.equal(count("emerald"), 9 - count("crystal") - count("totem") - count("diamond") - count("apple"));
     assert.equal(publicCard(out.newCard).kind, "end");
     // 宝藏卡不算张数：再长的第 4 张没有眼，第 6 张有
     const free = [0, 1, 2, 3, 4].filter((index) => index !== at).slice(0, 3);
@@ -232,10 +237,30 @@ describe("挖", () => {
     for (const index of free) assert.ok(dig(g, p, { cardId: 3, index, now: later() }).ok);
     const normal = Object.values(g.cards).filter((other) => other.kind !== "end").map((other) => other.composition.eye === 1);
     assert.deepEqual(normal, [false, false, true, false, false, true]);
-    // 宝藏卡上照常挖：除了一颗末影水晶都是宝物
-    const safe = out.newCard.deck.findIndex((kind) => kind !== "crystal");
+    // 宝藏卡上照常挖
+    const safe = out.newCard.deck.findIndex((kind) => kind === "emerald" || kind === "diamond");
     const dug = dig(g, p, { cardId: out.newCard.id, index: safe, now: later() });
     assert.ok(dug.ok && dug.result.amount > 0);
+  });
+  it("宝藏卡的配比：新局在范围里随机（两头都会出现），以前开的局照旧 4 绿宝石、3 钻石、1 金苹果、1 水晶", () => {
+    /** @type {Record<string, Set<number>>} */
+    const seen = {};
+    for (let n = 0; n < 60; n++) {
+      const g = game({ seed: `end-${n}` });
+      assert.equal(g.rules.endMix, 2);
+      const card = newEndCard(g, 99, 5, 5);
+      for (const kind of ["crystal", "totem", "diamond", "apple", "emerald"]) (seen[kind] ??= new Set()).add(card.composition[kind]);
+      assert.equal(card.deck.length, 9);
+      assert.equal(card.composition.tnt + card.composition.pearl + card.composition.eye + card.composition.shield + card.composition.spyglass, 0);
+    }
+    assert.deepEqual([...seen.crystal].sort(), [1, 2]);
+    assert.deepEqual([...seen.totem].sort(), [1, 2]);
+    assert.deepEqual([...seen.diamond].sort(), [1, 2]);
+    assert.deepEqual([...seen.apple].sort(), [0, 1]);
+    assert.ok(Math.min(...seen.emerald) >= 2 && Math.max(...seen.emerald) <= 6);
+    const old = game();
+    delete old.rules.endMix;
+    assert.deepEqual([...newEndCard(old, 99, 5, 5).deck].sort(), ["apple", "crystal", "diamond", "diamond", "diamond", "emerald", "emerald", "emerald", "emerald"]);
   });
   it("末影之眼可以关掉：参数 0 就没有眼", () => {
     const g = game({ params: { eyeEvery: 0 } });

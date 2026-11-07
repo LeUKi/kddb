@@ -4,6 +4,7 @@ import { fromBase64url, makeNonce, makeTicket, nonceValid, NONCE_TTL_MS, readTic
 import { MineRoom } from "../worker/room.mjs";
 import { signVoucher } from "../shared/voucher.mjs";
 import { pageFrom, SDK_URL, withSdkFrom } from "../worker/page.mjs";
+import { inScope, outOfScope } from "../worker/scope.mjs";
 
 const SITE = "http://127.0.0.1:8730";
 const PAGE = "http://127.0.0.1:8787";
@@ -238,6 +239,24 @@ describe("一局", () => {
     const room = new MineRoom(memory(), tools);
     assert.equal(await room.takeNonce("abc", NOW), true);
     assert.equal(await room.takeNonce("abc", NOW + 1), false);
+  });
+});
+
+describe("领取范围", () => {
+  it("没有范围谁都行；等级在里面或者是指定的人（名字不分大小写）才行；等级不知道的只看名字", () => {
+    assert.equal(inScope(null, { username: "a", level: 0 }), true);
+    assert.equal(inScope(undefined, { username: "a" }), true);
+    const scope = { levels: [1], users: [{ username: "XiaoMing" }] };
+    assert.equal(inScope(scope, { username: "a", level: 1 }), true);
+    assert.equal(inScope(scope, { username: "a", level: 3 }), false);
+    assert.equal(inScope(scope, { username: "xiaoming", level: 3 }), true);
+    assert.equal(inScope(scope, { username: "a", level: null }), false);
+  });
+  it("不让进时的话和红包页上的“仅限”一样写", () => {
+    assert.equal(outOfScope({ levels: [1] }), "这个红包仅限 Lv1，你不在里面：挖到的奖励领不了，所以进不了矿洞");
+    assert.match(outOfScope({ levels: [2, 3, 4] }), /仅限 Lv2 及以上，/);
+    assert.match(outOfScope({ levels: [0, 1, 3], users: [{ username: "a" }, { username: "b" }] }), /仅限 Lv0–1、Lv3 或指定的 2 人，/);
+    assert.match(outOfScope({ users: [{ username: "a" }] }), /仅限指定的 1 人，/);
   });
 });
 

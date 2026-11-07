@@ -106,7 +106,7 @@ async function siteKeys(site, fetcher, now) {
 
 /**
  * @typedef {{
- *   sub: string, username: string, name?: string, hongbao: string,
+ *   sub: string, username: string, name?: string, level?: number|null, hongbao: string,
  *   judge?: string, judgeVersion?: number, nonce?: string, exp: number, iat: number,
  * }} Identity
  */

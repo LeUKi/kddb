@@ -30,6 +30,8 @@ export interface Rules {
   players?: number
   /** 每人两次挖掘至少隔几秒；旧局没有，是 1 */
   digInterval?: number
+  /** 2：末地宝藏每张随机配（2026-11-07 起开的局）；旧局没有 */
+  endMix?: 2
 }
 export interface PublicGame {
   seq: number; rules: Rules; pool: number; left: number

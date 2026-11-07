@@ -61,6 +61,7 @@ export function App() {
     {phase === 'starting' ? <div className="state-card"><div className="sheen" /><p>正在打开矿洞…</p></div>
       : phase === 'login' ? <div className="state-card"><p>登录以后才能挖宝</p><button type="button" onClick={() => void signIn()}>登录</button></div>
         : phase === 'error' ? <div className="state-card"><p>{problem}</p><button type="button" onClick={() => void start()}>再试一次</button></div>
+          : phase === 'out' ? <div className="state-card"><p>{problem}</p></div>
           : <>
             <TopBar onRules={() => setRules(true)} />
             <MapView onFocus={onFocus} />

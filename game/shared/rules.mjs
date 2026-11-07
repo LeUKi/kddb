@@ -24,6 +24,7 @@
  *   eyeEvery: number,
  *   players?: number,
  *   digInterval?: number,
+ *   endMix?: 2,
  * }} Rules
  */
 /** @typedef {{ uid: number, name: string, at: number }} OpenCell */
@@ -95,6 +96,11 @@ const COMPOSITIONS = /** @type {const} */ ({
  * 2026-11-06 以前开出的宝藏卡是 5 绿宝石、3 钻石、1 金苹果，存着的牌不变。
  */
 const END_COMPOSITION = /** @type {const} */ ({ emerald: 4, diamond: 3, apple: 1, totem: 0, tnt: 0, pearl: 0, shield: 0, spyglass: 0, eye: 0, crystal: 1 });
+/**
+ * 2026-11-07 起开的局（rules.endMix 是 2）：每张宝藏卡随机，末影水晶 1–2 颗、双铁镐 1–2 把、
+ * 钻石 1–2 颗、金苹果 0–1 个，剩下的是绿宝石（2–6 颗）。钱少一点、机会多一点、风险大一点。
+ */
+export const END_RANGES = /** @type {const} */ ({ crystal: [1, 2], totem: [1, 2], diamond: [1, 2], apple: [0, 1] });
 /** 末影之眼默认每 3 张普通卡一颗；参数可改，0 是不开末地宝藏。 */
 export const EYE_EVERY = 3
 const TNT_COUNTS = /** @type {const} */ ({
@@ -163,6 +169,8 @@ export function rulesOf(/** @type {Record<string, unknown>} */ params, /** @type
       ? EYE_EVERY : Math.min(20, Math.max(0, Number(params.eyeEvery))),
     ...(params.smallReward == null ? { players } : {}),
     digInterval: DIG_INTERVALS.includes(/** @type {1} */ (Number(params.interval))) ? Number(params.interval) : 1,
+    // 末地宝藏的牌按新的随机范围配（开局时定下，存在局里；以前开的局没有这一项，照旧）
+    endMix: 2,
   });
 }
 
@@ -292,12 +300,18 @@ export function createGame({ seed, rules, pool, openedAt, deadlineAt }) {
   return game;
 }
 
-/** 末地宝藏卡，放在 (x, y)；牌序也由种子和卡号定。 */
+/** 末地宝藏卡，放在 (x, y)；配比（新局随机）和牌序都由种子和卡号定。 */
 export function newEndCard(/** @type {Game} */ game, /** @type {number} */ id, /** @type {number} */ x, /** @type {number} */ y) {
-  const composition = /** @type {Composition} */ ({ ...END_COMPOSITION });
+  const int = randomOf(game.seed, `card:${id}`);
+  /** @type {Composition} */
+  const composition = { ...END_COMPOSITION };
+  if (game.rules.endMix === 2) {
+    for (const [kind, [low, high]] of Object.entries(END_RANGES)) composition[/** @type {Kind} */ (kind)] = int(low, high);
+    composition.emerald = 9 - KINDS.filter((kind) => kind !== "emerald").reduce((sum, kind) => sum + composition[kind], 0);
+  }
   return /** @type {Card} */ ({
     id, x, y, size: 3, kind: "end", composition,
-    deck: shuffledDeck(randomOf(game.seed, `card:${id}`), composition),
+    deck: shuffledDeck(int, composition),
     opened: Array(9).fill(null),
     finished: false,
   });

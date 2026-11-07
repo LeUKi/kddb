@@ -12,6 +12,7 @@ import { signVoucher } from "../shared/voucher.mjs";
 import { makeNonce, makeTicket, nonceValid, readTicket, TICKET_TTL_MS, verifyIdentity } from "./auth.mjs";
 import { pageFrom } from "./page.mjs";
 import { MineRoom, RoomError } from "./room.mjs";
+import { inScope, outOfScope } from "./scope.mjs";
 
 /**
  * @typedef {{
@@ -154,8 +155,11 @@ export class MineObject extends DurableObject {
           return json({ message: "这次认人过期了，请重新打开矿洞夺宝" }, 401);
         const uid = Number(identity.sub);
         const name = identity.username;
-        const ticket = await makeTicket(this.env.TICKET_KEY, { uid, name, hongbao, exp: now + TICKET_TTL_MS });
         const info = await this.info(hongbao);
+        // 不在领取范围的人不给票据：挖到的分领不了，还占奖池（网页也会先看 hb.me() 拦下）
+        if (!inScope(info.scope, { username: identity.username, level: identity.level }))
+          return json({ message: outOfScope(/** @type {import("./scope.mjs").Scope} */ (info.scope)), out: true }, 403);
+        const ticket = await makeTicket(this.env.TICKET_KEY, { uid, name, hongbao, exp: now + TICKET_TTL_MS });
         return json({ ticket, uid, ...(await this.room.state(info, uid, name, now)) });
       }
 

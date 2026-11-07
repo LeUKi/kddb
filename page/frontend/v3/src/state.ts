@@ -11,7 +11,8 @@ import { money } from './types'
 
 export const store = createStore()
 
-export type Phase = 'starting' | 'login' | 'error' | 'ready'
+/** out：不在领取范围（挖到的领不了，不让进） */
+export type Phase = 'starting' | 'login' | 'error' | 'ready' | 'out'
 export const phaseAtom = atom<Phase>('starting')
 export const problemAtom = atom('')
 export const gameAtom = atom<PublicGame | null>(null)
@@ -97,8 +98,22 @@ export async function start() {
       store.set(phaseAtom, 'login')
       return
     }
+    // 不在领取范围：挖到的奖励领不了，还占奖池，先拦下（游戏站认人时也会拦）
+    if (!me.open && me.why === 'not_in_scope') {
+      store.set(problemAtom, '你不在这个红包的领取范围里（红包页上写着仅限哪些人领），挖到的奖励领不了，所以进不了矿洞')
+      store.set(phaseAtom, 'out')
+      return
+    }
     api = new GameApi(hongbao.id)
-    const state = await api.hello()
+    const state = await api.hello().catch(error => {
+      if (error instanceof ApiError && error.status === 403) {
+        store.set(problemAtom, error.message)
+        store.set(phaseAtom, 'out')
+        return null
+      }
+      throw error
+    })
+    if (!state) return
     store.set(uidAtom, api.uid)
     ahead.clear()
     store.set(gameAtom, null)
