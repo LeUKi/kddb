@@ -224,10 +224,10 @@ describe("挖", () => {
     assert.equal(out.result.amount, 0);
     assert.match(out.feed.text, /末地宝藏开了/);
     assert.ok(Math.max(Math.abs(out.newCard.x - card.x), Math.abs(out.newCard.y - card.y)) >= 2);
-    // 新局的宝藏卡随机配：末影水晶 1–2、双铁镐 1–2、钻石 1–2、金苹果 0–1，其余绿宝石
+    // 新局的宝藏卡随机配：末影水晶 1–2、双铁镐 1–2、金苹果 0–1、钻石 3–5，其余绿宝石
     const count = (kind) => out.newCard.deck.filter((item) => item === kind).length;
     assert.equal(out.newCard.deck.length, 9);
-    for (const [kind, [low, high]] of Object.entries({ crystal: [1, 2], totem: [1, 2], diamond: [1, 2], apple: [0, 1] }))
+    for (const [kind, [low, high]] of Object.entries({ crystal: [1, 2], totem: [1, 2], apple: [0, 1], diamond: [3, 5] }))
       assert.ok(count(kind) >= low && count(kind) <= high, `${kind} ${count(kind)}`);
     assert.equal(count("emerald"), 9 - count("crystal") - count("totem") - count("diamond") - count("apple"));
     assert.equal(publicCard(out.newCard).kind, "end");
@@ -242,22 +242,28 @@ describe("挖", () => {
     const dug = dig(g, p, { cardId: out.newCard.id, index: safe, now: later() });
     assert.ok(dug.ok && dug.result.amount > 0);
   });
-  it("宝藏卡的配比：新局在范围里随机（两头都会出现），以前开的局照旧 4 绿宝石、3 钻石、1 金苹果、1 水晶", () => {
+  it("宝藏卡的配比：新局在范围里随机（两头都会出现），钻石多过绿宝石，以前开的局照旧 4 绿宝石、3 钻石、1 金苹果、1 水晶", () => {
     /** @type {Record<string, Set<number>>} */
     const seen = {};
-    for (let n = 0; n < 60; n++) {
+    let diamonds = 0;
+    let emeralds = 0;
+    for (let n = 0; n < 200; n++) {
       const g = game({ seed: `end-${n}` });
       assert.equal(g.rules.endMix, 2);
       const card = newEndCard(g, 99, 5, 5);
       for (const kind of ["crystal", "totem", "diamond", "apple", "emerald"]) (seen[kind] ??= new Set()).add(card.composition[kind]);
+      diamonds += card.composition.diamond;
+      emeralds += card.composition.emerald;
       assert.equal(card.deck.length, 9);
       assert.equal(card.composition.tnt + card.composition.pearl + card.composition.eye + card.composition.shield + card.composition.spyglass, 0);
     }
     assert.deepEqual([...seen.crystal].sort(), [1, 2]);
     assert.deepEqual([...seen.totem].sort(), [1, 2]);
-    assert.deepEqual([...seen.diamond].sort(), [1, 2]);
+    assert.deepEqual([...seen.diamond].sort(), [3, 4, 5]);
     assert.deepEqual([...seen.apple].sort(), [0, 1]);
-    assert.ok(Math.min(...seen.emerald) >= 2 && Math.max(...seen.emerald) <= 6);
+    assert.deepEqual([...seen.emerald].sort(), [0, 1, 2, 3, 4]);
+    // 平均每张约 4 颗钻石、1.5 颗绿宝石：约 21 份小奖
+    assert.ok(diamonds / 200 > 3.7 && emeralds / 200 < 2);
     const old = game();
     delete old.rules.endMix;
     assert.deepEqual([...newEndCard(old, 99, 5, 5).deck].sort(), ["apple", "crystal", "diamond", "diamond", "diamond", "emerald", "emerald", "emerald", "emerald"]);

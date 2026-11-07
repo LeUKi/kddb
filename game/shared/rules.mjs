@@ -97,10 +97,11 @@ const COMPOSITIONS = /** @type {const} */ ({
  */
 const END_COMPOSITION = /** @type {const} */ ({ emerald: 4, diamond: 3, apple: 1, totem: 0, tnt: 0, pearl: 0, shield: 0, spyglass: 0, eye: 0, crystal: 1 });
 /**
- * 2026-11-07 起开的局（rules.endMix 是 2）：每张宝藏卡随机，末影水晶 1–2 颗、双铁镐 1–2 把、
- * 钻石 1–2 颗、金苹果 0–1 个，剩下的是绿宝石（2–6 颗）。钱少一点、机会多一点、风险大一点。
+ * 2026-11-07 起开的局（rules.endMix 是 2）：每张宝藏卡随机，依次抽末影水晶 1–2 颗、双铁镐 1–2 把、
+ * 金苹果 0–1 个、钻石 3–5 颗（剩下的格子不够就少抽），剩下的是绿宝石（0–4 颗）。水晶可能有两颗，
+ * 风险大了，钱也多：钻石比绿宝石多，平均约 21 份小奖（以前 19 份）。
  */
-export const END_RANGES = /** @type {const} */ ({ crystal: [1, 2], totem: [1, 2], diamond: [1, 2], apple: [0, 1] });
+export const END_RANGES = /** @type {const} */ ({ crystal: [1, 2], totem: [1, 2], apple: [0, 1], diamond: [3, 5] });
 /** 末影之眼默认每 3 张普通卡一颗；参数可改，0 是不开末地宝藏。 */
 export const EYE_EVERY = 3
 const TNT_COUNTS = /** @type {const} */ ({
@@ -306,8 +307,13 @@ export function newEndCard(/** @type {Game} */ game, /** @type {number} */ id, /
   /** @type {Composition} */
   const composition = { ...END_COMPOSITION };
   if (game.rules.endMix === 2) {
-    for (const [kind, [low, high]] of Object.entries(END_RANGES)) composition[/** @type {Kind} */ (kind)] = int(low, high);
-    composition.emerald = 9 - KINDS.filter((kind) => kind !== "emerald").reduce((sum, kind) => sum + composition[kind], 0);
+    let room = 9;
+    for (const [kind, [low, high]] of Object.entries(END_RANGES)) {
+      const count = int(low, Math.min(high, room));
+      composition[/** @type {Kind} */ (kind)] = count;
+      room -= count;
+    }
+    composition.emerald = room;
   }
   return /** @type {Card} */ ({
     id, x, y, size: 3, kind: "end", composition,
