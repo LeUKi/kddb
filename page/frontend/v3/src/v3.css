@@ -51,10 +51,14 @@ body { overflow: hidden; overscroll-behavior: none; }
  */
 .map-view .map-block.has-eye { background: #9a6bff12; box-shadow: inset 0 0 0 calc(1.5px * var(--px, 1)) #b48cff8c; }
 .map-view .map-block.is-end:not(.is-done) { background: #ffd36b17; box-shadow: inset 0 0 0 calc(2px * var(--px, 1)) #f1c57fb3; }
-/* 外面那圈光放在 ::before 上，只变透明度：不用每一帧重画大片模糊的阴影，手机上拖地图不掉帧 */
+/*
+ * 外面那圈光放在 ::before 上，只变透明度：不用每一帧重画大片模糊的阴影，手机上拖地图不掉帧。
+ * 出现时呼吸三下，之后一直亮着：一直动的话网页每一帧都要重新合成，红包站包着它的那块
+ * 毛玻璃也跟着每一帧重新模糊一遍（有藏着眼的卡就停不下来）
+ */
 .map-block::before { content: ''; position: absolute; inset: 0; border-radius: inherit; opacity: 0; pointer-events: none; }
-.map-view .map-block.has-eye::before { box-shadow: 0 0 calc(40px * var(--px, 1)) #9a6bff73; will-change: opacity; animation: glow-pulse 2.2s ease-in-out infinite alternate; }
-.map-view .map-block.is-end:not(.is-done)::before { box-shadow: 0 0 calc(56px * var(--px, 1)) #ffbf3d8c; will-change: opacity; animation: glow-pulse 1.8s ease-in-out infinite alternate; }
+.map-view .map-block.has-eye::before { box-shadow: 0 0 calc(40px * var(--px, 1)) #9a6bff73; animation: glow-pulse 2.2s ease-in-out 5 alternate forwards; }
+.map-view .map-block.is-end:not(.is-done)::before { box-shadow: 0 0 calc(56px * var(--px, 1)) #ffbf3d8c; animation: glow-pulse 1.8s ease-in-out 5 alternate forwards; }
 @keyframes glow-pulse { from { opacity: .35; } to { opacity: 1; } }
 
 .map-card.is-end { background: #2a2637; border-color: #d9c27a; }
@@ -65,9 +69,9 @@ body { overflow: hidden; overscroll-behavior: none; }
 button.eye-status { cursor: pointer; }
 .eye-status.is-treasure { color: #2a1a00; font-weight: 650; background: linear-gradient(#ffe08a, #e8a93a); border-color: #fff3c4; }
 
-/* JP：末地宝藏开着、又不在画面里时，画面边上一直亮着；金色，一道光扫过，轻轻呼吸 */
-.jp-marker { position: absolute; z-index: 4; display: flex; align-items: center; gap: 5px; padding: 6px 13px; overflow: hidden; color: #2a1a00; font-weight: 900; font-size: 14px; letter-spacing: .5px; background: linear-gradient(#ffe08a, #e8a93a); border: 0; border-radius: 999px; box-shadow: 0 0 22px #ffd36baa, inset 0 0 0 2px #fff3c4; transform: translate(-50%, -50%); cursor: pointer; animation: jp-breathe 1.6s ease-in-out infinite alternate; }
-.jp-marker::after { content: ''; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 30%, #ffffffcc 50%, transparent 70%); transform: translateX(-120%); animation: jp-sheen 2.2s ease-in-out infinite; pointer-events: none; }
+/* JP：末地宝藏开着、又不在画面里时，画面边上一直亮着；金色，出现时一道光扫过、呼吸几下，之后静止（理由同上） */
+.jp-marker { position: absolute; z-index: 4; display: flex; align-items: center; gap: 5px; padding: 6px 13px; overflow: hidden; color: #2a1a00; font-weight: 900; font-size: 14px; letter-spacing: .5px; background: linear-gradient(#ffe08a, #e8a93a); border: 0; border-radius: 999px; box-shadow: 0 0 22px #ffd36baa, inset 0 0 0 2px #fff3c4; transform: translate(-50%, -50%); cursor: pointer; animation: jp-breathe 1.6s ease-in-out 6 alternate; }
+.jp-marker::after { content: ''; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 30%, #ffffffcc 50%, transparent 70%); transform: translateX(-120%); animation: jp-sheen 2.2s ease-in-out 3; pointer-events: none; }
 @keyframes jp-breathe { from { box-shadow: 0 0 12px #ffd36b88, inset 0 0 0 2px #fff3c4; } to { box-shadow: 0 0 30px #ffd36bdd, inset 0 0 0 2px #fff3c4; } }
 @keyframes jp-sheen { 0%, 40% { transform: translateX(-120%); } 80%, 100% { transform: translateX(120%); } }
 
@@ -143,9 +147,10 @@ button.eye-status { cursor: pointer; }
 .digging-pick { position: absolute; animation: pick-swing .32s ease-in-out infinite alternate; transform-origin: 80% 80%; }
 @keyframes pick-swing { from { transform: rotate(-25deg); } to { transform: rotate(18deg); } }
 .map-cell.just-mine { animation: cell-pop .5s var(--ease-out); z-index: 2; }
-.map-cell.just-other { animation: cell-flash 1.2s ease-out; }
+/* 别人刚挖开的：一圈光淡出（光画在 ::after 上只变透明度，不每一帧重画阴影） */
+.map-cell.just-other::after { content: ''; position: absolute; inset: -1px; border-radius: inherit; box-shadow: 0 0 0 2px #f5e7cf, 0 0 18px #f5e7cf88; opacity: 0; animation: cell-flash 1.2s ease-out; pointer-events: none; }
 @keyframes cell-pop { from { transform: scale(.6); } 60% { transform: scale(1.12); } to { transform: none; } }
-@keyframes cell-flash { from { box-shadow: 0 0 0 2px #f5e7cf, 0 0 18px #f5e7cf88; } to { box-shadow: 0 0 0 0 transparent; } }
+@keyframes cell-flash { from { opacity: 1; } to { opacity: 0; } }
 .cell-float { position: absolute; left: 50%; top: 4px; z-index: 3; padding: 1px 5px; color: #b4f0a8; font-size: 12px; font-weight: 700; white-space: nowrap; background: #11171dcc; border-radius: 4px; transform: translateX(-50%); animation: float-up 1.6s var(--ease-out) forwards; pointer-events: none; }
 .cell-float.is-bad { color: #ff9c8a; }
 @keyframes float-up { from { opacity: 0; transform: translate(-50%, 8px); } 15% { opacity: 1; } 75% { opacity: 1; } to { opacity: 0; transform: translate(-50%, -8px); } }
@@ -158,7 +163,14 @@ button.eye-status { cursor: pointer; }
  * 整张地图的画布（MapCanvas）：远处的卡都画在这上面，网页里的卡盖在它上面。区块底色
  * 另画一块，只在全图那一级显示。悬停在画布上的卡时，用一块和区块一样的高亮罩住它。
  */
-.map-blocks-canvas, .map-cards-canvas { position: absolute; display: block; }
+/*
+ * 缩到全图（level-0 一加上，飞的途中就算）：除了当前卡和正在长出来的卡，近处那几张网页里的
+ * 卡先藏起来，露出画布上画好的同一张。不藏的话，浏览器要在缩小的途中把它们连同格子、图标
+ * 按原来的清晰度重新栅格化，显卡忙半秒，包着网页的红包站也跟着卡
+ */
+.map-view.level-0 .map-block:not(.is-focused, .is-grown) { visibility: hidden; }
+.map-blocks-canvas, .map-glow-canvas, .map-cards-canvas { position: absolute; display: block; }
+.map-glow-canvas { pointer-events: none; }
 .map-blocks-canvas { opacity: 0; transition: opacity .18s var(--ease-out); pointer-events: none; }
 .map-view.level-0 .map-blocks-canvas { opacity: 1; }
 .map-view.is-pointing .map-cards-canvas { cursor: pointer; }
@@ -316,5 +328,7 @@ button.eye-status { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   .jp-marker, .jp-marker::after, .map-block::before, .map-card::after,
   .map-block, .map-card, .map-block.is-grown, .map-block.is-grown .map-card, .map-block.is-grown .map-cell, .map-block.is-grown .thumb-canvas, .map-cell.just-mine, .map-cell.just-other, .digging-pick, .cell-float, .new-marker, .toast, .sheen,
-  .map-cell.revealed > .item-icon, .cell-who { animation: none !important; transition: none !important; }
+  .map-cell.revealed > .item-icon, .cell-who, .map-cell.just-other::after { animation: none !important; transition: none !important; }
+  /* 不呼吸，直接亮着 */
+  .map-view .map-block.has-eye::before, .map-view .map-block.is-end:not(.is-done)::before { opacity: 1; }
 }

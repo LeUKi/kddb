@@ -435,11 +435,11 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
   const nearOf = (card: PublicCard) => onScreen(card, cullAt, view, 200)
     || (!!cullFocus && Math.max(Math.abs(card.x - cullFocus.x), Math.abs(card.y - cullFocus.y)) <= 1)
   /**
-   * 放在网页里的卡：画格子的、正要飞过去的、当前卡、发光的（藏着眼的、没挖完的宝藏）、
-   * 刚长出来的。别的都只画在整张地图的画布上。
+   * 放在网页里的卡：画格子的、正要飞过去的、当前卡、刚长出来的。别的都只画在整张地图的
+   * 画布上（远处发光的卡，光也画在画布上）。
    */
   const dom = new Set(cards.filter(card => (detailScale && nearOf(card)) || card.id === warm || card.id === focused?.id
-    || (isTreasure(card) && !card.finished) || (card.left.eye ?? 0) > 0 || card.id === entrance?.cardId).map(card => card.id))
+    || card.id === entrance?.cardId).map(card => card.id))
   const hoverCard = hover === null ? null : cards.find(card => card.id === hover) ?? null
   // 望远镜看到的格子按卡分开；只有自己的望远镜会变
   const peeksOf = useMemo(() => {
@@ -456,7 +456,7 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
   return <div className={`map-view level-${level}${cooling.seconds ? ' is-cooling' : ''}${hoverCard ? ' is-pointing' : ''}`}>
     <div className="map-canvas" ref={box} onClickCapture={onClickCapture}>
     <motion.div className="map-world" style={{ x, y, scale, transformOrigin: '0 0', '--px': 1 / settled.scale } as MotionStyle}>
-      <MapCanvas cards={cards} view={view} skip={entrance?.cardId ?? null} onPick={pickOnCanvas} onHover={hoverOnCanvas} />
+      <MapCanvas cards={cards} view={view} skip={entrance?.cardId ?? null} inDom={dom} onPick={pickOnCanvas} onHover={hoverOnCanvas} />
       {hoverCard && !dom.has(hoverCard.id) ? <div className="map-hover" aria-hidden="true"
         style={{ left: hoverCard.x * SLOT_PX - BLOCK_PX / 2, top: hoverCard.y * SLOT_PX - BLOCK_PX / 2, width: BLOCK_PX, height: BLOCK_PX }} /> : null}
       {cards.map(card => {

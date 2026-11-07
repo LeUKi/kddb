@@ -28,6 +28,19 @@ import {
 /** @typedef {import("../shared/rules.mjs").Game} Game */
 /** @typedef {import("../shared/rules.mjs").Player} Player */
 
+/**
+ * 推送第 2 版：只说变了的那一格（网页自己把它放到卡上、减掉剩下的数、看挖完没有），
+ * 一条两百字节左右；第 1 版每条带整张卡（谁挖的名字每格一份），挖满的 7×7 卡一条一千五。
+ * @typedef {{
+ *   type: "cell", seq: number, cardId: number, index: number,
+ *   cell: { kind: string, uid: number, name: string, at: number },
+ *   newCard: ReturnType<typeof publicCard>|null, text: string,
+ *   left: number, over: boolean, stats: Game["stats"],
+ * }} CellMessage
+ */
+/** 内存里留最近这么多条第 2 版推送，网页漏了几条时按序号补（GET /since），不用重读整局。 */
+export const RECENT_LIMIT = 2000;
+
 export class RoomError extends Error {
   constructor(/** @type {number} */ status, /** @type {string} */ message) {
     super(message);
@@ -41,6 +54,11 @@ export class MineRoom {
   /** @type {Map<number, Player>} */
   players = new Map();
   loaded = false;
+  /**
+   * 最近的第 2 版推送，序号连着（重启以后从空的开始，补不上的就给整局）。
+   * @type {CellMessage[]}
+   */
+  recent = [];
 
   /**
    * @param {Storage} storage
@@ -118,16 +136,29 @@ export class MineRoom {
   }
 
   /**
-   * 挖一格：回给挖的人的，和推给大家的。
-   * @returns {Promise<{ answer: Record<string, unknown>, broadcast: Record<string, unknown>|null }>}
+   * 挖一格：回给挖的人的，和推给大家的（broadcast 是第 1 版，cell 是第 2 版）。
+   * compact：网页认第 2 版推送（它回答里的 update 也用第 2 版）。没挖成时回答里带上
+   * 那张卡现在的样子（格子被别人先挖了，网页只改这一张，不重读整局）和现在为什么不能挖。
+   * @returns {Promise<{ answer: Record<string, unknown>, broadcast: Record<string, unknown>|null, cell: CellMessage|null }>}
    */
-  async dig(/** @type {Info} */ info, /** @type {number} */ uid, /** @type {string} */ name, /** @type {{ cardId: number, index: number }} */ at, /** @type {number} */ now) {
+  async dig(/** @type {Info} */ info, /** @type {number} */ uid, /** @type {string} */ name, /** @type {{ cardId: number, index: number }} */ at, /** @type {number} */ now, { compact = false } = {}) {
     const game = await this.gameFor(info);
     const player = await this.playerOf(game, uid, name);
-    if (info.status !== "active") return { answer: { ok: false, message: "红包已经结束了", me: privatePlayer(player, game, now) }, broadcast: null };
-    if (info.paused) return { answer: { ok: false, message: "红包暂停了，稍后再试", me: privatePlayer(player, game, now) }, broadcast: null };
+    const refused = (/** @type {string} */ message) => {
+      const card = game.cards[at.cardId];
+      return {
+        answer: {
+          ok: false, message, me: privatePlayer(player, game, now), blocked: this.blocked(info, game, player, now),
+          ...(card ? { card: publicCard(card) } : {}),
+        },
+        broadcast: null,
+        cell: null,
+      };
+    };
+    if (info.status !== "active") return refused("红包已经结束了");
+    if (info.paused) return refused("红包暂停了，稍后再试");
     const out = dig(game, player, { cardId: at.cardId, index: at.index, now });
-    if (!out.ok) return { answer: { ok: false, message: out.message, me: privatePlayer(player, game, now) }, broadcast: null };
+    if (!out.ok) return refused(out.message);
     const { cards, ...meta } = game;
     /** @type {Record<string, unknown>} */
     const entries = {
@@ -138,21 +169,62 @@ export class MineRoom {
     };
     if (out.newCard) entries[`card:${out.newCard.id}`] = out.newCard;
     await this.storage.put(entries);
+    const newCard = out.newCard ? publicCard(out.newCard) : null;
+    const stats = { ...game.stats };
     const broadcast = {
       type: "dig",
       seq: game.seq,
       card: publicCard(cards[at.cardId]),
-      newCard: out.newCard ? publicCard(out.newCard) : null,
+      newCard,
       feed: out.feed,
       left: game.pool - game.used,
       over: game.over,
-      stats: game.stats,
+      stats,
     };
+    /** @type {CellMessage} */
+    const cell = {
+      type: "cell",
+      seq: game.seq,
+      cardId: at.cardId,
+      index: at.index,
+      cell: { kind: out.result.kind, uid, name: player.name, at: now },
+      newCard,
+      text: out.feed.text,
+      left: game.pool - game.used,
+      over: game.over,
+      stats,
+    };
+    this.remember(cell);
     // 挖的人直接拿到这次的变化（update），不等推送
     return {
-      answer: { ok: true, result: out.result, me: privatePlayer(player, game, now), claimNow: out.claimNow, update: broadcast },
+      answer: {
+        ok: true, result: out.result, me: privatePlayer(player, game, now), claimNow: out.claimNow,
+        blocked: this.blocked(info, game, player, now), update: compact ? cell : broadcast,
+      },
       broadcast,
+      cell,
     };
+  }
+
+  /** 记下一条第 2 版推送；序号接不上（不该有）就从这条重新记。 */
+  remember(/** @type {CellMessage} */ message) {
+    const last = this.recent.at(-1);
+    if (last && last.seq + 1 !== message.seq) this.recent = [];
+    this.recent.push(message);
+    if (this.recent.length > RECENT_LIMIT) this.recent.splice(0, this.recent.length - RECENT_LIMIT);
+  }
+
+  /**
+   * 网页手上到第 seq 条，后面漏了：内存里还有就给这几条，没有（刚重启、漏得太多）就给整局。
+   * @returns {Promise<{ messages: CellMessage[] } | { state: Awaited<ReturnType<MineRoom["state"]>> }>}
+   */
+  async since(/** @type {Info} */ info, /** @type {number} */ uid, /** @type {string} */ name, /** @type {number} */ seq, /** @type {number} */ now) {
+    const game = await this.gameFor(info);
+    if (seq >= game.seq) return { messages: [] };
+    const first = this.recent[0];
+    if (first && seq >= 0 && first.seq <= seq + 1 && this.recent.at(-1)?.seq === game.seq)
+      return { messages: this.recent.slice(seq + 1 - first.seq) };
+    return { state: await this.state(info, uid, name, now) };
   }
 
   /** 收益卡：自己的逐格记录和数，全场前几名。 */

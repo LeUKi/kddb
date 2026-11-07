@@ -4,7 +4,9 @@ import type { HbHongbao } from '../../../hb'
 import { ApiError, GameApi } from './api'
 import { landMs } from './PearlFlight'
 import { play, soundOfResult } from './sound'
-import type { DigResult, Live, Me, PublicCard, PublicGame } from './types'
+import type { Merge } from './live'
+import { mergeCard, mergeLive, mergeState } from './live'
+import type { DigResult, Live, LiveStep, Me, PublicGame, State } from './types'
 import { money } from './types'
 
 export const store = createStore()
@@ -98,10 +100,13 @@ export async function start() {
     api = new GameApi(hongbao.id)
     const state = await api.hello()
     store.set(uidAtom, api.uid)
-    apply(state.game, state.me, state.blocked)
+    ahead.clear()
+    store.set(gameAtom, null)
+    acceptState(state)
     store.set(phaseAtom, 'ready')
     stopLive?.()
-    stopLive = api.live(onLive, () => void refresh())
+    // 连上（和断了重连上）时按序号补上漏的
+    stopLive = api.live(onLive, () => void catchUp())
     window.setInterval(checkWrapUp, 5000)
   } catch (error) {
     setProblem(error)
@@ -113,26 +118,80 @@ export async function signIn() {
   if (result?.signedIn) await start()
 }
 
-function apply(game: PublicGame, me: Me, blocked: string | null) {
-  store.set(gameAtom, game)
-  setMe(me)
-  store.set(blockedAtom, blocked)
-}
-
 function setMe(me: Me) {
   store.set(meAtom, me)
   if (me.coolingMs !== undefined) store.set(readyAtAtom, Date.now() + me.coolingMs)
 }
 
-/** 整张重读：连上推送时、漏了推送时。 */
-export async function refresh() {
-  if (!api) return
-  try {
-    const state = await api.state()
-    apply(state.game, state.me, state.blocked)
-  } catch {
-    // 下次推送或重连时再读
+/**
+ * 序号接不上的推送（ahead）：先等一会儿，推送和挖的回答走两条路，晚到的那条多半马上就到；
+ * 还缺就找游戏站按序号补（catchUp）。同一时间只补一次，补回来的比手上旧就不要：以前每次
+ * 接不上都重读整局（几百 KB），读回来的又比手上旧、往回一退又接不上，一局下来几万次重读。
+ */
+const GAP_WAIT_MS = 400
+const ahead = new Map<number, LiveStep>()
+let gapTimer: ReturnType<typeof setTimeout> | undefined
+let catching: Promise<void> | null = null
+
+/** 把合好的整局放进去：别人新开的格子闪一下，新卡长出来，奖池分完了就结束。 */
+function commit(merge: Merge) {
+  const before = store.get(gameAtom)
+  store.set(gameAtom, merge.game)
+  const uid = store.get(uidAtom)
+  const now = Date.now()
+  const fresh: Record<string, { mine: boolean; at: number }> = {}
+  for (const cell of merge.opened) if (cell.uid !== uid) fresh[key(cell.cardId, cell.index)] = { mine: false, at: now }
+  if (Object.keys(fresh).length > 0) addFresh(fresh)
+  // 新卡（谁挖出来的都一样）：地图上长出来，不在画面里就在边上提醒，镜头不动
+  if (merge.grown) {
+    const { uid: digger, ...grown } = merge.grown
+    store.set(newCardAtom, { ...grown, at: now })
+    // 别人挖到末影之眼：末地宝藏开了，大家都听得见（轻一些）
+    const card = merge.game.cards.find(item => item.id === grown.cardId)
+    if (digger !== uid && card?.kind === 'end') play('portal', { volume: 0.6, delay: landMs('eye') })
   }
+  // 推送、补回来的让奖池分完了（刚打开时就分完的照旧只显示为什么不能挖）
+  if (merge.game.over && before && !before.over) gameOver()
+  if (ahead.size === 0) {
+    clearTimeout(gapTimer)
+    gapTimer = undefined
+  } else if (gapTimer === undefined && !catching) {
+    gapTimer = setTimeout(() => {
+      gapTimer = undefined
+      if (ahead.size > 0) void catchUp()
+    }, GAP_WAIT_MS)
+  }
+}
+
+/** 整局（认人、补不上时）：比手上的旧就只收自己的那份。 */
+function acceptState(state: State) {
+  setMe(state.me)
+  store.set(blockedAtom, state.blocked)
+  const merge = mergeState(store.get(gameAtom), state.game, ahead)
+  if (merge) commit(merge)
+}
+
+/** 按序号补上漏的（连上推送时、序号一直接不上时）；同一时间只补一次。 */
+function catchUp(): Promise<void> {
+  if (!api) return Promise.resolve()
+  const game = store.get(gameAtom)
+  catching ??= (async () => {
+    try {
+      const answer = game ? await api!.since(game.seq) : await api!.state()
+      if ('state' in answer) acceptState(answer.state)
+      else if ('messages' in answer) applyLive(answer.messages)
+      else acceptState(answer)
+    } catch {
+      // 下次推送或重连时再补
+    }
+  })().finally(() => {
+    catching = null
+    if (ahead.size > 0 && gapTimer === undefined) gapTimer = setTimeout(() => {
+      gapTimer = undefined
+      if (ahead.size > 0) void catchUp()
+    }, GAP_WAIT_MS)
+  })
+  return catching
 }
 
 /**
@@ -158,52 +217,9 @@ function flushLive() {
   if (queue.length > 0) applyLive(queue)
 }
 
-/** 按序号一条条接上（漏了就整张重读），最后只设一次状态。 */
 function applyLive(messages: Live[]) {
-  let game = store.get(gameAtom)
-  if (!game) return
-  const uid = store.get(uidAtom)
-  const now = Date.now()
-  let cards: PublicCard[] | null = null
-  const put = (card: PublicCard) => {
-    cards ??= game!.cards.slice()
-    const at = cards.findIndex(item => item.id === card.id)
-    if (at < 0) cards.push(card)
-    else cards[at] = card
-  }
-  const fresh: Record<string, { mine: boolean; at: number }> = {}
-  let grown: { cardId: number; at: number; from: { cardId: number; index: number } } | null = null
-  let missed = false
-  for (const message of messages) {
-    if (message.type === 'claim') {
-      game = { ...game, stats: message.stats }
-      continue
-    }
-    if (message.seq <= game.seq) continue
-    if (message.seq > game.seq + 1) {
-      missed = true
-      break
-    }
-    put(message.card)
-    if (message.newCard) put(message.newCard)
-    game = {
-      ...game, seq: message.seq, cards: cards ?? game.cards, left: message.left, over: message.over, stats: message.stats,
-      feed: [message.feed, ...game.feed].slice(0, 30),
-    }
-    const mine = message.feed.uid === uid
-    if (!mine) fresh[key(message.feed.cardId, message.feed.index)] = { mine: false, at: now }
-    // 新卡（谁挖出来的都一样）：地图上长出来，不在画面里就在边上提醒，镜头不动
-    if (message.newCard) {
-      grown = { cardId: message.newCard.id, at: now, from: { cardId: message.feed.cardId, index: message.feed.index } }
-      // 别人挖到末影之眼：末地宝藏开了，大家都听得见（轻一些）
-      if (!mine && message.newCard.kind === 'end') play('portal', { volume: 0.6, delay: landMs('eye') })
-    }
-  }
-  store.set(gameAtom, game)
-  if (Object.keys(fresh).length > 0) addFresh(fresh)
-  if (grown) store.set(newCardAtom, grown)
-  if (game.over) gameOver()
-  if (missed) void refresh()
+  const game = store.get(gameAtom)
+  if (game) commit(mergeLive(game, ahead, messages))
 }
 
 /** 奖池分完：手里有分的自动领；没有分的只说游戏结束了，不领（领了也是 0）。 */
@@ -219,34 +235,46 @@ function gameOver() {
   if (me.digs > 0) showEnd()
 }
 
-/** 挖一格。 */
+/**
+ * 挖一格。上一格还在挖（回答没到）时不发：两次至少隔 1 秒，发了也是被拒。间隔拉长了
+ * （3 秒以上）没到时间就说还要等几秒；间隔 1 秒时差一点点就到点，镐子先挥着，到点再发。
+ */
 export async function dig(cardId: number, index: number) {
   const cell = key(cardId, index)
-  if (!api || store.get(pendingAtom)[cell]) return
+  if (!api) return
+  const pending = store.get(pendingAtom)
+  if (pending[cell]) return
   const blocked = store.get(blockedAtom)
   if (blocked) {
     toast(blocked)
     return
   }
-  // 挖掘间隔拉长了（3 秒以上）：没到时间就不发，告诉他还要等几秒
+  if (Object.keys(pending).length > 0) {
+    toast('上一格还在挖，稍等一下')
+    return
+  }
   const wait = store.get(readyAtAtom) - Date.now()
   if ((store.get(gameAtom)?.rules.digInterval ?? 1) > 1 && wait > 0) {
     toast(`还要等 ${Math.ceil(wait / 1000)} 秒才能再挖`)
     return
   }
   store.set(pendingAtom, value => ({ ...value, [cell]: true }))
-  play('dig')
   try {
+    if (wait > 0) await new Promise(resolve => window.setTimeout(resolve, wait))
+    play('dig')
     const answer = await api.dig(cardId, index)
     setMe(answer.me)
+    if (answer.blocked !== undefined) store.set(blockedAtom, answer.blocked)
     if (!answer.ok) {
       toast(answer.message)
-      void refresh()
+      // 格子被别人先挖了之类：只把这张卡换成游戏站上现在的样子，不重读整局
+      const game = store.get(gameAtom)
+      if (answer.card && game) commit(mergeCard(game, answer.card))
       return
     }
-    // 先接上攒着的推送，再放自己这次的（序号接得上）
+    // 先接上攒着的推送，再放自己这次的：格子马上翻开，序号接不上也不等
     flushLive()
-    applyLive([(answer as unknown as { update: Live }).update])
+    applyLive([answer.update])
     addFresh({ [cell]: { mine: true, at: Date.now(), result: answer.result } })
     const sound = soundOfResult(answer.result)
     if (sound) play(sound)
@@ -334,4 +362,6 @@ function checkWrapUp() {
 export function stop() {
   stopLive?.()
   stopLive = null
+  clearTimeout(gapTimer)
+  gapTimer = undefined
 }

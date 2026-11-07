@@ -64,10 +64,17 @@ export interface Summary {
   stats: Stats; pool: number; left: number; over: boolean
 }
 
-/** 实时推送（game/worker/room.mjs 的 broadcast）。 */
-export type Live =
-  | { type: 'dig'; seq: number; card: PublicCard; newCard: PublicCard | null; feed: FeedItem; left: number; over: boolean; stats: Stats }
-  | { type: 'claim'; name: string; points: number; stats: Stats }
+/**
+ * 实时推送（game/worker/room.mjs）：网页连推送时带 v=2，收第 2 版的 cell（只有变了的那一格）；
+ * 第 1 版的 dig（整张卡）只有老的游戏站发，留着认。
+ */
+export interface LiveCell {
+  type: 'cell'; seq: number; cardId: number; index: number; cell: OpenCell
+  newCard: PublicCard | null; text: string; left: number; over: boolean; stats: Stats
+}
+export interface LiveDig { type: 'dig'; seq: number; card: PublicCard; newCard: PublicCard | null; feed: FeedItem; left: number; over: boolean; stats: Stats }
+export type LiveStep = LiveCell | LiveDig
+export type Live = LiveStep | { type: 'claim'; name: string; points: number; stats: Stats }
 
 /** 10000 → "100.00"。 */
 export function money(points: number) {

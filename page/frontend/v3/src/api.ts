@@ -1,4 +1,4 @@
-import type { Live, Me, DigResult, State, Summary } from './types'
+import type { DigResult, Live, LiveStep, Me, PublicCard, State, Summary } from './types'
 
 declare const __API_BASE__: string
 
@@ -77,11 +77,20 @@ export class GameApi {
     return this.call<Summary>('GET', 'summary')
   }
 
+  /**
+   * 挖一格（v: 2：回答里的 update 是第 2 版，只有这一格）。没挖成时带着那张卡现在的样子；
+   * blocked 是挖完以后为什么不能再挖（能挖时 null，不算间隔）。
+   */
   dig(cardId: number, index: number) {
     return this.call<
-      | { ok: true; result: DigResult; me: Me; claimNow: boolean }
-      | { ok: false; message: string; me: Me }
-    >('POST', 'dig', { cardId, index })
+      | { ok: true; result: DigResult; me: Me; claimNow: boolean; update: LiveStep; blocked?: string | null }
+      | { ok: false; message: string; me: Me; card?: PublicCard; blocked?: string | null }
+    >('POST', 'dig', { cardId, index, v: 2 })
+  }
+
+  /** 手上到第 seq 条，后面漏了：游戏站给漏的那几条，或者（太多、刚重启）给整局。 */
+  since(seq: number) {
+    return this.call<{ messages: LiveStep[] } | { state: State }>('GET', `since?seq=${seq}`)
   }
 
   claim() {
@@ -91,7 +100,7 @@ export class GameApi {
     >('POST', 'claim')
   }
 
-  /** 实时推送：断了就退避重连，连上时 onOpen（网页借机重读整张，补上断开时漏的）。 */
+  /** 实时推送：断了就退避重连，连上时 onOpen（网页借机按序号补上断开时漏的）。 */
   live(onMessage: (message: Live) => void, onOpen: () => void) {
     let socket: WebSocket | null = null
     let closed = false
@@ -102,6 +111,7 @@ export class GameApi {
       const url = this.url('live')
       url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
       url.searchParams.set('ticket', this.ticket)
+      url.searchParams.set('v', '2')
       socket = new WebSocket(url)
       socket.onopen = () => {
         delay = 1000

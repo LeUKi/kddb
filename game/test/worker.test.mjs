@@ -185,6 +185,55 @@ describe("一局", () => {
     assert.deepEqual(rebuilt.top.map((entry) => entry.uid), [10002, 10001]);
     assert.ok(Array.isArray(/** @type {{ top?: unknown }} */ (storage.map.get("game")).top));
   });
+  it("第 2 版推送只有变了的那一格；网页要第 2 版时回答里的 update 也是", async () => {
+    const room = new MineRoom(memory(), tools);
+    const game = await room.gameFor(info);
+    game.cards[1].deck = game.cards[1].deck.map(() => "emerald");
+    const old = await room.dig(info, 10001, "xiaoming", { cardId: 1, index: 0 }, NOW);
+    assert.equal(old.answer.update, old.broadcast);
+    const out = await room.dig(info, 10002, "xiaohong", { cardId: 1, index: 1 }, NOW, { compact: true });
+    assert.deepEqual(out.cell, {
+      type: "cell", seq: 2, cardId: 1, index: 1,
+      cell: { kind: "emerald", uid: 10002, name: "xiaohong", at: NOW },
+      newCard: null, text: "挖到了绿宝石", left: 10000 - 20, over: false,
+      stats: { digs: 2, players: 2, claimed: 0, claimedPoints: 0 },
+    });
+    assert.equal(out.answer.update, out.cell);
+    assert.equal(out.answer.blocked, null);
+    // 第 1 版带整张卡，第 2 版小得多
+    assert.ok(JSON.stringify(out.cell).length < JSON.stringify(out.broadcast).length);
+    // 之后的挖不改已经推过的那条（统计是当时的）
+    await room.dig(info, 10003, "xiaogang", { cardId: 1, index: 2 }, NOW);
+    assert.equal(out.cell?.stats.digs, 2);
+  });
+  it("漏了几条：按序号补；内存里没有了（重启）给整局", async () => {
+    const storage = memory();
+    const room = new MineRoom(storage, tools);
+    for (const [uid, index] of [[10001, 0], [10002, 1], [10003, 2]]) await room.dig(info, uid, `p${uid}`, { cardId: 1, index }, NOW);
+    assert.deepEqual(await room.since(info, 10001, "p10001", 3, NOW), { messages: [] });
+    const some = await room.since(info, 10001, "p10001", 1, NOW);
+    assert.deepEqual("messages" in some && some.messages.map((message) => [message.seq, message.index]), [[2, 1], [3, 2]]);
+    const again = new MineRoom(storage, tools);
+    const whole = await again.since(info, 10001, "p10001", 1, NOW);
+    assert.ok("state" in whole && whole.state.game.seq === 3);
+    // 重启以后挖的能补；重启以前的给整局
+    await again.dig(info, 10004, "p10004", { cardId: 1, index: 3 }, NOW);
+    const after = await again.since(info, 10001, "p10001", 3, NOW);
+    assert.deepEqual("messages" in after && after.messages.map((message) => message.seq), [4]);
+    assert.ok("state" in (await again.since(info, 10001, "p10001", 2, NOW)));
+  });
+  it("没挖成：回答里带那张卡现在的样子和为什么不能再挖", async () => {
+    const room = new MineRoom(memory(), tools);
+    await room.dig(info, 10001, "xiaoming", { cardId: 1, index: 0 }, NOW);
+    const taken = await room.dig(info, 10002, "xiaohong", { cardId: 1, index: 0 }, NOW);
+    assert.equal(taken.answer.ok, false);
+    assert.equal(taken.answer.message, "这一格已经被挖开了，换一格");
+    assert.equal(/** @type {{ cells: unknown[] }} */ (taken.answer.card).cells[0] !== null, true);
+    assert.equal(taken.answer.blocked, null);
+    assert.equal(taken.cell, null);
+    const ended = await room.dig({ ...info, status: "ended" }, 10002, "xiaohong", { cardId: 1, index: 1 }, NOW);
+    assert.equal(ended.answer.blocked, "红包已经结束了");
+  });
   it("nonce 只能用一次", async () => {
     const room = new MineRoom(memory(), tools);
     assert.equal(await room.takeNonce("abc", NOW), true);

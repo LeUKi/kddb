@@ -23,6 +23,8 @@ import { MineRoom, RoomError } from "./room.mjs";
 
 const HONGBAO_ID = /^[A-Za-z0-9_-]{1,64}$/;
 const INFO_TTL_MS = 30_000;
+/** 过了 30 秒、还不到 5 分钟的红包信息：先用着，后台去读新的（挖的人不等红包站） */
+const INFO_STALE_MS = 5 * 60_000;
 
 const json = (/** @type {unknown} */ body, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -71,6 +73,8 @@ export default {
 export class MineObject extends DurableObject {
   /** @type {{ info: import("./room.mjs").Info, at: number }|null} */
   infoKept = null;
+  /** @type {Promise<import("./room.mjs").Info>|null} 正在读的红包信息（同时来的请求共用这一次） */
+  infoLoading = null;
 
   /** @param {DurableObjectState} ctx @param {Env} env */
   constructor(ctx, env) {
@@ -84,10 +88,27 @@ export class MineObject extends DurableObject {
     });
   }
 
-  /** 红包信息：30 秒内用上次的；读不到用上次的；从没读到过就请他稍后再试。 */
+  /**
+   * 红包信息：30 秒内用上次的；30 秒到 5 分钟先用上次的、后台读新的；再旧的等读完。
+   * 同时要的共用一次读（以前每 30 秒那一下，正在挖的人都要等红包站、各读一遍）。
+   */
   async info(/** @type {string} */ hongbao) {
+    const kept = this.infoKept;
+    const age = kept ? Date.now() - kept.at : Infinity;
+    if (kept && age < INFO_TTL_MS) return kept.info;
+    const loading = (this.infoLoading ??= this.loadInfo(hongbao).finally(() => {
+      this.infoLoading = null;
+    }));
+    if (kept && age < INFO_STALE_MS) {
+      this.ctx.waitUntil(loading.catch(() => {}));
+      return kept.info;
+    }
+    return loading;
+  }
+
+  /** 读一次红包信息；读不到用上次的；从没读到过就请他稍后再试。 */
+  async loadInfo(/** @type {string} */ hongbao) {
     const now = Date.now();
-    if (this.infoKept && now - this.infoKept.at < INFO_TTL_MS) return this.infoKept.info;
     try {
       const response = await fetch(`${this.env.HB_ORIGIN}/api/hongbao/${encodeURIComponent(hongbao)}`);
       if (response.ok) {
@@ -143,7 +164,8 @@ export class MineObject extends DurableObject {
         if (!who) return json({ message: "票据过期了" }, 401);
         if (request.headers.get("Upgrade") !== "websocket") return json({ message: "要用 WebSocket" }, 426);
         const pair = new WebSocketPair();
-        this.ctx.acceptWebSocket(pair[1], [String(who.uid)]);
+        // v=2 的网页收第 2 版推送（只有变了的那一格），别的照旧收整张卡
+        this.ctx.acceptWebSocket(pair[1], url.searchParams.get("v") === "2" ? [String(who.uid), "v2"] : [String(who.uid)]);
         return new Response(null, { status: 101, webSocket: pair[0] });
       }
 
@@ -155,13 +177,20 @@ export class MineObject extends DurableObject {
 
       if (route === "GET /summary") return json(await this.room.summary(info, who.uid, who.name));
 
+      // 漏了几条推送：按序号补（内存里没有了就给整局）
+      if (route === "GET /since") {
+        const seq = Number(url.searchParams.get("seq"));
+        if (!Number.isSafeInteger(seq) || seq < 0) return json({ message: "序号不对" }, 400);
+        return json(await this.room.since(info, who.uid, who.name, seq, Date.now()));
+      }
+
       if (route === "POST /dig") {
-        const body = /** @type {{ cardId?: unknown, index?: unknown }} */ (await request.json().catch(() => ({})));
+        const body = /** @type {{ cardId?: unknown, index?: unknown, v?: unknown }} */ (await request.json().catch(() => ({})));
         const cardId = Number(body.cardId);
         const index = Number(body.index);
         if (!Number.isSafeInteger(cardId) || !Number.isSafeInteger(index)) return json({ message: "格子不对" }, 400);
-        const { answer, broadcast } = await this.room.dig(info, who.uid, who.name, { cardId, index }, Date.now());
-        if (broadcast) this.broadcast(broadcast);
+        const { answer, broadcast, cell } = await this.room.dig(info, who.uid, who.name, { cardId, index }, Date.now(), { compact: body.v === 2 });
+        if (broadcast) this.broadcast(broadcast, cell);
         return json(answer);
       }
 
@@ -179,14 +208,23 @@ export class MineObject extends DurableObject {
     }
   }
 
-  /** 推给所有开着的网页。 */
-  broadcast(/** @type {Record<string, unknown>} */ message) {
-    const text = JSON.stringify(message);
+  /**
+   * 推给所有开着的网页：带 v2 标记的收第 2 版（compact，有的话），别的收第 1 版。
+   * @param {Record<string, unknown>} message @param {Record<string, unknown>|null} [compact]
+   */
+  broadcast(message, compact = null) {
+    /** @type {string|undefined} */
+    let full;
+    /** @type {string|undefined} */
+    let small;
     for (const socket of this.ctx.getWebSockets()) {
+      const text = compact && this.ctx.getTags(socket).includes("v2")
+        ? (small ??= JSON.stringify(compact))
+        : (full ??= JSON.stringify(message));
       try {
         socket.send(text);
       } catch {
-        // 已经断了，网页会重连、重读整张
+        // 已经断了，网页会重连、补上漏的
       }
     }
   }
