@@ -5,12 +5,13 @@
 // 环境变量：HB_ORIGIN（红包站，本地是开发包模拟器 http://127.0.0.1:8730）、
 // PAGE_ORIGIN（这个网页的来源，令牌的 aud）、JUDGE_ID、MIN_JUDGE_VERSION（只认 v3
 // 起的判定器版本）、CLAIM_KID。Secrets：CLAIM_KEY（签凭证的私钥 JWK）、TICKET_KEY（票据和
-// nonce 的 HMAC 密钥）。
+// nonce 的 HMAC 密钥），BOT_KEY（只在 Stage：压测机器人的钥匙，见 bots.mjs）。
 
 import { DurableObject } from "cloudflare:workers";
 import { signVoucher } from "../shared/voucher.mjs";
 import { makeNonce, makeTicket, nonceValid, readTicket, TICKET_TTL_MS, verifyIdentity } from "./auth.mjs";
 import { pageFrom } from "./page.mjs";
+import { BOT_DIGS_MAX, botKeyValid } from "./bots.mjs";
 import { LivePushes } from "./push.mjs";
 import { MineRoom, RoomError } from "./room.mjs";
 import { inScope, outOfScope } from "./scope.mjs";
@@ -18,7 +19,7 @@ import { inScope, outOfScope } from "./scope.mjs";
 /**
  * @typedef {{
  *   HB_ORIGIN: string, PAGE_ORIGIN: string, JUDGE_ID: string, MIN_JUDGE_VERSION: string,
- *   CLAIM_KID: string, CLAIM_KEY: string, TICKET_KEY: string, LOCAL_SEED?: string,
+ *   CLAIM_KID: string, CLAIM_KEY: string, TICKET_KEY: string, LOCAL_SEED?: string, BOT_KEY?: string,
  *   MINE: DurableObjectNamespace<MineObject>, ASSETS: Fetcher,
  * }} Env
  */
@@ -174,6 +175,16 @@ export class MineObject extends DurableObject {
         // v=2 的网页收第 2 版推送（只有变了的那一格），别的照旧收整张卡
         this.ctx.acceptWebSocket(pair[1], url.searchParams.get("v") === "2" ? [String(who.uid), "v2"] : [String(who.uid)]);
         return new Response(null, { status: 101, webSocket: pair[0] });
+      }
+
+      // Stage 压测：机器人挖 count 格（只有设了 BOT_KEY 的环境有）
+      if (route === "POST /bots") {
+        if (!botKeyValid(request.headers.get("X-Bot-Key"), this.env.BOT_KEY)) return json({ message: "没有这个接口" }, 404);
+        const body = /** @type {{ count?: unknown }} */ (await request.json().catch(() => ({})));
+        const count = Math.min(BOT_DIGS_MAX, Math.max(1, Math.floor(Number(body.count)) || 1));
+        const { pushes, ...out } = await this.room.botDigs(await this.info(hongbao), count, Date.now());
+        for (const [broadcast, cell] of pushes) this.pushes.push(broadcast, cell);
+        return json(out);
       }
 
       const who = await this.ticketOf(request.headers.get("Authorization"), hongbao);

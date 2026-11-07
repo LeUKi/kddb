@@ -6,6 +6,7 @@ import { signVoucher } from "../shared/voucher.mjs";
 import { pageFrom, SDK_URL, withSdkFrom } from "../worker/page.mjs";
 import { inScope, outOfScope } from "../worker/scope.mjs";
 import { LivePushes, PUSH_EVERY_MS } from "../worker/push.mjs";
+import { BOT_BASE, botKeyValid } from "../worker/bots.mjs";
 
 const SITE = "http://127.0.0.1:8730";
 const PAGE = "http://127.0.0.1:8787";
@@ -240,6 +241,25 @@ describe("一局", () => {
     const room = new MineRoom(memory(), tools);
     assert.equal(await room.takeNonce("abc", NOW), true);
     assert.equal(await room.takeNonce("abc", NOW + 1), false);
+  });
+});
+
+describe("Stage 压测机器人", () => {
+  it("照规则挖：轮着换机器人，每格都有推送，地图会长；没设钥匙的环境不认", async () => {
+    const room = new MineRoom(memory(), tools);
+    const big = { ...info, params: { boardSpec: "5", smallReward: 1, initialChances: 2 } };
+    let n = 0;
+    const random = () => ((n = (n * 9301 + 49297) % 233280) / 233280);
+    const out = await room.botDigs(big, 200, NOW, random);
+    assert.equal(out.dug, 200);
+    assert.equal(out.seq, 200);
+    assert.equal(out.pushes.length, 200);
+    assert.ok(out.cards > 3, `cards ${out.cards}`);
+    const diggers = new Set(out.pushes.map(([, cell]) => cell.cell.uid));
+    assert.ok(diggers.size >= 100 && [...diggers].every((uid) => uid >= BOT_BASE));
+    assert.match(out.pushes[0][1].cell.name, /^机器人 \d+$/);
+    assert.equal(botKeyValid("k", undefined), false);
+    assert.equal(botKeyValid(null, "k"), false);
   });
 });
 

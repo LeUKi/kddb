@@ -8,6 +8,7 @@ import {
   amountOf, claim, createGame, dig, digBlocked, newPlayer, privatePlayer,
   publicCard, publicGame, rulesOf, summaryOf, topWith,
 } from "../shared/rules.mjs";
+import { BOT_BASE, BOT_COUNT, pickCell } from "./bots.mjs";
 
 /**
  * @typedef {{
@@ -60,6 +61,8 @@ export class MineRoom {
    * @type {CellMessage[]}
    */
   recent = [];
+  /** 下一个挖的机器人（Stage 压测） */
+  botNext = 0;
 
   /**
    * @param {Storage} storage
@@ -205,6 +208,32 @@ export class MineRoom {
       broadcast,
       cell,
     };
+  }
+
+  /**
+   * Stage 压测（bots.mjs）：机器人挖 count 格，每格挑没挖完的卡上随便一格，轮着换机器人
+   * （机会用完、间隔没到的换下一个）。挖不动了（结束、快截止、都挖完）就停。
+   * @returns {Promise<{ pushes: [Record<string, unknown>, CellMessage][], dug: number, cards: number, seq: number, over: boolean }>}
+   */
+  async botDigs(/** @type {Info} */ info, /** @type {number} */ count, /** @type {number} */ now, random = Math.random) {
+    const game = await this.gameFor(info);
+    /** @type {[Record<string, unknown>, CellMessage][]} */
+    const pushes = [];
+    for (let i = 0; i < count && !game.over; i++) {
+      const at = pickCell(game, random);
+      if (!at) break;
+      let dug = false;
+      for (let tries = 0; tries < 20 && !dug; tries++) {
+        const k = this.botNext++ % BOT_COUNT;
+        const { broadcast, cell } = await this.dig(info, BOT_BASE + k, `机器人 ${k + 1}`, at, now);
+        if (broadcast && cell) {
+          pushes.push([broadcast, cell]);
+          dug = true;
+        }
+      }
+      if (!dug) break;
+    }
+    return { pushes, dug: pushes.length, cards: Object.keys(game.cards).length, seq: game.seq, over: game.over };
   }
 
   /** 记下一条第 2 版推送；序号接不上（不该有）就从这条重新记。 */
