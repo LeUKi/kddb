@@ -211,12 +211,15 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
     const card = cards.find(item => item.id === newCard.cardId)
     const source = cards.find(item => item.id === newCard.from.cardId)
     const flies = !!card && !!source && !reduced && onScreen(source, settled, view, 120)
+    // 画面附近的才在网页里翻出来；远处的直接画到整张地图的画布上（上千张卡、一秒长一张时，
+    // 每张都进出一次网页，拖动时会顿一下）。NEW 提醒照旧
+    const near = !!card && onScreen(card, camera(), view, 400)
     const edge = card && source ? edgeFacing(card, source) : null
     // 末地宝藏是末影之眼开出来的：眼浮起来转一圈，金色的尾巴，飞得更远
     const variant: Flight = card && isTreasure(card) ? 'eye' : 'pearl'
     entranceKept.current = {
       at: newCard.at,
-      value: card && source && edge ? {
+      value: card && source && edge && (near || flies) ? {
         cardId: card.id,
         edge,
         land: flies ? landMs(variant) : 0,
