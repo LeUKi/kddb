@@ -5,6 +5,7 @@ import { MineRoom } from "../worker/room.mjs";
 import { signVoucher } from "../shared/voucher.mjs";
 import { pageFrom, SDK_URL, withSdkFrom } from "../worker/page.mjs";
 import { inScope, outOfScope } from "../worker/scope.mjs";
+import { LivePushes, PUSH_EVERY_MS } from "../worker/push.mjs";
 
 const SITE = "http://127.0.0.1:8730";
 const PAGE = "http://127.0.0.1:8787";
@@ -239,6 +240,36 @@ describe("一局", () => {
     const room = new MineRoom(memory(), tools);
     assert.equal(await room.takeNonce("abc", NOW), true);
     assert.equal(await room.takeNonce("abc", NOW + 1), false);
+  });
+});
+
+describe("推送攒一攒再发", () => {
+  it("100 毫秒里的几条一次发出：第 2 版一个数组，第 1 版一条条；没有第 2 版的两边一样；发完再来的另起一批", () => {
+    /** @type {{ v1: Record<string, unknown>[], v2: Record<string, unknown>[] }[]} */
+    const sent = [];
+    /** @type {{ run: () => void, ms: number }[]} */
+    const timers = [];
+    let cancelled = 0;
+    const pushes = new LivePushes((out) => sent.push(out), (run, ms) => timers.push({ run, ms }), () => { cancelled += 1; });
+    pushes.push({ type: "dig", seq: 1 }, { type: "cell", seq: 1 });
+    pushes.push({ type: "dig", seq: 2 }, { type: "cell", seq: 2 });
+    pushes.push({ type: "claim", name: "p" });
+    assert.equal(sent.length, 0);
+    assert.equal(timers.length, 1);
+    assert.equal(timers[0].ms, PUSH_EVERY_MS);
+    timers[0].run();
+    assert.deepEqual(sent, [{
+      v1: [{ type: "dig", seq: 1 }, { type: "dig", seq: 2 }, { type: "claim", name: "p" }],
+      v2: [{ type: "cell", seq: 1 }, { type: "cell", seq: 2 }, { type: "claim", name: "p" }],
+    }]);
+    assert.equal(cancelled, 0);
+    pushes.push({ type: "dig", seq: 3 }, { type: "cell", seq: 3 });
+    assert.equal(timers.length, 2);
+    pushes.flush();
+    assert.equal(cancelled, 1);
+    assert.deepEqual(sent[1].v2, [{ type: "cell", seq: 3 }]);
+    pushes.flush();
+    assert.equal(sent.length, 2);
   });
 });
 

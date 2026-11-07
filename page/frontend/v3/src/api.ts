@@ -1,3 +1,4 @@
+import { liveMessages } from './live'
 import type { DigResult, Live, LiveStep, Me, PublicCard, State, Summary } from './types'
 
 declare const __API_BASE__: string
@@ -118,11 +119,7 @@ export class GameApi {
         onOpen()
       }
       socket.onmessage = event => {
-        try {
-          onMessage(JSON.parse(String(event.data)) as Live)
-        } catch {
-          // 看不懂的不理
-        }
+        for (const message of liveMessages(String(event.data))) onMessage(message)
       }
       socket.onclose = () => {
         if (closed) return

@@ -13,6 +13,20 @@ export interface Merge {
   grown: { cardId: number; from: { cardId: number; index: number }; uid: number } | null
 }
 
+/**
+ * 推送里的一段文字是哪几条：游戏站攒 100 毫秒发一次，第 2 版是一个数组（按序号）；
+ * 单独一条的（以前的、回放里的）也认。看不懂的不要。
+ */
+export function liveMessages(text: string): Live[] {
+  try {
+    const data: unknown = JSON.parse(text)
+    const list = Array.isArray(data) ? data : [data]
+    return list.filter((item): item is Live => typeof item === 'object' && item !== null && typeof (item as { type?: unknown }).type === 'string')
+  } catch {
+    return []
+  }
+}
+
 /** 一张卡开了几格。 */
 export function openedCount(card: PublicCard) {
   let count = 0

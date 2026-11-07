@@ -70,6 +70,13 @@ test('新卡长出来一次；第 1 版推送（整张卡）比手上旧时不�
   assert.equal(live.mergeLive(out.game, ahead, [stale]).game.cards[0], newer)
 })
 
+test('推送：游戏站攒着发的数组拆成一条条，单独一条也认，看不懂的不要', () => {
+  assert.deepEqual(live.liveMessages(JSON.stringify([step(1, 0), step(2, 3)])).map(item => item.seq), [1, 2])
+  assert.equal(live.liveMessages(JSON.stringify(step(4, 1)))[0].seq, 4)
+  assert.deepEqual(live.liveMessages(JSON.stringify([{ type: 'claim', name: 'p', points: 1, stats: stats(0) }, 3, null])).map(item => item.type), ['claim'])
+  assert.deepEqual(live.liveMessages('{'), [])
+})
+
 test('没挖成时游戏站给的卡：开得多才换', () => {
   const cells = Array(25).fill(null)
   cells[9] = { kind: 'tnt', uid: 8, name: 'q', at: 1 }

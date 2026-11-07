@@ -11,6 +11,7 @@ import { DurableObject } from "cloudflare:workers";
 import { signVoucher } from "../shared/voucher.mjs";
 import { makeNonce, makeTicket, nonceValid, readTicket, TICKET_TTL_MS, verifyIdentity } from "./auth.mjs";
 import { pageFrom } from "./page.mjs";
+import { LivePushes } from "./push.mjs";
 import { MineRoom, RoomError } from "./room.mjs";
 import { inScope, outOfScope } from "./scope.mjs";
 
@@ -76,6 +77,8 @@ export class MineObject extends DurableObject {
   infoKept = null;
   /** @type {Promise<import("./room.mjs").Info>|null} 正在读的红包信息（同时来的请求共用这一次） */
   infoLoading = null;
+  /** 推给开着的网页的，攒 100 毫秒发一次 */
+  pushes = new LivePushes((out) => this.sendLive(out));
 
   /** @param {DurableObjectState} ctx @param {Env} env */
   constructor(ctx, env) {
@@ -194,13 +197,13 @@ export class MineObject extends DurableObject {
         const index = Number(body.index);
         if (!Number.isSafeInteger(cardId) || !Number.isSafeInteger(index)) return json({ message: "格子不对" }, 400);
         const { answer, broadcast, cell } = await this.room.dig(info, who.uid, who.name, { cardId, index }, Date.now(), { compact: body.v === 2 });
-        if (broadcast) this.broadcast(broadcast, cell);
+        if (broadcast) this.pushes.push(broadcast, cell);
         return json(answer);
       }
 
       if (route === "POST /claim") {
         const { answer, broadcast } = await this.room.claim(info, who.uid, who.name);
-        if (broadcast) this.broadcast(broadcast);
+        if (broadcast) this.pushes.push(broadcast);
         return json(answer);
       }
 
@@ -213,20 +216,18 @@ export class MineObject extends DurableObject {
   }
 
   /**
-   * 推给所有开着的网页：带 v2 标记的收第 2 版（compact，有的话），别的收第 1 版。
-   * @param {Record<string, unknown>} message @param {Record<string, unknown>|null} [compact]
+   * 攒下的推送发给所有开着的网页：带 v2 标记的收一个数组（一次 send），别的一条一条收第 1 版。
+   * @param {{ v1: Record<string, unknown>[], v2: Record<string, unknown>[] }} out
    */
-  broadcast(message, compact = null) {
+  sendLive(out) {
     /** @type {string|undefined} */
-    let full;
-    /** @type {string|undefined} */
-    let small;
+    let batch;
+    /** @type {string[]|undefined} */
+    let singles;
     for (const socket of this.ctx.getWebSockets()) {
-      const text = compact && this.ctx.getTags(socket).includes("v2")
-        ? (small ??= JSON.stringify(compact))
-        : (full ??= JSON.stringify(message));
       try {
-        socket.send(text);
+        if (this.ctx.getTags(socket).includes("v2")) socket.send((batch ??= JSON.stringify(out.v2)));
+        else for (const text of (singles ??= out.v1.map((message) => JSON.stringify(message)))) socket.send(text);
       } catch {
         // 已经断了，网页会重连、补上漏的
       }
