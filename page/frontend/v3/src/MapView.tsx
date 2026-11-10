@@ -12,11 +12,17 @@ import { cardAt, MapCanvas } from './MapCanvas'
 import { landMs, PearlFlight } from './PearlFlight'
 import { isTreasure } from './eye'
 import { useCooling } from './Hud'
-import { blockedAtom, dig, focusRequestAtom, freshAtom, gameAtom, hongbaoAtom, meAtom, newCardAtom, pendingAtom, settledAtom, uidAtom } from './state'
-import type { DigResult, Peek, PublicCard } from './types'
+import { aimAtom, blockedAtom, dig, focusRequestAtom, freshAtom, gameAtom, heldAtom, hongbaoAtom, meAtom, newCardAtom, peekedAtom, pendingAtom, putDown, settledAtom, slotMenuAtom, store, uidAtom } from './state'
+import { Toolbar } from './Toolbar'
+import { aimInfo, anchorFor, torchHoverAtom, applyAt } from './aim'
+import { shapeOf } from './items'
+import { FollowTip } from './Tips'
+import { Creeper } from './Creeper'
+import type { DigResult, Peek, PublicCard, Torch } from './types'
 
 const DRAG_SLOP = 6
 const NO_PEEKS: Peek[] = []
+const NO_OPENED: number[] = []
 const NO_PENDING: Record<string, true> = {}
 const NO_FRESH: Record<string, { mine: boolean; at: number; result?: DigResult }> = {}
 
@@ -74,6 +80,14 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
   const settled_ = useAtomValue(settledAtom)
   const reduced = useReducedMotion() ?? false
   const cooling = useCooling()
+  const held = useAtomValue(heldAtom)
+  const slotMenu = useAtomValue(slotMenuAtom)
+  const peeked = useAtomValue(peekedAtom)
+  const aim = useAtomValue(aimAtom)
+  const setAim = useSetAtom(aimAtom)
+  const setTorchHover = useSetAtom(torchHoverAtom)
+  /** 上一次按下的是鼠标还是手指：鼠标点一下就用（指着时已经预览过），手指要点两下 */
+  const lastPointer = useRef<string>('mouse')
 
   const box = useRef<HTMLDivElement>(null)
   const [view, setView] = useState<Viewport>({ width: 0, height: 0 })
@@ -450,14 +464,67 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
     for (const peek of me?.peeks ?? []) groups.set(peek.cardId, [...(groups.get(peek.cardId) ?? []), peek])
     return groups
   }, [me?.peeks])
+  // 刚用望远镜看到的格子：那张卡上飘一下是什么（1.6 秒）
+  const [peekShown, setPeekShown] = useState<{ cardId: number; index: number } | null>(null)
+  useEffect(() => {
+    if (!peeked) return
+    const [cardId, index] = peeked.cell.split(':').map(Number)
+    setPeekShown({ cardId, index })
+    const timer = window.setTimeout(() => setPeekShown(null), 1600)
+    return () => window.clearTimeout(timer)
+  }, [peeked])
   const markerCard = marker === null ? null : cards.find(card => card.id === marker) ?? null
   const pointer = markerCard && !fullyOnScreen(markerCard, settled, view) ? edgePointer(markerCard, settled, view) : null
   // JP：末地宝藏还有没挖的格子、又没整张在画面里时，画面边上一直亮着金色的 JP 指着它
   const jpCard = useMemo(() => [...cards].reverse().find(card => isTreasure(card) && !card.finished) ?? null, [cards])
   const jpPointer = jpCard && jpCard.id !== jpHold && !fullyOnScreen(jpCard, settled, view) ? edgePointer(jpCard, settled, view) : null
 
-  return <div className={`map-view level-${level}${cooling.seconds ? ' is-cooling' : ''}${hoverCard ? ' is-pointing' : ''}`}>
-    <div className="map-canvas" ref={box} onClickCapture={onClickCapture}>
+  // 拿着道具时点右键是放下（电脑上）；收着说明时也收起
+  const onContextMenu = (event: React.MouseEvent) => {
+    if (!held && !slotMenu) return
+    event.preventDefault()
+    putDown()
+  }
+
+  // 拿着道具：触屏上第一下点是预览，再点同一处才用；鼠标指着就是预览，点一下就用（docs/V3_ITEMS.md §5）
+  const onAim = useCallback((cardId: number, index: number, qx: 0 | 1, qy: 0 | 1, hover: boolean) => {
+    const holding = store.get(heldAtom)
+    const card = store.get(gameAtom)?.cards.find(item => item.id === cardId)
+    if (!holding || !card) return
+    const at = anchorFor(holding, card, index, qx, qy)
+    if (at === null) return
+    const current = store.get(aimAtom)
+    const same = !!current && current.cardId === cardId && current.index === at
+    if (hover) {
+      if (!same) setAim({ cardId, index: at })
+      return
+    }
+    if (lastPointer.current === 'mouse' || same) applyAt(cardId, at)
+    else setAim({ cardId, index: at })
+  }, [setAim])
+  const onTorch = useCallback((torch: Torch | null) => setTorchHover(torch), [setTorchHover])
+  // 换了卡、离开挖卡那一级：预览作废
+  useEffect(() => {
+    const current = store.get(aimAtom)
+    if (current && (level !== 2 || current.cardId !== focusId)) setAim(null)
+  }, [focusId, level, setAim])
+  const openedOf = useMemo(() => {
+    const groups = new Map<number, number[]>()
+    for (const cell of me?.vaultsOpened ?? []) {
+      const [cardId, index] = cell.split(':').map(Number)
+      groups.set(cardId, [...(groups.get(cardId) ?? []), index])
+    }
+    return groups
+  }, [me?.vaultsOpened])
+  const previewOf = (card: PublicCard) => held && aim && aim.cardId === card.id ? { ...aimInfo(held, card, aim.index, me), at: aim.index } : null
+  // 电脑上的指针：拿着什么就是什么，冷却时镐子变灰（cursor.ts 画好放在 CSS 变量里）
+  const shape = held ? shapeOf(held) : null
+  const cursorClass = held ? (shape ? 'cur-ench' : `cur-${held}`) : cooling.seconds ? 'cur-cool' : 'cur-pick'
+
+  return <div className={`map-view level-${level}${cooling.seconds ? ' is-cooling' : ''}${hoverCard ? ' is-pointing' : ''}${held ? ` is-aiming aim-${held}` : ''} ${cursorClass}`}>
+    <div className="map-stage">
+    <div className="map-canvas" ref={box} onClickCapture={onClickCapture} onContextMenu={onContextMenu}
+      onPointerDownCapture={event => { lastPointer.current = event.pointerType }}>
     <motion.div className="map-world" style={{ x, y, scale, transformOrigin: '0 0', '--px': 1 / settled.scale } as MotionStyle}>
       <MapCanvas cards={cards} view={view} skip={entrance?.cardId ?? null} inDom={dom} onPick={pickOnCanvas} onHover={hoverOnCanvas} />
       {hoverCard && !dom.has(hoverCard.id) ? <div className="map-hover" aria-hidden="true"
@@ -480,7 +547,13 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
           pending={pendingOf(card.id)}
           fresh={freshOf(card.id)}
           entrance={entrance?.cardId === card.id ? entrance : null}
+          held={level === 2 && current ? held : null}
+          preview={level === 2 && current ? previewOf(card) : null}
+          peeked={peekShown?.cardId === card.id ? peekShown.index : null}
+          opened={openedOf.get(card.id) ?? NO_OPENED}
           onDig={dig}
+          onAim={onAim}
+          onTorch={onTorch}
           onPick={pick}
         />
       })}
@@ -505,6 +578,13 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
     </div>
     {banner ? <p className="map-banner" role="status">{banner}</p>
       : level !== 2 ? <p className="map-hint">点一张卡放大过去，放大以后才能挖</p> : null}
+    <FollowTip box={box} />
+    <Creeper />
+    </div>
+    <Toolbar level={level} card={focused} onNeedDig={() => {
+      const card = focused ?? nearestCard(cards, camera(), view)
+      if (card) goToCard(card, 2)
+    }} />
     </div>
   </div>
 }

@@ -663,6 +663,166 @@
       "sha256": "48eadb631e434beb46f380440db106519da1e692e74954a8bd2c987d6c978d76",
       "width": 16,
       "height": 16
+    },
+    {
+      "path": "textures/item/stick.png",
+      "source": "assets/minecraft/textures/item/stick.png",
+      "bytes": 136,
+      "sha256": "2b5a6b7202fcd3a45663ccf249fe87de076e8c735e0b6ab8a3bf2a812332b4ff",
+      "width": 16,
+      "height": 16
+    },
+    {
+      "path": "textures/item/trial_key.png",
+      "source": "assets/minecraft/textures/item/trial_key.png",
+      "bytes": 220,
+      "sha256": "40d0aa03f363b94197f9a741ce0b9c70176bcb810b3ce977c5ccb8830cdbad87",
+      "width": 16,
+      "height": 16
+    },
+    {
+      "path": "textures/item/chest_minecart.png",
+      "source": "assets/minecraft/textures/item/chest_minecart.png",
+      "bytes": 265,
+      "sha256": "2ed9c4cf90de90086a7aa5376f74087c050ab2713c500c73f721b60a5c7da7ab",
+      "width": 16,
+      "height": 16
+    },
+    {
+      "path": "textures/item/potion.png",
+      "source": "assets/minecraft/textures/item/potion.png",
+      "bytes": 165,
+      "sha256": "6a09a39bb6c41bc92bd5eca1f51caf5b582a85f68206b164476c8e14a4669416",
+      "width": 16,
+      "height": 16
+    },
+    {
+      "path": "textures/item/potion_overlay.png",
+      "source": "assets/minecraft/textures/item/potion_overlay.png",
+      "bytes": 144,
+      "sha256": "a734ecf66d6a09767592c6b38c453854290d47c987ea122712bad37dca9683e9",
+      "width": 16,
+      "height": 16
+    },
+    {
+      "path": "textures/block/torch.png",
+      "source": "assets/minecraft/textures/block/torch.png",
+      "bytes": 138,
+      "sha256": "329db8f31720564ca9c6eeb3bafb98bb30a4d277e958e55806720cc01dbf296d",
+      "width": 16,
+      "height": 16
+    },
+    {
+      "path": "textures/block/redstone_torch.png",
+      "source": "assets/minecraft/textures/block/redstone_torch.png",
+      "bytes": 150,
+      "sha256": "160caba109123055dc002a7471439cb32502cbcb07074524be564782586872a6",
+      "width": 16,
+      "height": 16
+    },
+    {
+      "path": "textures/block/cobweb.png",
+      "source": "assets/minecraft/textures/block/cobweb.png",
+      "bytes": 183,
+      "sha256": "409632826c6b942db77edc8828e3e04f56417e6004cc2e24331d3c1535a2a39f",
+      "width": 16,
+      "height": 16
+    },
+    {
+      "path": "textures/block/lava_still.png",
+      "source": "assets/minecraft/textures/block/lava_still.png",
+      "bytes": 4910,
+      "sha256": "7ba546bb9093670f1277ad39d4e973a693ce362f1854a9db00fdb7ab3e434c3c",
+      "width": 16,
+      "height": 320
+    },
+    {
+      "path": "textures/block/tuff_bricks.png",
+      "source": "assets/minecraft/textures/block/tuff_bricks.png",
+      "bytes": 213,
+      "sha256": "986ec3abddf88ca29c56c59c7e078686c10447f402b4c4bbc6c0d25dda16688e",
+      "width": 16,
+      "height": 16
+    },
+    {
+      "path": "textures/block/chiseled_tuff.png",
+      "source": "assets/minecraft/textures/block/chiseled_tuff.png",
+      "bytes": 271,
+      "sha256": "8c5593d5855170c38ebf12ac9e17441def2c617857236b8daaad7e186b70c4e8",
+      "width": 16,
+      "height": 16
+    },
+    {
+      "path": "textures/block/copper_bulb_lit.png",
+      "source": "assets/minecraft/textures/block/copper_bulb_lit.png",
+      "bytes": 243,
+      "sha256": "f1a460ba570fe11fcac2c5c4a8fe96398278ca3dd1e8b2e7af9cfb215569c643",
+      "width": 16,
+      "height": 16
+    },
+    {
+      "path": "textures/block/netherrack.png",
+      "source": "assets/minecraft/textures/block/netherrack.png",
+      "bytes": 213,
+      "sha256": "3c0208b749c5393b9bad9d57ed3d830326a02b8cbd8444e96d4d0d277f85625f",
+      "width": 16,
+      "height": 16
+    },
+    {
+      "path": "textures/block/ancient_debris_side.png",
+      "source": "assets/minecraft/textures/block/ancient_debris_side.png",
+      "bytes": 207,
+      "sha256": "b357286224a18b152312601f920f83939249b51d1229c9811e3e6aa8659ee57d",
+      "width": 16,
+      "height": 16
+    },
+    {
+      "path": "textures/block/rail.png",
+      "source": "assets/minecraft/textures/block/rail.png",
+      "bytes": 216,
+      "sha256": "37d88051df220b81bfeb5f59add18a3a019307671ac59c68e7c0bdb79c599313",
+      "width": 16,
+      "height": 16
+    },
+    {
+      "path": "textures/block/deepslate_tiles.png",
+      "source": "assets/minecraft/textures/block/deepslate_tiles.png",
+      "bytes": 194,
+      "sha256": "de5b1065c13dfbf4b758a886b5565c881ee1b2b13a36e1f46ad80969977fdb48",
+      "width": 16,
+      "height": 16
+    },
+    {
+      "path": "textures/block/sculk.png",
+      "source": "assets/minecraft/textures/block/sculk.png",
+      "bytes": 266,
+      "sha256": "e270724c7dc44cad75543054c6e05b720aa03e204f18c23948f456cb541faad3",
+      "width": 16,
+      "height": 64
+    },
+    {
+      "path": "textures/entity/creeper/creeper.png",
+      "source": "assets/minecraft/textures/entity/creeper/creeper.png",
+      "bytes": 2835,
+      "sha256": "a98947a543623cedca72016e06aa24dc34807251ff8e2433be158c86a977c9e9",
+      "width": 64,
+      "height": 32
+    },
+    {
+      "path": "textures/entity/warden/warden.png",
+      "source": "assets/minecraft/textures/entity/warden/warden.png",
+      "bytes": 1773,
+      "sha256": "244f0c7c645afc0b480deb07cb4bf1e37494ca865008853a02e45f40705d459c",
+      "width": 128,
+      "height": 128
+    },
+    {
+      "path": "textures/entity/spider/cave_spider.png",
+      "source": "assets/minecraft/textures/entity/spider/cave_spider.png",
+      "bytes": 648,
+      "sha256": "02386867edcf8af7d4a205360800991ab6be475dc4c80752c9145efb2699a8ac",
+      "width": 64,
+      "height": 32
     }
   ],
   "source": "Mojang Minecraft Java Edition client JAR; unchanged extracted bytes",

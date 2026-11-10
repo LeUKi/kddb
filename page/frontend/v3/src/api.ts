@@ -1,5 +1,5 @@
 import { liveMessages } from './live'
-import type { DigResult, Live, LiveStep, Me, PublicCard, State, Summary } from './types'
+import type { DigResult, Live, LiveStep, Me, Peek, PublicCard, Shape, State, Summary } from './types'
 
 declare const __API_BASE__: string
 
@@ -87,6 +87,27 @@ export class GameApi {
       | { ok: true; result: DigResult; me: Me; claimNow: boolean; update: LiveStep; blocked?: string | null }
       | { ok: false; message: string; me: Me; card?: PublicCard; blocked?: string | null }
     >('POST', 'dig', { cardId, index, v: 2 })
+  }
+
+  /**
+   * 用道具（docs/V3_ITEMS.md §4）。附魔镐挖开的格子在 updates 里（一格一条，第 2 版）、每格的结果
+   * 在 results 里；望远镜、藏宝图看到的在 peek 里；火把、宝库变了的那张卡在 card 里。没用成时
+   * 带着那张卡现在的样子。
+   */
+  use(body: { item: string; cardId?: number; index?: number; choice?: Shape }) {
+    return this.call<
+      | {
+        ok: true; me: Me; blocked?: string | null; text?: string; claimNow?: boolean
+        updates?: LiveStep[]; results?: DigResult[]; peek?: Peek; card?: PublicCard
+        reward?: { kind: 'small' | 'diamond' | 'table' | 'shield'; amount: number }
+      }
+      | { ok: false; message: string; me: Me; card?: PublicCard; blocked?: string | null }
+    >('POST', 'use', body)
+  }
+
+  /** 苦力怕倒数完了：游戏站核对时间，扣掉手上的 20%（lost 是扣了多少）。 */
+  creeper() {
+    return this.call<{ ok: true; me: Me; lost: number } | { ok: false; message: string; me: Me }>('POST', 'creeper', {})
   }
 
   /** 手上到第 seq 条，后面漏了：游戏站给漏的那几条，或者（太多、刚重启）给整局。 */

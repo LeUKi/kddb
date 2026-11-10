@@ -7,6 +7,7 @@ import { MapView } from './MapView'
 import { installSound } from './sound'
 import { gameAtom, hongbaoAtom, meAtom, phaseAtom, problemAtom, signIn, start, summaryOpenAtom, toastAtom } from './state'
 import { SummaryCard } from './Summary'
+import { ItemDialogs } from './Dialogs'
 import type { PublicCard } from './types'
 
 export function App() {
@@ -54,6 +55,12 @@ export function App() {
   useEffect(() => {
     document.documentElement.style.setProperty('--stone', `url("${new URL('assets/minecraft/1.21.4/textures/block/stone.png', document.baseURI)}")`)
     document.documentElement.style.setProperty('--end-stone', `url("${new URL('assets/minecraft/1.21.4/textures/block/end_stone.png', document.baseURI)}")`)
+    // 区块和道具用的原版贴图（docs/V3_ITEMS.md）
+    for (const [name, path] of Object.entries({
+      'tuff-bricks': 'block/tuff_bricks', 'chiseled-tuff': 'block/chiseled_tuff', 'copper-bulb': 'block/copper_bulb_lit', netherrack: 'block/netherrack',
+      planks: 'block/oak_planks', rail: 'block/rail', 'deepslate-tiles': 'block/deepslate_tiles', sculk: 'block/sculk', lava: 'block/lava_still',
+      creeper: 'entity/creeper/creeper', 'cave-spider': 'entity/spider/cave_spider', warden: 'entity/warden/warden', 'potion-overlay': 'item/potion_overlay', 'pick-mask': 'item/iron_pickaxe',
+    })) document.documentElement.style.setProperty(`--${name}`, `url("${new URL(`assets/minecraft/1.21.4/textures/${path}.png`, document.baseURI)}")`)
   }, [])
 
   return <div className="v3-app">
@@ -68,6 +75,7 @@ export function App() {
             <BottomBar card={card} />
           </>}
     {rules ? <Rules onClose={() => setRules(false)} onPractice={() => { setRules(false); setGuide(true) }} /> : null}
+    {phase === 'ready' ? <ItemDialogs /> : null}
     {guide && game ? <Guide rules={game.rules} unit={hongbao?.unit ?? 'LDC'} onClose={closeGuide} /> : null}
     {summary && phase === 'ready' ? <SummaryCard reason={summary} onClose={closeSummary} /> : null}
     <Toast />

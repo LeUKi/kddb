@@ -8,6 +8,8 @@ import { atom } from 'jotai'
 export type Sound =
   | 'dig' | 'emerald' | 'diamond' | 'apple' | 'totem' | 'tnt' | 'crystal' | 'shield' | 'block'
   | 'spyglass' | 'throw' | 'teleport' | 'eye' | 'portal' | 'claim' | 'click'
+  // 有道具栏的局（docs/V3_ITEMS.md）
+  | 'fuse' | 'chest' | 'enchant' | 'lava' | 'warden' | 'vault' | 'pop'
 
 /** 每种动作用哪几个文件（随机挑一个）、多响、音高上下浮动多少（像游戏里一样不完全一样）。 */
 const SOUNDS: Record<Sound, { files: string[]; volume: number; pitch?: number }> = {
@@ -27,6 +29,13 @@ const SOUNDS: Record<Sound, { files: string[]; volume: number; pitch?: number }>
   portal: { files: ['block/end_portal/endportal'], volume: 0.3 },
   claim: { files: ['ui/toast/challenge_complete'], volume: 0.35 },
   click: { files: ['random/click'], volume: 0.3 },
+  fuse: { files: ['random/fuse'], volume: 0.6 },
+  chest: { files: ['random/chestopen'], volume: 0.45 },
+  enchant: { files: ['block/enchantment_table/enchant1'], volume: 0.5 },
+  lava: { files: ['liquid/lavapop'], volume: 0.4, pitch: 0.15 },
+  warden: { files: ['mob/warden/emerge'], volume: 0.45 },
+  vault: { files: ['block/vault/open_shutter'], volume: 0.5 },
+  pop: { files: ['random/pop'], volume: 0.4, pitch: 0.2 },
 }
 
 /** 全部声音文件（几种动作共用的只下一次）。 */
@@ -155,6 +164,10 @@ export function soundOfResult(result: { kind: string; amount: number; blocked: b
     case 'crystal': return 'crystal'
     case 'shield': return result.amount > 0 ? 'emerald' : 'shield'
     case 'spyglass': return result.amount > 0 ? 'emerald' : 'spyglass'
+    case 'debris': return 'diamond'
+    case 'minecart': return result.amount > 0 ? 'emerald' : 'chest'
+    case 'coal': case 'stick': case 'map': case 'potion': case 'key': case 'ender': return 'pop'
+    case 'cobweb': case 'spawner': return 'block'
     // 珍珠和眼的声音跟着飞行动画放（起飞、落地）
     default: return null
   }

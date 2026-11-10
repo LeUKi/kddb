@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import type { IconKind } from './game'
 
 const base = './assets/minecraft/1.21.4'
@@ -15,11 +16,39 @@ const textures: Record<IconKind, string> = {
   shield: 'inventory/shield.png',
   chest: 'inventory/chest.png',
   ore: 'inventory/stone.png',
+  coal: 'textures/item/coal.png',
+  stick: 'textures/item/stick.png',
+  map: 'inventory/map.png',
+  potion: 'textures/item/potion.png',
+  key: 'textures/item/trial_key.png',
+  vault: 'inventory/vault.png',
+  deco: 'textures/block/chiseled_tuff.png',
+  lava: 'textures/block/lava_still.png',
+  debris: 'inventory/ancient_debris.png',
+  cobweb: 'textures/block/cobweb.png',
+  spawner: 'inventory/spawner.png',
+  minecart: 'textures/item/chest_minecart.png',
+  ender: 'inventory/ender_chest.png',
+  torch: 'textures/block/torch.png',
+  'torch-green': 'inventory/copper_torch.png',
+  'torch-red': 'textures/block/redstone_torch.png',
+  table: 'inventory/enchanting_table.png',
+  sculk: 'inventory/sculk_sensor.gif',
 }
+
+/** 急迫药水：药水瓶的液体层按急迫的颜色染（游戏里药水图标就是这样画的：液体层乘上效果的颜色）。 */
+const HASTE = '#d9c043'
 
 /** Unmodified vanilla textures/renders. Provenance: docs/MINECRAFT_ASSETS.md. */
 export function ItemIcon({ kind, size = 32, className = '' }: { kind: IconKind; size?: number; className?: string }) {
   if (kind === 'totem') return <span className={`item-icon pickaxe-pair ${className}`} style={{ width: size, height: size }} aria-hidden="true"><img className="pair-back" src={`${base}/${textures.pickaxe}`} alt="" draggable={false} /><img className="pair-front" src={`${base}/${textures.pickaxe}`} alt="" draggable={false} /></span>
   if (kind === 'apple') return <picture className={`item-icon ${className}`} style={{ width: size, height: size }} aria-hidden="true"><source media="(prefers-reduced-motion: reduce)" srcSet={`${base}/${textures.apple}`} /><img src={`${base}/inventory/enchanted_golden_apple.gif`} width={size} height={size} alt="" draggable={false} /></picture>
+  if (kind === 'potion') return <span className={`item-icon potion-icon ${className}`} style={{ width: size, height: size, '--tint': HASTE, '--overlay': `url(${base}/textures/item/potion_overlay.png)` } as CSSProperties} aria-hidden="true">
+    <img className="potion-liquid" src={`${base}/textures/item/potion_overlay.png`} alt="" draggable={false} />
+    <span className="potion-tint" />
+    <img className="potion-bottle" src={`${base}/${textures.potion}`} alt="" draggable={false} />
+  </span>
+  // 岩浆：原版的 20 帧动画贴图，竖着一条，按帧往下走
+  if (kind === 'lava') return <span className={`item-icon lava-icon ${className}`} style={{ width: size, height: size, backgroundImage: `url(${base}/${textures.lava})` }} aria-hidden="true" />
   return <img className={`item-icon ${className}`} src={`${base}/${textures[kind]}`} width={size} height={size} alt="" aria-hidden="true" draggable={false} />
 }

@@ -10,12 +10,12 @@ export const BOT_COUNT = 2000;
 /** 一次请求最多挖几格。 */
 export const BOT_DIGS_MAX = 500;
 
-/** 挑一格：没挖完的卡里随便一张，上面没开的格子里随便一格；都挖完了是 null。 */
+/** 挑一格：没挖完的卡里随便一张，上面没开的格子里随便一格（固定的格子挖不了，不挑）；都挖完了是 null。 */
 export function pickCell(/** @type {Game} */ game, random = Math.random) {
   const open = Object.values(game.cards).filter((card) => !card.finished);
   if (open.length === 0) return null;
   const card = open[Math.floor(random() * open.length)];
-  const covered = card.opened.flatMap((cell, index) => (cell === null ? [index] : []));
+  const covered = card.opened.flatMap((cell, index) => (cell === null && card.fixed?.[index] === undefined ? [index] : []));
   return { cardId: card.id, index: covered[Math.floor(random() * covered.length)] };
 }
 

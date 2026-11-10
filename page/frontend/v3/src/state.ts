@@ -6,7 +6,9 @@ import { landMs } from './PearlFlight'
 import { play, soundOfResult } from './sound'
 import type { Merge } from './live'
 import { mergeCard, mergeLive, mergeState } from './live'
-import type { DigResult, Live, LiveStep, Me, PublicGame, State } from './types'
+import type { Held, Slot } from './items'
+import { outOfPicks } from './items'
+import type { DigResult, Kind, Live, LiveStep, Me, PublicGame, Shape, State } from './types'
 import { money } from './types'
 
 export const store = createStore()
@@ -38,6 +40,33 @@ export const claimingAtom = atom<Claiming>('idle')
 export const settledAtom = atom<{ amount: string; unit: string } | null>(null)
 /** 收益卡开着：他点开的（button），或者这一局对他结束了自动弹的（end） */
 export const summaryOpenAtom = atom<'button' | 'end' | null>(null)
+
+/**
+ * 工具条（docs/V3_ITEMS.md §5）：拿在手上的道具（null 是镐子，点格子就是挖）、说明或确认开着的
+ * 那一格，和对格子用的道具现在预览在哪（触屏第一下点、电脑上指着；再点同一处才用）。
+ */
+export type { Slot }
+export const heldAtom = atom<Held | null>(null)
+export const slotMenuAtom = atom<Slot | null>(null)
+/** 预览在哪：哪张卡的哪一格（形状的中心、火把那个角右下的格子、宝库） */
+export const aimAtom = atom<{ cardId: number; index: number } | null>(null)
+/** 刚用望远镜、藏宝图看到的格子（"卡号:格"）：格子上飘一下看到的是什么 */
+export const peekedAtom = atom<{ cell: string; at: number; words?: string } | null>(null)
+/** 弹窗：末影箱、附魔台、宝库开出的东西 */
+export type Dialog = { type: 'ender' } | { type: 'table' } | { type: 'vault'; text: string; kind: Kind | 'table' | null }
+export const dialogAtom = atom<Dialog | null>(null)
+/** 本机时间：苦力怕什么时候来（null 是不来）、急迫药水到什么时候 */
+export const creeperAtAtom = atom<number | null>(null)
+export const hasteUntilAtom = atom(0)
+/** 末影箱刚存进去：顶栏的绿字下面自己弹几秒说明 */
+export const chestNoteAtom = atom(0)
+
+/** 放下道具、收起说明（取消、用完、Esc、右键）。 */
+export function putDown() {
+  store.set(heldAtom, null)
+  store.set(slotMenuAtom, null)
+  store.set(aimAtom, null)
+}
 
 let api: GameApi | null = null
 let stopLive: (() => void) | null = null
@@ -135,8 +164,14 @@ export async function signIn() {
 
 function setMe(me: Me) {
   store.set(meAtom, me)
-  if (me.coolingMs !== undefined) store.set(readyAtAtom, Date.now() + me.coolingMs)
+  const now = Date.now()
+  if (me.coolingMs !== undefined) store.set(readyAtAtom, now + me.coolingMs)
+  if (me.creeperMs !== undefined) store.set(creeperAtAtom, me.creeperMs === null ? null : now + me.creeperMs)
+  store.set(hasteUntilAtom, me.hasteMs ? now + me.hasteMs : 0)
 }
+
+/** 手上加末影箱里的：领取时领到的。 */
+export const totalOf = (me: Me) => me.points + (me.chest ?? 0)
 
 /**
  * 序号接不上的推送（ahead）：先等一会儿，推送和挖的回答走两条路，晚到的那条多半马上就到；
@@ -164,6 +199,12 @@ function commit(merge: Merge) {
     // 别人挖到末影之眼：末地宝藏开了，大家都听得见（轻一些）
     const card = merge.game.cards.find(item => item.id === grown.cardId)
     if (digger !== uid && card?.kind === 'end') play('portal', { volume: 0.6, delay: landMs('eye') })
+  }
+  // 监守者醒了、岩浆吞了格子：大家都听得见（轻一些）
+  if (before) {
+    const was = new Map(before.cards.map(card => [card.id, card]))
+    if (merge.game.cards.some(card => card.closed && was.get(card.id) && !was.get(card.id)!.closed)) play('warden', { volume: 0.5 })
+    else if (merge.opened.some(cell => cell.uid === 0)) play('lava', { volume: 0.5 })
   }
   // 推送、补回来的让奖池分完了（刚打开时就分完的照旧只显示为什么不能挖）
   if (merge.game.over && before && !before.over) gameOver()
@@ -241,7 +282,7 @@ function applyLive(messages: Live[]) {
 function gameOver() {
   const me = store.get(meAtom)
   if (!me || me.status !== 'playing') return
-  if (me.points > 0) {
+  if (totalOf(me) > 0) {
     store.set(blockedAtom, '奖池已经分完，游戏结束了，请领取')
     void claim(true)
     return
@@ -266,6 +307,11 @@ export async function dig(cardId: number, index: number) {
   }
   if (Object.keys(pending).length > 0) {
     toast('上一格还在挖，稍等一下')
+    return
+  }
+  const me = store.get(meAtom)
+  if (me && me.chances <= 0) {
+    toast('镐子的机会用完了，还能用附魔镐')
     return
   }
   const wait = store.get(readyAtAtom) - Date.now()
@@ -303,7 +349,7 @@ export async function dig(cardId: number, index: number) {
     }
     if (answer.claimNow) window.setTimeout(() => void claim(true), 1200)
     // 机会用完、手里没有分：这一局对他结束了
-    else if (answer.me.chances <= 0 && answer.me.points <= 0) window.setTimeout(showEnd, 1200)
+    else if (outOfPicks(answer.me) && totalOf(answer.me) <= 0) window.setTimeout(showEnd, 1200)
   } catch (error) {
     toast(error instanceof ApiError ? error.message : '没挖成，稍后再试', 'bad')
   } finally {
@@ -316,6 +362,100 @@ export async function dig(cardId: number, index: number) {
 }
 
 /**
+ * 用道具（docs/V3_ITEMS.md §4）：望远镜、火把、附魔镐、钥匙点格子；藏宝图、药水、末影箱确认了就用；
+ * 附魔台带上挑的形状。不花镐子的机会。用完（或者手里没有了）放下；没用成照旧拿着，换一处再点。
+ */
+let using = false
+export async function applyItem(item: string, body: { cardId?: number; index?: number; choice?: Shape } = {}) {
+  if (!api || using) return false
+  const blocked = store.get(blockedAtom)
+  if (blocked) {
+    toast(blocked)
+    putDown()
+    return false
+  }
+  const digs = item.startsWith('pick-')
+  const wait = store.get(readyAtAtom) - Date.now()
+  if (digs && wait > 0 && (store.get(gameAtom)?.rules.digInterval ?? 1) > 1) {
+    toast(`还要等 ${Math.ceil(wait / 1000)} 秒才能再挖`)
+    return false
+  }
+  using = true
+  const cell = body.cardId !== undefined && body.index !== undefined ? key(body.cardId, body.index) : null
+  if (digs && cell) store.set(pendingAtom, value => ({ ...value, [cell]: true }))
+  try {
+    if (digs && wait > 0) await new Promise(resolve => window.setTimeout(resolve, wait))
+    if (digs) play('dig')
+    const answer = await api.use({ item, ...body })
+    setMe(answer.me)
+    if (answer.blocked !== undefined) store.set(blockedAtom, answer.blocked)
+    if (!answer.ok) {
+      toast(answer.message)
+      const game = store.get(gameAtom)
+      if (answer.card && game) commit(mergeCard(game, answer.card))
+      return false
+    }
+    putDown()
+    // 附魔镐挖开的格子：一格一条，先接上攒着的推送再放
+    if (answer.updates?.length) {
+      flushLive()
+      applyLive(answer.updates)
+      const now = Date.now()
+      const fresh: Record<string, { mine: boolean; at: number; result?: DigResult }> = {}
+      for (const result of answer.results ?? []) fresh[key(result.cardId, result.index)] = { mine: true, at: now, result }
+      addFresh(fresh)
+      const worst = (answer.results ?? []).map(soundOfResult).find(sound => sound === 'tnt' || sound === 'crystal' || sound === 'block')
+      const best = (answer.results ?? []).map(soundOfResult).find(Boolean)
+      const sound = worst ?? best
+      if (sound) play(sound)
+    }
+    const game = store.get(gameAtom)
+    if (answer.card && game) commit(mergeCard(game, answer.card))
+    if (item === 'spyglass') play('spyglass')
+    else if (item === 'ender') play('chest')
+    else if (item === 'table') play('enchant')
+    else if (item === 'key') play('vault')
+    else if (item === 'torch' || item === 'potion' || item === 'map') play('click')
+    if (answer.peek) {
+      store.set(peekedAtom, { cell: key(answer.peek.cardId, answer.peek.index), at: Date.now() })
+      // 藏宝图：镜头飞到那一格
+      if (item === 'map') store.set(focusRequestAtom, { cardId: answer.peek.cardId, at: Date.now(), dig: true })
+    }
+    if (item === 'ender') store.set(chestNoteAtom, Date.now())
+    if (item === 'key') {
+      const reward = answer.reward?.kind
+      store.set(dialogAtom, { type: 'vault', text: answer.text ?? '宝库开了', kind: reward === 'small' ? 'emerald' : reward ?? null })
+    }
+    else if (answer.text && !answer.updates?.length && item !== 'spyglass' && item !== 'map') toast(answer.text, 'good')
+    if (answer.claimNow) window.setTimeout(() => void claim(true), 1200)
+    else if (digs && outOfPicks(answer.me) && totalOf(answer.me) <= 0) window.setTimeout(showEnd, 1200)
+    return true
+  } catch (error) {
+    toast(error instanceof ApiError ? error.message : '没用成，稍后再试', 'bad')
+    return false
+  } finally {
+    using = false
+    if (digs && cell) store.set(pendingAtom, value => {
+      const next = { ...value }
+      delete next[cell]
+      return next
+    })
+  }
+}
+
+/** 苦力怕倒数完了：游戏站核对时间，炸掉手上的 20%。 */
+export async function creeperBoom() {
+  if (!api) return null
+  try {
+    const answer = await api.creeper()
+    setMe(answer.me)
+    return answer.ok ? answer.lost : null
+  } catch {
+    return null
+  }
+}
+
+/**
  * 领取：游戏站签凭证，网页交给判定器（hb.submit）。交不上就填进指令框，
  * 他自己点提交。auto 是机会用完、预算分完、快截止时自动领的。
  */
@@ -323,7 +463,7 @@ export async function claim(auto = false) {
   if (!api || store.get(claimingAtom) === 'working' || store.get(settledAtom)) return
   const me = store.get(meAtom)
   // 手里没有分不领：交上去只会在红包里记一笔“领取 0.00”
-  if (me && me.status === 'playing' && me.points <= 0) {
+  if (me && me.status === 'playing' && totalOf(me) <= 0) {
     if (!auto) toast('手里还没有奖励，不用领取')
     return
   }
@@ -369,8 +509,8 @@ function checkWrapUp() {
   const me = store.get(meAtom)
   if (!game || !me || me.status !== 'playing' || game.wrapUpAt === null) return
   if (hb.now() >= game.wrapUpAt) {
-    if (!store.get(blockedAtom)) store.set(blockedAtom, me.points > 0 ? '快截止了，已经停止挖掘，请领取' : '快截止了，已经停止挖掘')
-    if (me.points > 0) void claim(true)
+    if (!store.get(blockedAtom)) store.set(blockedAtom, totalOf(me) > 0 ? '快截止了，已经停止挖掘，请领取' : '快截止了，已经停止挖掘')
+    if (totalOf(me) > 0) void claim(true)
   }
 }
 

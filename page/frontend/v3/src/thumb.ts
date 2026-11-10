@@ -24,9 +24,29 @@ const ICONS: Partial<Record<Kind | 'pickaxe', string>> = {
   spyglass: 'textures/item/spyglass.png',
   tnt: 'inventory/tnt.png',
   shield: 'inventory/shield.png',
+  coal: 'textures/item/coal.png',
+  stick: 'textures/item/stick.png',
+  map: 'inventory/map.png',
+  potion: 'textures/item/potion.png',
+  key: 'textures/item/trial_key.png',
+  debris: 'inventory/ancient_debris.png',
+  cobweb: 'textures/block/cobweb.png',
+  spawner: 'inventory/spawner.png',
+  minecart: 'textures/item/chest_minecart.png',
+  ender: 'inventory/ender_chest.png',
+  vault: 'inventory/vault.png',
 }
 const STONE = 'textures/block/stone.png'
 const END_STONE = 'textures/block/end_stone.png'
+/** 各区块没挖开的格子（docs/V3_ITEMS.md §2） */
+const GROUNDS: Partial<Record<NonNullable<PublicCard['kind']>, string>> = {
+  end: END_STONE, trial: 'textures/block/tuff_bricks.png', nether: 'textures/block/netherrack.png', deep: 'textures/block/deepslate_tiles.png',
+}
+const FRAMES: Partial<Record<NonNullable<PublicCard['kind']>, [string, string]>> = {
+  end: ['#d9c27a', '#2a2637'], trial: ['#8c6a4a', '#2b2d2a'], mine: ['#8a6b45', '#2a2118'], nether: ['#8a3a2c', '#2a1214'], deep: ['#1f6a73', '#0d1418'],
+}
+/** 火把在远处只剩一个光点：绿、黄、红 */
+const TORCH_COLORS = ['#7cf08a', '#ffd75a', '#ff5a3c']
 
 /** 挖开的格子底色（和 v3.css 的 .map-cell.kind-* 一样） */
 export const CELL_COLORS: Partial<Record<Kind, string>> = {
@@ -80,12 +100,12 @@ export function drawThumb(context: CanvasRenderingContext2D, card: PublicCard) {
  * 挖完的卡盖一层暗色（DOM 上是灰度加变暗的 filter）。
  */
 export function drawCard(context: CanvasRenderingContext2D, card: PublicCard, left: number, top: number, scale: number) {
-  const end = card.kind === 'end'
+  const [frame, back] = (card.kind && FRAMES[card.kind]) ?? ['#67533e', '#211f20']
   const size = CARD_PX * scale
   const border = CARD_BORDER * scale
-  context.fillStyle = end ? '#d9c27a' : '#67533e'
+  context.fillStyle = frame
   roundRect(context, left, top, size, size, 6 * scale)
-  context.fillStyle = end ? '#2a2637' : '#211f20'
+  context.fillStyle = back
   context.fillRect(left + border, top + border, size - border * 2, size - border * 2)
   const inset = (PAD + CARD_BORDER) * scale
   const complete = drawCells(context, card, left + inset, top + inset, scale)
@@ -112,12 +132,23 @@ function drawCells(context: CanvasRenderingContext2D, card: PublicCard, left: nu
     return img
   }
   context.imageSmoothingEnabled = false
-  const ground = need(card.kind === 'end' ? END_STONE : STONE)
+  const ground = need((card.kind && GROUNDS[card.kind]) ?? STONE)
   card.cells.forEach((cell, index) => {
     const rect = cellRect(card.size, index, scale)
     const x = left + rect.x
     const y = top + rect.y
     const { side } = rect
+    // 不能挖的格子：岩浆、装饰、宝库
+    const fixed = card.fixed?.[index] ?? (cell?.burn ? 'lava' : undefined)
+    if (fixed) {
+      context.fillStyle = fixed === 'lava' ? '#d4561c' : fixed === 'vault' ? '#3a4a4f' : card.kind === 'mine' ? '#6b5233' : '#5d5f58'
+      context.fillRect(x, y, side, side)
+      if (fixed === 'vault' && side * 0.62 >= 3) {
+        const img = need(ICONS.vault!)
+        if (img) context.drawImage(img, x + side * 0.19, y + side * 0.19, side * 0.62, side * 0.62)
+      }
+      return
+    }
     if (!cell) {
       if (ground) context.drawImage(ground, x, y, side, side)
       else {
@@ -150,5 +181,20 @@ function drawCells(context: CanvasRenderingContext2D, card: PublicCard, left: nu
     const img = path ? need(path) : null
     if (img) context.drawImage(img, iconLeft, iconTop, icon, icon)
   })
+  // 火把：远处只剩光点，颜色和近处一样（绿、黄、红），一圈光晕
+  if (card.torches?.length) {
+    const side = cellPx(card.size)
+    for (const torch of card.torches) {
+      const cx = left + ((torch.at % card.size) * (side + GAP) - GAP / 2) * scale
+      const cy = top + (Math.floor(torch.at / card.size) * (side + GAP) - GAP / 2) * scale
+      const radius = Math.max(1.5, side * 0.5 * scale)
+      const glow = context.createRadialGradient(cx, cy, 0, cx, cy, radius)
+      glow.addColorStop(0, TORCH_COLORS[torch.level])
+      glow.addColorStop(0.25, `${TORCH_COLORS[torch.level]}cc`)
+      glow.addColorStop(1, `${TORCH_COLORS[torch.level]}00`)
+      context.fillStyle = glow
+      context.fillRect(cx - radius, cy - radius, radius * 2, radius * 2)
+    }
+  }
   return complete
 }

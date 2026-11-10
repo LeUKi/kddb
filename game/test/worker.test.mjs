@@ -7,6 +7,7 @@ import { pageFrom, SDK_URL, withSdkFrom } from "../worker/page.mjs";
 import { inScope, outOfScope } from "../worker/scope.mjs";
 import { LivePushes, PUSH_EVERY_MS } from "../worker/push.mjs";
 import { BOT_BASE, botKeyValid } from "../worker/bots.mjs";
+import { newCard } from "../shared/rules.mjs";
 
 const SITE = "http://127.0.0.1:8730";
 const PAGE = "http://127.0.0.1:8787";
@@ -123,6 +124,26 @@ describe("一局", () => {
     assert.deepEqual(storage.map.get("log:000000001"), { uid: 10001, cardId: 1, index: 0, at: NOW });
     assert.ok(!JSON.stringify(broadcast).includes("peeks"));
     assert.ok(!JSON.stringify(broadcast).includes("deck"));
+  });
+  it("用望远镜：存下自己的，不推送、不进动态；没用成时带上那张卡", async () => {
+    const storage = memory();
+    const room = new MineRoom(storage, tools);
+    await room.state(info, 10001, "xiaoming", NOW);
+    const player = await room.playerOf(/** @type {any} */ (room.game), 10001, "xiaoming");
+    player.spyglasses = 1;
+    const seq = room.game?.seq;
+    const { answer, pushes } = await room.use(info, 10001, "xiaoming", { item: "spyglass", cardId: 1, index: 4 }, NOW);
+    assert.equal(answer.ok, true);
+    assert.deepEqual(pushes, []);
+    assert.equal(/** @type {any} */ (answer.me).spyglasses, 0);
+    assert.equal(/** @type {any} */ (answer.me).peeks.length, 1);
+    assert.equal(/** @type {any} */ (storage.map.get("player:10001")).peeks.length, 1);
+    assert.equal(room.game?.seq, seq);
+    assert.equal(room.recent.length, 0);
+    const { answer: again } = await room.use(info, 10001, "xiaoming", { item: "spyglass", cardId: 1, index: 5 }, NOW);
+    assert.equal(again.ok, false);
+    assert.equal(again.message, "你手里没有望远镜");
+    assert.equal(/** @type {any} */ (again.card).id, 1);
   });
   it("重启以后从存储读回整局和每个人", async () => {
     const storage = memory();
@@ -243,6 +264,163 @@ describe("一局", () => {
     assert.equal(await room.takeNonce("abc", NOW + 1), false);
   });
 });
+
+describe("道具和区块（docs/V3_ITEMS.md §4）", () => {
+  /** 一局，第 1 张卡全是绿宝石（cells 里给的除外）；返回房间、存储、整局和小明。 */
+  async function room(/** @type {Record<number, string>} */ cells = {}) {
+    const storage = memory();
+    const one = new MineRoom(storage, tools);
+    const game = await one.gameFor(info);
+    game.cards[1].deck = game.cards[1].deck.map((_, index) => /** @type {any} */ (cells[index] ?? "emerald"));
+    const me = await one.playerOf(game, 10001, "xiaoming");
+    return { one, storage, game, me };
+  }
+  /** 放进一张这种区块的卡，牌全换成绿宝石（固定的格子照旧）。 */
+  function biome(/** @type {any} */ game, /** @type {string} */ kind) {
+    for (let id = 2; ; id++) {
+      const card = newCard(game, id, id, 0);
+      if (card.kind !== kind) continue;
+      card.deck = card.deck.map((each, index) => (card.fixed?.[index] ? each : "emerald"));
+      game.cards[id] = card;
+      game.slots[`${id},0`] = id;
+      return card;
+    }
+  }
+
+  it("附魔镐：每挖开一格推一条，序号连着；回答带 updates；每一挖都记下", async () => {
+    const { one, storage, game, me } = await room({ 13: "tnt" });
+    await one.dig(info, 10002, "xiaohong", { cardId: 1, index: 11 }, NOW);
+    me.items.pick.x = 1;
+    const { answer, pushes } = await one.use(info, 10001, "xiaoming", { item: "pick-x", cardId: 1, index: 12 }, NOW + 2000);
+    assert.equal(answer.ok, true);
+    const updates = /** @type {any[]} */ (answer.updates);
+    assert.deepEqual(updates.map((cell) => [cell.seq, cell.index, cell.cell.kind, cell.cell.uid]), [[2, 7, "emerald", 10001], [3, 12, "emerald", 10001], [4, 13, "tnt", 10001], [5, 17, "emerald", 10001]]);
+    assert.deepEqual(updates.map((cell) => cell.stats.digs), [2, 3, 4, 5]);
+    assert.deepEqual(/** @type {any[]} */ (answer.results).map((result) => result.index), [7, 12, 13, 17]);
+    assert.match(String(answer.text), /十字附魔镐挖开了 4 格，跳过 1 格/);
+    assert.equal(answer.claimNow, false);
+    assert.equal(/** @type {any} */ (answer.me).chances, 3);
+    assert.equal(/** @type {any} */ (answer.me).items.pick.x, 0);
+    assert.equal(pushes.length, 4);
+    pushes.forEach(([v1, v2], k) => {
+      assert.equal(v1.type, "dig");
+      assert.equal(v1.seq, updates[k].seq);
+      assert.equal(v2, updates[k]);
+    });
+    assert.deepEqual(storage.map.get("log:000000002"), { uid: 10001, cardId: 1, index: 7, at: NOW + 2000, via: "pick-x" });
+    assert.equal(/** @type {any} */ (storage.map.get("player:10001")).items.pick.x, 0);
+    assert.equal(/** @type {any} */ (storage.map.get("game")).seq, 5);
+    const missed = await one.since(info, 10002, "xiaohong", 1, NOW + 3000);
+    assert.deepEqual("messages" in missed && missed.messages.map((message) => message.seq), [2, 3, 4, 5]);
+    // 间隔没到：不挖，回那张卡
+    me.items.pick.h = 1;
+    const early = await one.use(info, 10001, "xiaoming", { item: "pick-h", cardId: 1, index: 3 }, NOW + 2500);
+    assert.equal(early.answer.ok, false);
+    assert.equal(/** @type {any} */ (early.answer.card).id, 1);
+    assert.deepEqual(early.pushes, []);
+  });
+
+  it("火把、宝库：改了的卡推一条 card（没有序号，带预算）；插过火把的卡之后的第 2 版推送带 torches", async () => {
+    const { one, storage, game, me } = await room({ 0: "tnt" });
+    me.items.torch = 1;
+    const seq = game.seq;
+    const torch = await one.use(info, 10001, "xiaoming", { item: "torch", cardId: 1, index: 6 }, NOW);
+    assert.equal(torch.answer.ok, true);
+    assert.deepEqual(/** @type {any} */ (torch.answer.card).torches, [{ at: 6, level: 1, name: "xiaoming" }]);
+    assert.deepEqual(torch.pushes, [[{ type: "card", card: torch.answer.card, left: 10000, over: false }, null]]);
+    assert.equal(game.seq, seq);
+    assert.equal(one.recent.length, 0);
+    assert.equal(/** @type {any} */ (storage.map.get("card:1")).torches.length, 1);
+    const boom = await one.dig(info, 10002, "xiaohong", { cardId: 1, index: 0 }, NOW, { compact: true });
+    assert.deepEqual(boom.cell?.torches, [{ at: 6, level: 0, name: "xiaoming" }]);
+    const trial = biome(game, "trial");
+    // 没插过火把的卡的推送没有这一项
+    const plain = await one.dig(info, 10002, "xiaohong", { cardId: trial.id, index: 1 }, NOW + 2000, { compact: true });
+    assert.equal(plain.answer.ok, true);
+    assert.equal(plain.cell && "torches" in plain.cell, false);
+    me.items.key = 1;
+    const vault = await one.use(info, 10001, "xiaoming", { item: "key", cardId: trial.id, index: 22 }, NOW);
+    assert.equal(vault.answer.ok, true);
+    assert.deepEqual(/** @type {any} */ (vault.answer.card).vaults, { 22: 3, 26: 4 });
+    assert.ok(["small", "diamond", "table", "shield"].includes(/** @type {any} */ (vault.answer.reward).kind));
+    assert.equal(vault.pushes[0][0].type, "card");
+    assert.deepEqual(/** @type {any} */ (storage.map.get(`card:${trial.id}`)).vaults, { 22: 3, 26: 4 });
+    assert.deepEqual(/** @type {any} */ (vault.answer.me).vaultsOpened, [`${trial.id}:22`]);
+    assert.equal(/** @type {any} */ (storage.map.get("game")).used, game.used);
+  });
+
+  it("岩浆、深暗之域：第 2 版推送带 burned、noise、closed", async () => {
+    const { one, game } = await room();
+    const nether = biome(game, "nether");
+    const lava = Number(Object.keys(nether.fixed)[0]);
+    const far = [...Array(36).keys()].filter((index) => !nether.fixed[index] && Math.abs(index % 6 - lava % 6) + Math.abs(Math.floor(index / 6) - Math.floor(lava / 6)) > 3);
+    let last;
+    for (const [k, index] of far.slice(0, 3).entries()) last = await one.dig(info, 10010 + k, `p${k}`, { cardId: nether.id, index }, NOW, { compact: true });
+    assert.equal(last?.cell?.burned?.length, 1);
+    const burned = /** @type {any} */ (last?.cell?.burned)[0];
+    assert.deepEqual(/** @type {any} */ (last?.answer.update).burned, last?.cell?.burned);
+    assert.deepEqual(publicBurn(last?.broadcast, burned.index), { kind: burned.kind, uid: 0, name: "", at: NOW, burn: 1 });
+    const deep = biome(game, "deep");
+    deep.wardenAt = 2;
+    const quiet = await one.dig(info, 10020, "a", { cardId: deep.id, index: 0 }, NOW, { compact: true });
+    assert.deepEqual([quiet.cell?.noise, quiet.cell?.closed], [1, false]);
+    const loud = await one.dig(info, 10021, "b", { cardId: deep.id, index: 1 }, NOW, { compact: true });
+    assert.deepEqual([loud.cell?.noise, loud.cell?.closed], [2, true]);
+    assert.match(String(loud.cell?.text), /惊醒了监守者/);
+    const shut = await one.dig(info, 10022, "c", { cardId: deep.id, index: 2 }, NOW, { compact: true });
+    assert.equal(shut.answer.message, "监守者醒了，这张卡已经关闭，不能再挖");
+  });
+
+  it("末影箱：领的是手上加箱子，凭证上的分也是；箱子改了预算要存", async () => {
+    const { one, storage, me } = await room();
+    await one.dig(info, 10001, "xiaoming", { cardId: 1, index: 0 }, NOW);
+    await one.dig(info, 10001, "xiaoming", { cardId: 1, index: 1 }, NOW + 2000);
+    me.items.ender = 1;
+    const { answer, pushes } = await one.use(info, 10001, "xiaoming", { item: "ender" }, NOW + 3000);
+    assert.deepEqual([answer.ok, answer.stored, answer.destroyed, pushes.length], [true, 10, 10, 0]);
+    assert.equal(/** @type {any} */ (storage.map.get("game")).used, 10);
+    assert.deepEqual([/** @type {any} */ (answer.me).points, /** @type {any} */ (answer.me).chest], [0, 10]);
+    await one.dig(info, 10001, "xiaoming", { cardId: 1, index: 2 }, NOW + 4000);
+    const claimed = await one.claim(info, 10001, "xiaoming", NOW + 5000);
+    assert.equal(claimed.answer.points, 20);
+    assert.match(String(claimed.answer.voucher), /^kd3\.\d+\.10001\.20\.k1\./);
+    assert.equal(claimed.broadcast?.points, 20);
+    // 只有箱子里有分也能领
+    const other = await room();
+    const q = await other.one.playerOf(other.game, 10003, "xiaogang");
+    q.chest = 5;
+    assert.equal((await other.one.claim(info, 10003, "xiaogang", NOW)).answer.points, 5);
+  });
+
+  it("苦力怕：网页打开时重新计时；到点前不扣，到点扣手上的 20% 回到预算；补推送不算打开", async () => {
+    const { one, storage } = await room();
+    await one.dig(info, 10001, "xiaoming", { cardId: 1, index: 0 }, NOW);
+    const opened = await one.state(info, 10001, "xiaoming", NOW + 1000);
+    assert.equal(opened.me.creeperMs, 60_000);
+    await one.since(info, 10001, "xiaoming", 0, NOW + 30_000);
+    const early = await one.creeper(info, 10001, "xiaoming", NOW + 1000 + 67_000);
+    assert.deepEqual([early.ok, early.lost, early.message], [false, 0, "苦力怕还没到时候"]);
+    const boom = await one.creeper(info, 10001, "xiaoming", NOW + 1000 + 68_000);
+    assert.deepEqual([boom.ok, boom.lost, /** @type {any} */ (boom.me).points, /** @type {any} */ (boom.me).creeperMs], [true, 2, 8, 60_000]);
+    assert.equal(/** @type {any} */ (storage.map.get("player:10001")).points, 8);
+    assert.equal(/** @type {any} */ (storage.map.get("game")).used, 8);
+    const ended = await one.creeper({ ...info, status: "ended" }, 10001, "xiaoming", NOW + 999_000);
+    assert.equal(ended.message, "红包已经结束了");
+  });
+
+  it("没有这种道具、乱给的形状：不改东西", async () => {
+    const { one, storage } = await room();
+    const out = await one.use(info, 10001, "xiaoming", { item: "sword" }, NOW);
+    assert.deepEqual([out.answer.ok, out.answer.message, out.pushes.length, storage.map.has("player:10001")], [false, "没有这种道具", 0, false]);
+    const table = await one.use(info, 10001, "xiaoming", { item: "table", choice: "h" }, NOW);
+    assert.equal(table.answer.message, "你手里没有附魔台");
+  });
+});
+
+/** 第 1 版推送里整张卡上的第 index 格。 */
+function publicBurn(/** @type {any} */ broadcast, /** @type {number} */ index) {
+  return broadcast.card.cells[index];
+}
 
 describe("Stage 压测机器人", () => {
   it("照规则挖：轮着换机器人，每格都有推送，地图会长；没设钥匙的环境不认", async () => {

@@ -68,6 +68,16 @@ export const params = [
     min: 0,
     max: 20,
   },
+  {
+    // docs/V3_ITEMS.md §3：防蹲守。游戏站把它收到至少是挖掘间隔的两倍；没有这一项的旧判定器按 60
+    key: "creeper",
+    label: "苦力怕",
+    hint: "手上有奖励、这么多秒没挖也没用道具时，苦力怕会来炸掉手上的 20%。填 0 不开",
+    type: "integer",
+    default: 60,
+    min: 0,
+    max: 600,
+  },
 ];
 
 /** @type {import("./judge").HongbaoRules} */

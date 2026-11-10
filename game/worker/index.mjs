@@ -212,8 +212,28 @@ export class MineObject extends DurableObject {
         return json(answer);
       }
 
+      // 用道具（新局的道具栏，docs/V3_ITEMS.md §4）：{ item, cardId?, index?, choice? }。附魔镐挖开的
+      // 格子、火把和宝库改了的卡推给大家，别的只改自己的
+      if (route === "POST /use") {
+        const body = /** @type {{ item?: unknown, cardId?: unknown, index?: unknown, choice?: unknown }} */ (await request.json().catch(() => ({})));
+        const number = (/** @type {unknown} */ value) => (value == null ? undefined : Number(value));
+        const cardId = number(body.cardId);
+        const index = number(body.index);
+        if (typeof body.item !== "string" || [cardId, index].some((value) => value !== undefined && !Number.isSafeInteger(value))
+          || (body.choice != null && typeof body.choice !== "string"))
+          return json({ message: "道具或格子不对" }, 400);
+        const { answer, pushes } = await this.room.use(info, who.uid, who.name, {
+          item: body.item, cardId, index, ...(typeof body.choice === "string" ? { choice: body.choice } : {}),
+        }, Date.now());
+        for (const [v1, v2] of pushes) this.pushes.push(v1, v2);
+        return json(answer);
+      }
+
+      // 苦力怕：网页倒数到点时发，游戏站核对时间再扣（docs/V3_ITEMS.md §3）
+      if (route === "POST /creeper") return json(await this.room.creeper(info, who.uid, who.name, Date.now()));
+
       if (route === "POST /claim") {
-        const { answer, broadcast } = await this.room.claim(info, who.uid, who.name);
+        const { answer, broadcast } = await this.room.claim(info, who.uid, who.name, Date.now());
         if (broadcast) this.pushes.push(broadcast);
         return json(answer);
       }

@@ -37,6 +37,14 @@
 
 金苹果的原始物品 PNG 没有附魔闪光；附魔金苹果的完整背包效果使用下面的原版背包动画。
 
+### 2026-11-10 道具和区块补的文件
+
+用户说 Minecraft 的贴图直接从客户端取、不用再问。同一个 1.21.4 客户端 JAR（核对过 SHA-1）补提取 20 个 PNG，原样放进 `textures/`，都记在 `manifest.json`（现在 110 条）：木棍、试炼钥匙、运输矿车（箱子）、药水瓶和它的液体层、火把、红石火把、蜘蛛网、岩浆（20 帧动画竖条）、凝灰岩砖、雕纹凝灰岩、亮着的铜灯、下界岩、远古残骸侧面、铁轨、深板岩瓷砖、幽匿块，以及苦力怕、监守者、洞穴蜘蛛的实体图集（网页只用 CSS 从图集里截出脸，不另存文件）。
+
+急迫药水的图标不是一张图：网页把药水瓶的液体层乘上急迫效果的颜色 `#d9c043` 再叠上瓶子，和游戏画药水图标的办法一样（`ItemIcon.tsx`）。
+
+音效同样从 1.21.4 的资源索引按 SHA-1 下载、核对大小和散列，只转成 MP3：`random/fuse`（苦力怕）、`random/chestopen`、`block/enchantment_table/enchant1`、`liquid/lavapop`、`mob/warden/emerge`、`block/vault/open_shutter`、`random/pop`，记在 `sounds/provenance.json`。
+
 ## 背包渲染图
 
 石头和 TNT 的背包图标由游戏根据方块模型渲染，盾牌和箱子由专用模型与实体图集渲染。客户端没有名为 `textures/item/stone.png`、`tnt.png`、`shield.png` 或 `chest.png` 的独立背包贴图。
@@ -50,6 +58,8 @@
 | `inventory/chest.png` | [Invicon Chest](https://minecraft.wiki/w/File:Invicon_Chest.png) | 32 × 32 / 775 字节 | `56521798cec43fb49c9b5b0538cc2609989dc06c` |
 | `inventory/stone.png` | [Invicon Stone](https://minecraft.wiki/w/File:Invicon_Stone.png) | 32 × 32 / 434 字节 | `a5028873b84838e4f1a2d36a79a8e602155a71c3` |
 | `inventory/enchanted_golden_apple.gif` | [Invicon Enchanted Golden Apple](https://minecraft.wiki/w/File:Invicon_Enchanted_Golden_Apple.gif) | 32 × 32 / 561,974 字节 | `eb9adf78243cc3fa58f73f1a104a6109673c8c66` |
+
+2026-11-10 用同样的办法补了 8 张（用 `?format=original` 取原文件，SHA-1 和 MediaWiki API 给的一致；不加这个参数时网站发的是重新压缩过的文件，散列对不上，没用）：`inventory/ender_chest.png`（末影箱）、`enchanting_table.png`（附魔台）、`vault.png`（宝库）、`spawner.png`（刷怪笼）、`ancient_debris.png`（远古残骸）、`copper_torch.png`（铜火把，绿色火焰，1.21.9 起才有，网页拿它当绿色的火把）、`map.png`（地图）、`sculk_sensor.gif`（幽匿感测体，动图）。
 
 另有 `inventory/enchanted_golden_apple.png`：用 Pillow 将上述 GIF 的第一帧解码为 RGBA，再保存为 32 × 32 PNG（970 字节，SHA-1 `f153666dd7ea093fb93c7575e7df1efbb6e4a896`）。这是原动画的静态首帧，用于 `prefers-reduced-motion`；没有缩放、改色或重画，已核对 PNG 与 GIF 第一帧的 RGBA 像素完全一致。该 PNG 是本地派生文件，来源记录中明确标注这一点。
 

@@ -5,8 +5,8 @@
 // storage 那几个方法，测试里用一个 Map 顶替。
 
 import {
-  amountOf, claim, createGame, dig, digBlocked, newPlayer, privatePlayer,
-  publicCard, publicGame, rulesOf, summaryOf, topWith,
+  amountOf, claim, createGame, creeperBlast, dig, digBlocked, dugOf, newPlayer, privatePlayer,
+  publicCard, publicGame, publicTorches, rulesOf, summaryOf, topWith, totalOf, useItem,
 } from "../shared/rules.mjs";
 import { BOT_BASE, BOT_COUNT, pickCell } from "./bots.mjs";
 
@@ -29,15 +29,21 @@ import { BOT_BASE, BOT_COUNT, pickCell } from "./bots.mjs";
  */
 /** @typedef {import("../shared/rules.mjs").Game} Game */
 /** @typedef {import("../shared/rules.mjs").Player} Player */
+/** @typedef {import("../shared/rules.mjs").Card} Card */
+/** @typedef {import("../shared/rules.mjs").CellOut} CellOut */
 
 /**
  * 推送第 2 版：只说变了的那一格（网页自己把它放到卡上、减掉剩下的数、看挖完没有），
  * 一条两百字节左右；第 1 版每条带整张卡（谁挖的名字每格一份），挖满的 7×7 卡一条一千五。
+ * 新局另有（docs/V3_ITEMS.md §4）：torches（这张卡插过火把时，亮着的那些，颜色按现在算）、
+ * burned（这一挖让岩浆吞掉的格子）、noise 和 closed（深暗之域的卡）。
  * @typedef {{
  *   type: "cell", seq: number, cardId: number, index: number,
  *   cell: { kind: string, uid: number, name: string, at: number },
  *   newCard: ReturnType<typeof publicCard>|null, text: string,
  *   left: number, over: boolean, stats: Game["stats"],
+ *   torches?: ReturnType<typeof publicTorches>, burned?: CellOut["burned"],
+ *   noise?: number, closed?: boolean,
  * }} CellMessage
  */
 /** 内存里留最近这么多条第 2 版推送，网页漏了几条时按序号补（GET /since），不用重读整局。 */
@@ -125,10 +131,14 @@ export class MineRoom {
     return true;
   }
 
-  /** 整局和自己的。 */
-  async state(/** @type {Info} */ info, /** @type {number} */ uid, /** @type {string} */ name, /** @type {number} */ now) {
+  /**
+   * 整局和自己的。网页打开（hello、GET /state）时苦力怕重新计时（touch；只记在内存里，不为它
+   * 写存储）；漏了推送补整局时不算（since 传 touch: false）。
+   */
+  async state(/** @type {Info} */ info, /** @type {number} */ uid, /** @type {string} */ name, /** @type {number} */ now, { touch = true } = {}) {
     const game = await this.gameFor(info);
     const player = await this.playerOf(game, uid, name);
+    if (touch && game.rules.items) player.activeAt = now;
     return { game: publicGame(game), me: privatePlayer(player, game, now), blocked: this.blocked(info, game, player, now) };
   }
 
@@ -173,32 +183,7 @@ export class MineRoom {
     };
     if (out.newCard) entries[`card:${out.newCard.id}`] = out.newCard;
     await this.storage.put(entries);
-    const newCard = out.newCard ? publicCard(out.newCard) : null;
-    const stats = { ...game.stats };
-    const broadcast = {
-      type: "dig",
-      seq: game.seq,
-      card: publicCard(cards[at.cardId]),
-      newCard,
-      feed: out.feed,
-      left: game.pool - game.used,
-      over: game.over,
-      stats,
-    };
-    /** @type {CellMessage} */
-    const cell = {
-      type: "cell",
-      seq: game.seq,
-      cardId: at.cardId,
-      index: at.index,
-      cell: { kind: out.result.kind, uid, name: player.name, at: now },
-      newCard,
-      text: out.feed.text,
-      left: game.pool - game.used,
-      over: game.over,
-      stats,
-    };
-    this.remember(cell);
+    const { broadcast, cell } = this.publish(game, player, out, { left: game.pool - game.used, over: game.over, stats: { ...game.stats } });
     // 挖的人直接拿到这次的变化（update），不等推送
     return {
       answer: {
@@ -208,6 +193,118 @@ export class MineRoom {
       broadcast,
       cell,
     };
+  }
+
+  /**
+   * 挖开的一格要推的两版：第 1 版带整张卡（现在的样子），第 2 版只带这一格，记进 recent。
+   * snapshot 是挖完这一格那一刻的预算、结束没有、统计（附魔镐一次挖几格，每格各是各的）。
+   * @param {Game} game @param {Player} player @param {CellOut} out
+   * @param {{ left: number, over: boolean, stats: Game["stats"] }} snapshot
+   */
+  publish(game, player, out, { left, over, stats }) {
+    const { result, feed } = out;
+    const card = game.cards[result.cardId];
+    const newCard = out.newCard ? publicCard(out.newCard) : null;
+    const broadcast = { type: "dig", seq: feed.seq, card: publicCard(card), newCard, feed, left, over, stats };
+    /** @type {CellMessage} */
+    const cell = {
+      type: "cell",
+      seq: feed.seq,
+      cardId: result.cardId,
+      index: result.index,
+      cell: { kind: result.kind, uid: player.uid, name: player.name, at: feed.at },
+      newCard,
+      text: feed.text,
+      left,
+      over,
+      stats,
+      ...(card.torches && card.torches.length > 0 ? { torches: publicTorches(card) } : {}),
+      ...(out.burned.length > 0 ? { burned: out.burned } : {}),
+      ...(card.kind === "deep" ? { noise: dugOf(card), closed: Boolean(card.closed) } : {}),
+    };
+    this.remember(cell);
+    return { broadcast, cell };
+  }
+
+  /**
+   * 用道具（新局的道具栏，docs/V3_ITEMS.md §3、§4）。附魔镐每挖一格推一条（第 1 版、第 2 版，
+   * 序号连着），回答里的 updates 是这几条第 2 版；火把、宝库改了卡推一条 { type: "card", card }
+   * （没有序号，网页直接换掉那张卡）；别的只改自己的，不推送。没用成时带上那张卡现在的样子
+   * （格子刚被别人挖开），和现在为什么不能挖。
+   * @returns {Promise<{ answer: Record<string, unknown>, pushes: [Record<string, unknown>, Record<string, unknown>|null][] }>}
+   */
+  async use(
+    /** @type {Info} */ info, /** @type {number} */ uid, /** @type {string} */ name,
+    /** @type {{ item: string, cardId?: number, index?: number, choice?: string }} */ at, /** @type {number} */ now,
+  ) {
+    const game = await this.gameFor(info);
+    const player = await this.playerOf(game, uid, name);
+    const refused = (/** @type {string} */ message) => {
+      const card = at.cardId === undefined ? undefined : game.cards[at.cardId];
+      return {
+        answer: {
+          ok: false, message, me: privatePlayer(player, game, now), blocked: this.blocked(info, game, player, now),
+          ...(card ? { card: publicCard(card) } : {}),
+        },
+        pushes: [],
+      };
+    };
+    if (info.status !== "active") return refused("红包已经结束了");
+    if (info.paused) return refused("红包暂停了，稍后再试");
+    const out = useItem(game, player, { ...at, now });
+    if (!out.ok) return refused(String(out.message));
+    const { cards, ...meta } = game;
+    /** @type {Record<string, unknown>} */
+    const entries = { [`player:${uid}`]: player };
+    /** @type {[Record<string, unknown>, Record<string, unknown>|null][]} */
+    const pushes = [];
+    /** @type {Record<string, unknown>} */
+    let answer;
+    if ("cells" in out) {
+      const cells = /** @type {Extract<typeof out, { cells: unknown }>["cells"]} */ (out.cells);
+      entries.game = meta;
+      entries[`card:${cells[0].result.cardId}`] = cards[cells[0].result.cardId];
+      /** @type {CellMessage[]} */
+      const updates = [];
+      for (const each of cells) {
+        entries[`log:${String(each.feed.seq).padStart(9, "0")}`] = { uid, cardId: each.result.cardId, index: each.result.index, at: now, via: at.item };
+        if (each.newCard) entries[`card:${each.newCard.id}`] = each.newCard;
+        const { broadcast, cell } = this.publish(game, player, each, each);
+        pushes.push([broadcast, cell]);
+        updates.push(cell);
+      }
+      answer = { ok: true, item: at.item, text: out.text, results: cells.map((each) => each.result), updates, claimNow: out.claimNow };
+    } else {
+      const { ok: _ok, card, budget, ...rest } = out;
+      answer = { ok: true, item: at.item, ...rest };
+      if (budget) entries.game = meta;
+      if (card) {
+        entries[`card:${card.id}`] = card;
+        const shown = publicCard(card);
+        answer.card = shown;
+        pushes.push([{ type: "card", card: shown, left: game.pool - game.used, over: game.over }, null]);
+      }
+    }
+    await this.storage.put(entries);
+    return { answer: { ...answer, me: privatePlayer(player, game, now), blocked: this.blocked(info, game, player, now) }, pushes };
+  }
+
+  /**
+   * 苦力怕（网页倒数到点时来）：游戏站核对时间再扣，扣掉的回到预算。只改自己的，不推送。
+   * @returns {Promise<Record<string, unknown>>}
+   */
+  async creeper(/** @type {Info} */ info, /** @type {number} */ uid, /** @type {string} */ name, /** @type {number} */ now) {
+    const game = await this.gameFor(info);
+    const player = await this.playerOf(game, uid, name);
+    const refused = (/** @type {string} */ message) =>
+      ({ ok: false, message, lost: 0, me: privatePlayer(player, game, now), blocked: this.blocked(info, game, player, now) });
+    if (info.status !== "active") return refused("红包已经结束了");
+    if (info.paused) return refused("红包暂停了，稍后再试");
+    const out = creeperBlast(game, player, now);
+    if (!out.ok) return refused(out.message);
+    const { cards: _cards, ...meta } = game;
+    await this.storage.put({ game: meta, [`player:${uid}`]: player });
+    return { ok: true, lost: out.lost, text: out.text, me: privatePlayer(player, game, now), blocked: this.blocked(info, game, player, now) };
   }
 
   /**
@@ -254,7 +351,7 @@ export class MineRoom {
     const first = this.recent[0];
     if (first && seq >= 0 && first.seq <= seq + 1 && this.recent.at(-1)?.seq === game.seq)
       return { messages: this.recent.slice(seq + 1 - first.seq) };
-    return { state: await this.state(info, uid, name, now) };
+    return { state: await this.state(info, uid, name, now, { touch: false }) };
   }
 
   /** 收益卡：自己的逐格记录和数，全场前几名。 */
@@ -286,20 +383,21 @@ export class MineRoom {
   }
 
   /**
-   * 领取：分定下来，签一张凭证；再要一次还是同一张。
+   * 领取：分（手上加末影箱）定下来，签一张凭证；再要一次还是同一张。
    * @returns {Promise<{ answer: Record<string, unknown>, broadcast: Record<string, unknown>|null }>}
    */
-  async claim(/** @type {Info} */ info, /** @type {number} */ uid, /** @type {string} */ name) {
+  async claim(/** @type {Info} */ info, /** @type {number} */ uid, /** @type {string} */ name, now = Date.now()) {
     const game = await this.gameFor(info);
     const player = await this.playerOf(game, uid, name);
     if (info.status !== "active" && player.status !== "claimed")
-      return { answer: { ok: false, message: "红包已经结束了，没领的奖励作废", me: privatePlayer(player) }, broadcast: null };
-    // 手里没有分：不签凭证（交上去只会在红包里记一笔“领取 0.00”）
-    if (player.status !== "claimed" && player.points <= 0)
-      return { answer: { ok: false, message: "手里还没有奖励，不用领取", me: privatePlayer(player) }, broadcast: null };
+      return { answer: { ok: false, message: "红包已经结束了，没领的奖励作废", me: privatePlayer(player, game, now) }, broadcast: null };
+    // 手里没有分（手上加末影箱）：不签凭证（交上去只会在红包里记一笔“领取 0.00”）
+    if (player.status !== "claimed" && totalOf(player) <= 0)
+      return { answer: { ok: false, message: "手里还没有奖励，不用领取", me: privatePlayer(player, game, now) }, broadcast: null };
     await this.topOf(game);
     const first = player.status !== "claimed";
-    const points = claim(game, player);
+    // 领的是手上加末影箱
+    const points = claim(game, player, now);
     // ECDSA 每次签出来不一样：第一次签的存下来，再要还是这一张
     const kept = /** @type {Player & { voucher?: string }} */ (player);
     kept.voucher ??= await this.tools.sign({ openedAt: game.openedAt, id: uid, points });
@@ -309,7 +407,7 @@ export class MineRoom {
       await this.storage.put({ game: meta, [`player:${uid}`]: player });
     }
     return {
-      answer: { ok: true, voucher, points, me: privatePlayer(player) },
+      answer: { ok: true, voucher, points, me: privatePlayer(player, game, now) },
       broadcast: first ? { type: "claim", name: player.name, points, stats: game.stats } : null,
     };
   }

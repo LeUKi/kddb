@@ -3,7 +3,7 @@
 // 开格子只增不减，所以格子不管先后、不管序号接不接得上，先放上去（看得见），放过的不再放；
 // 序号、动态、奖池、统计按序号一条条接，接不上的留在 ahead 里，等推送晚到的那条或者
 // 找游戏站按序号补（GET /since）。手上的整局从不往回退：比手上旧的整局不要。
-import type { FeedItem, Live, LiveStep, PublicCard, PublicGame } from './types'
+import type { FeedItem, Kind, Live, LiveStep, PublicCard, PublicGame } from './types'
 
 export interface Merge {
   game: PublicGame
@@ -32,6 +32,11 @@ export function openedCount(card: PublicCard) {
   let count = 0
   for (const cell of card.cells) if (cell) count += 1
   return count
+}
+
+/** 挖完了没有：不能挖的格子（装饰、宝库、开局的岩浆）不算；监守者醒了也算挖完。 */
+export function finishedOf(card: Pick<PublicCard, 'fixed' | 'closed'>, cells: PublicCard['cells']) {
+  return !!card.closed || cells.every((cell, index) => cell !== null || !!card.fixed?.[index])
 }
 
 /** 两份同一张卡开的是不是同样那些格子。 */
@@ -90,14 +95,31 @@ export function mergeLive(game: PublicGame, ahead: Map<number, LiveStep>, messag
         put(step.card)
         if (!card?.cells[index] && step.card.cells[index]) opened.push({ cardId, index, uid })
       }
-    } else if (card && !card.cells[index]) {
+    } else if (card && (!card.cells[index] || step.torches || step.burned || step.noise !== undefined || step.closed)) {
       const cells = card.cells.slice()
-      cells[index] = step.cell
       const left = { ...card.left }
-      const count = left[step.cell.kind]
-      if (count !== undefined) left[step.cell.kind] = Math.max(0, count - 1)
-      put({ ...card, cells, left, finished: cells.every(Boolean) })
-      opened.push({ cardId, index, uid })
+      const take = (kind: Kind) => {
+        const count = left[kind]
+        if (count !== undefined) left[kind] = Math.max(0, count - 1)
+      }
+      if (!cells[index]) {
+        cells[index] = step.cell
+        take(step.cell.kind)
+        opened.push({ cardId, index, uid })
+      }
+      // 岩浆吞掉的格子：翻开给大家看一下
+      for (const burned of step.burned ?? []) if (!cells[burned.index]) {
+        cells[burned.index] = { kind: burned.kind, uid: 0, name: '', at: step.cell.at, burn: 1 }
+        take(burned.kind)
+        opened.push({ cardId, index: burned.index, uid: 0 })
+      }
+      const next = {
+        ...card, cells, left,
+        ...(step.torches ? { torches: step.torches } : {}),
+        ...(step.noise !== undefined ? { noise: Math.max(card.noise ?? 0, step.noise) } : {}),
+        ...(step.closed ? { closed: true } : {}),
+      }
+      put({ ...next, finished: finishedOf(next, cells) })
     }
     if (step.newCard && !find(step.newCard.id)) {
       put(step.newCard)
@@ -107,6 +129,14 @@ export function mergeLive(game: PublicGame, ahead: Map<number, LiveStep>, messag
 
   let next = game
   for (const message of messages) {
+    if (message.type === 'card') {
+      // 火把、宝库变了：换成这一份，格子只增不减（这条可能比手上的格子晚）
+      const card = find(message.card.id)
+      put(card ? unionCard(card, message.card) : message.card)
+      // 宝库开出的奖励也从奖池里出：剩下的跟着它（不带序号，只会更少）
+      if (message.left !== undefined) next = { ...next, left: Math.min(next.left, message.left), over: next.over || !!message.over }
+      continue
+    }
     if (message.type === 'claim') {
       next = { ...next, stats: message.stats }
       continue
@@ -143,11 +173,27 @@ export function mergeState(current: PublicGame | null, next: PublicGame, ahead: 
   return mergeLive({ ...next, cards }, ahead, rest)
 }
 
-/** 一张卡现在的样子（没挖成时游戏站给的）：比手上的开得多才换。 */
+/**
+ * 游戏站给的一张卡放到手上那张上：开的格子两边合起来（只增不减），剩下的数取少的，
+ * 火把、宝库、噪音用游戏站这一份。
+ */
+export function unionCard(before: PublicCard, card: PublicCard): PublicCard {
+  const cells = card.cells.map((cell, index) => cell ?? before.cells[index] ?? null)
+  const left = { ...card.left }
+  for (const [kind, count] of Object.entries(before.left)) {
+    const key = kind as keyof typeof left
+    if (count !== undefined && (left[key] === undefined || count < (left[key] as number))) left[key] = count
+  }
+  const next = { ...card, cells, left, noise: Math.max(before.noise ?? 0, card.noise ?? 0) || card.noise, closed: before.closed || card.closed }
+  return { ...next, finished: card.finished || finishedOf(next, cells) }
+}
+
+/** 一张卡现在的样子（没挖成时游戏站给的）：开的格子合起来，火把、宝库用这一份。 */
 export function mergeCard(game: PublicGame, card: PublicCard): Merge {
   const before = game.cards.find(item => item.id === card.id)
-  if (before && openedCount(before) >= openedCount(card)) return { game, opened: [], grown: null }
-  const cards = before ? game.cards.map(item => (item.id === card.id ? card : item)) : [...game.cards, card]
-  const opened = card.cells.flatMap((cell, index) => (cell && !before?.cells[index] ? [{ cardId: card.id, index, uid: cell.uid }] : []))
+  if (before && openedCount(before) >= openedCount(card) && !card.torches && !card.vaults && card.noise === undefined) return { game, opened: [], grown: null }
+  const merged = before ? unionCard(before, card) : card
+  const cards = before ? game.cards.map(item => (item.id === card.id ? merged : item)) : [...game.cards, card]
+  const opened = merged.cells.flatMap((cell, index) => (cell && !before?.cells[index] ? [{ cardId: card.id, index, uid: cell.uid }] : []))
   return { game: { ...game, cards }, opened, grown: null }
 }

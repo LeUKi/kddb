@@ -1,6 +1,9 @@
 export const kinds = ['emerald', 'diamond', 'apple', 'totem', 'tnt', 'pearl', 'shield', 'spyglass'] as const
 export type Kind = typeof kinds[number]
 export type IconKind = Kind | 'pickaxe' | 'ore' | 'chest' | 'eye' | 'crystal'
+  // v3 有道具栏的局（docs/V3_ITEMS.md）
+  | 'coal' | 'stick' | 'map' | 'potion' | 'key' | 'vault' | 'deco' | 'lava' | 'debris' | 'cobweb' | 'spawner' | 'minecart' | 'ender'
+  | 'torch' | 'torch-green' | 'torch-red' | 'table' | 'sculk'
 export type BoardSize = 5 | 6 | 7
 export type Difficulty = 'easy' | 'hard' | 'hell'
 export type Composition = Record<Kind, number>
