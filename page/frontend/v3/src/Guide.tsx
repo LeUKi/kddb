@@ -6,10 +6,14 @@ import type { Kind, Rules } from './types'
 import { money } from './types'
 
 // 首次练习（docs/V3_MAP.md §6）：两张 3×3 的小卡，演示挖到奖励、末影珍珠长出新卡、
-// 换到新卡、TNT 扣分和见好就收。全在这里，不连游戏站，不用真机会。
+// 换到新卡、TNT 扣分和见好就收。有道具栏的局（docs/V3_ITEMS.md §5）多两步：挖到望远镜进了
+// 工具条，拿起来看一格（手机上先点一下预览、再点一次才用；电脑上指着预览、点一下就用）。
+// 全在这里，不连游戏站，不用真机会。
 
-type Step = 'first' | 'pearl' | 'move' | 'tnt' | 'done'
+type Step = 'first' | 'pearl' | 'move' | 'tnt' | 'spy' | 'hold' | 'aim' | 'done'
 const SCRIPT: Record<'first' | 'pearl' | 'tnt', Kind> = { first: 'emerald', pearl: 'pearl', tnt: 'tnt' }
+/** 练习里望远镜看到的那一格是什么 */
+const LOOK: Kind = 'diamond'
 
 export const GUIDE_SEEN = 'kddb:v3:guide'
 
@@ -19,6 +23,12 @@ export function Guide({ rules, unit, onClose }: { rules: Rules; unit: string; on
   const [opened, setOpened] = useState<Record<string, Kind>>({})
   const [points, setPoints] = useState(0)
   const [onB, setOnB] = useState(false)
+  /** 有道具栏的局：拿着望远镜、预览在哪一格、看到了哪一格 */
+  const [held, setHeld] = useState(false)
+  const [aimAt, setAimAt] = useState<number | null>(null)
+  const [peekAt, setPeekAt] = useState<number | null>(null)
+  const items = !!rules.items
+  const mouse = typeof window !== 'undefined' && !!window.matchMedia?.('(hover: hover) and (pointer: fine)').matches
   const penalty = Math.floor(((rules.smallReward) * rules.tntPercent) / 100)
   const grown = step !== 'first' && step !== 'pearl'
 
@@ -43,6 +53,22 @@ export function Guide({ rules, unit, onClose }: { rules: Rules; unit: string; on
       play('tnt')
       setOpened(value => ({ ...value, [key]: 'tnt' }))
       setPoints(value => value - penalty)
+      setStep(items ? 'spy' : 'done')
+    } else if (card === 'b' && step === 'spy') {
+      play('dig')
+      play('pop')
+      setOpened(value => ({ ...value, [key]: 'spyglass' }))
+      setStep('hold')
+    } else if (card === 'b' && step === 'aim') {
+      // 拿着望远镜：手机上第一下只预览，再点同一格才用；鼠标点一下就用
+      if (!mouse && aimAt !== index) {
+        setAimAt(index)
+        return
+      }
+      play('spyglass')
+      setPeekAt(index)
+      setHeld(false)
+      setAimAt(null)
       setStep('done')
     }
   }
@@ -52,16 +78,26 @@ export function Guide({ rules, unit, onClose }: { rules: Rules; unit: string; on
     pearl: [`挖到绿宝石，+${money(rules.smallReward)} ${unit}`, '奖励先记在矿洞里。再挖一格试试。'],
     move: ['末影珍珠！旁边长出了一张新卡', '旧卡挖完以前一直能挖。在地图上拖动或直接点新卡就能过去，这里点「移到新卡」。'],
     tnt: ['到了新卡，再挖一格', '每张卡上都有各种道具，也有 TNT。'],
-    done: [`TNT！扣掉 ${rules.tntPercent}%（${money(penalty)} ${unit}）`, `点「见好就收」才领进红包；机会用完、奖池分完会自动领。截止前 2 分钟停止挖掘，没领的作废。`],
+    spy: [`TNT！扣掉 ${rules.tntPercent}%（${money(penalty)} ${unit}）`, '再挖一格试试。'],
+    hold: ['挖到望远镜，它进了下面的工具条', '道具都放在工具条里。点它拿起来。'],
+    aim: ['拿着望远镜', mouse ? '指着格子就能看到要看哪一格，点一下就用；右键或 Esc 放下。' : '点一格先放上去看看，再点一次同一格才用。拖动还是挪地图。'],
+    done: items && peekAt !== null ? ['望远镜看见了：钻石，只有你看得见', `点「见好就收」才领进红包；机会用完、奖池分完会自动领。截止前 2 分钟停止挖掘，没领的作废。`]
+      : [`TNT！扣掉 ${rules.tntPercent}%（${money(penalty)} ${unit}）`, `点「见好就收」才领进红包；机会用完、奖池分完会自动领。截止前 2 分钟停止挖掘，没领的作废。`],
   }
 
   const card = (id: 'a' | 'b') => <div className={`guide-card${(id === 'b') === onB ? ' is-focused' : ''}`}>
     {Array.from({ length: 9 }, (_, index) => {
       const kind = opened[`${id}${index}`]
-      const live = id === 'a' ? (step === 'first' || step === 'pearl') && !onB : step === 'tnt' && onB
+      const live = id === 'a' ? (step === 'first' || step === 'pearl') && !onB : (step === 'tnt' || step === 'spy' || step === 'aim') && onB
+      const looked = id === 'b' && peekAt === index
       return kind
         ? <div key={index} className={`map-cell revealed kind-${kind} is-mine`}><ItemIcon kind={kind} size={22} /></div>
-        : <button key={index} type="button" className="map-cell covered" disabled={!live} onClick={() => dig(id, index)} aria-label={`练习格子 ${index + 1}`} />
+        : <button key={index} type="button" className={`map-cell covered${looked ? ' has-peek' : ''}${id === 'b' && step === 'aim' && aimAt === index ? ' in-look' : ''}`}
+          disabled={!live} onClick={() => dig(id, index)}
+          onPointerMove={event => { if (event.pointerType === 'mouse' && step === 'aim' && id === 'b') setAimAt(index) }}
+          aria-label={`练习格子 ${index + 1}${step === 'aim' ? '，点按看看里面是什么' : ''}`}>
+          {looked ? <ItemIcon kind={LOOK} size={20} className="peek-icon" /> : null}
+        </button>
     })}
   </div>
 
@@ -76,10 +112,25 @@ export function Guide({ rules, unit, onClose }: { rules: Rules; unit: string; on
           <AnimatePresence>{grown ? <motion.div key="b" initial={reduced ? false : { opacity: 0, scale: .4, x: -40 }} animate={{ opacity: 1, scale: 1, x: 0 }} transition={{ duration: .6 }}>{card('b')}</motion.div> : null}</AnimatePresence>
         </motion.div>
       </div>
+      {items && (step === 'hold' || step === 'aim' || (step === 'done' && peekAt !== null)) ? <div className="guide-tools" role="toolbar" aria-label="练习的工具条">
+        <button type="button" className={`tool-slot is-pickaxe${held ? '' : ' is-selected'}`} aria-label="镐子" onClick={() => { setHeld(false); setAimAt(null); if (step === 'aim') setStep('hold') }}><ItemIcon kind="pickaxe" size={30} /></button>
+        {peekAt === null ? <button type="button" className={`tool-slot is-spyglass${held ? ' is-selected' : ''}${step === 'hold' ? ' is-hint' : ''}`} aria-label="望远镜 1" aria-pressed={held}
+          onClick={() => {
+            if (held) {
+              setHeld(false)
+              setAimAt(null)
+              setStep('hold')
+              return
+            }
+            play('click')
+            setHeld(true)
+            setStep('aim')
+          }}><ItemIcon kind="spyglass" size={30} /></button> : null}
+      </div> : null}
       <div className="guide-actions">
         {step === 'move' ? <button type="button" className="guide-next" onClick={() => { setOnB(true); setStep('tnt') }}>▶ 移到新卡</button> : null}
         {step === 'done' ? <>
-          <button type="button" className="guide-again" onClick={() => { setStep('first'); setOpened({}); setPoints(0); setOnB(false) }}>再试一次</button>
+          <button type="button" className="guide-again" onClick={() => { setStep('first'); setOpened({}); setPoints(0); setOnB(false); setHeld(false); setAimAt(null); setPeekAt(null) }}>再试一次</button>
           <button type="button" className="guide-start" onClick={onClose}>开始挖宝</button>
         </> : <button type="button" className="guide-skip" onClick={onClose}>跳过练习</button>}
       </div>

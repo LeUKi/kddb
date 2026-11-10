@@ -483,7 +483,7 @@ button.eye-status { cursor: pointer; }
 /* —— 地图上拿着道具：预览（附魔镐金框、望远镜青框、火把照亮 4 格、钥匙对着宝库），挖过的格子虚线跳过 —— */
 .map-card .map-cell.in-box { z-index: 1; border-color: #f3cc8f; box-shadow: inset 0 0 0 2px #f3cc8f, 0 0 12px #f3cc8f80; filter: brightness(1.15); }
 .map-card .map-cell.in-skip::before { content: ''; position: absolute; inset: 3px; border: 2px dashed #f3cc8fa6; border-radius: 2px; pointer-events: none; }
-.map-card .map-cell.in-look { z-index: 1; border-color: #8fe3f0; box-shadow: inset 0 0 0 2px #8fe3f0, 0 0 12px #8fe3f080; }
+.map-card .map-cell.in-look, .guide-card .map-cell.in-look { z-index: 1; border-color: #8fe3f0; box-shadow: inset 0 0 0 2px #8fe3f0, 0 0 12px #8fe3f080; }
 .map-card .map-cell.in-torch { z-index: 1; box-shadow: inset 0 0 0 1px #ffd76a99; filter: brightness(1.22) sepia(.25); }
 .map-card .map-cell.in-key { z-index: 1; box-shadow: inset 0 0 0 2px #8fe3f0, 0 0 12px #8fe3f080; }
 .map-card .map-cell.is-aim { cursor: crosshair; }
@@ -570,3 +570,8 @@ button.eye-status { cursor: pointer; }
 .creeper-tip { position: absolute; left: 50%; top: 8px; z-index: 7; width: max-content; max-width: min(340px, calc(100% - 24px)); padding: 8px 12px; translate: -50% 0; }
 .creeper-flash { position: absolute; inset: 0; z-index: 9; background: #fff; animation: creeper-flash .7s forwards; pointer-events: none; }
 @keyframes creeper-flash { from { opacity: .95; } to { opacity: 0; } }
+
+/* 练习里的工具条：只有镐子和望远镜；该点望远镜时它亮一下 */
+.guide-tools { display: flex; justify-content: center; gap: 6px; margin: 10px 0 0; }
+.guide-tools .tool-slot.is-hint { border-color: #8fe3f0; box-shadow: 0 0 0 2px #8fe3f040, 0 0 12px #8fe3f066; animation: count-bump .5s var(--ease-out) 2; }
+
