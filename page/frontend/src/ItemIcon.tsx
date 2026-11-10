@@ -33,7 +33,7 @@ const textures: Record<IconKind, string> = {
   'torch-green': 'inventory/copper_torch.png',
   'torch-red': 'textures/block/redstone_torch.png',
   table: 'inventory/enchanting_table.png',
-  sculk: 'inventory/sculk_sensor.gif',
+  sculk: 'textures/block/sculk.png',
 }
 
 /** 急迫药水：药水瓶的液体层按急迫的颜色染（游戏里药水图标就是这样画的：液体层乘上效果的颜色）。 */
@@ -48,6 +48,8 @@ export function ItemIcon({ kind, size = 32, className = '' }: { kind: IconKind; 
     <span className="potion-tint" />
     <img className="potion-bottle" src={`${base}/${textures.potion}`} alt="" draggable={false} />
   </span>
+  // 幽匿块：原版是 4 帧的竖条，只画第一帧（不动）
+  if (kind === 'sculk') return <span className={`item-icon sculk-icon ${className}`} style={{ width: size, height: size, backgroundImage: `url(${base}/${textures.sculk})` }} aria-hidden="true" />
   // 岩浆：原版的 20 帧动画贴图，竖着一条，按帧往下走
   if (kind === 'lava') return <span className={`item-icon lava-icon ${className}`} style={{ width: size, height: size, backgroundImage: `url(${base}/${textures.lava})` }} aria-hidden="true" />
   return <img className={`item-icon ${className}`} src={`${base}/${textures[kind]}`} width={size} height={size} alt="" aria-hidden="true" draggable={false} />

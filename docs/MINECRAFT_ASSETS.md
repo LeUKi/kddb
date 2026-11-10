@@ -59,7 +59,7 @@
 | `inventory/stone.png` | [Invicon Stone](https://minecraft.wiki/w/File:Invicon_Stone.png) | 32 × 32 / 434 字节 | `a5028873b84838e4f1a2d36a79a8e602155a71c3` |
 | `inventory/enchanted_golden_apple.gif` | [Invicon Enchanted Golden Apple](https://minecraft.wiki/w/File:Invicon_Enchanted_Golden_Apple.gif) | 32 × 32 / 561,974 字节 | `eb9adf78243cc3fa58f73f1a104a6109673c8c66` |
 
-2026-11-10 用同样的办法补了 8 张（用 `?format=original` 取原文件，SHA-1 和 MediaWiki API 给的一致；不加这个参数时网站发的是重新压缩过的文件，散列对不上，没用）：`inventory/ender_chest.png`（末影箱）、`enchanting_table.png`（附魔台）、`vault.png`（宝库）、`spawner.png`（刷怪笼）、`ancient_debris.png`（远古残骸）、`copper_torch.png`（铜火把，绿色火焰，1.21.9 起才有，网页拿它当绿色的火把）、`map.png`（地图）、`sculk_sensor.gif`（幽匿感测体，动图）。
+2026-11-10 用同样的办法补了 7 张（用 `?format=original` 取原文件，SHA-1 和 MediaWiki API 给的一致；不加这个参数时网站发的是重新压缩过的文件，散列对不上，没用）：`inventory/ender_chest.png`（末影箱）、`enchanting_table.png`（附魔台）、`vault.png`（宝库）、`spawner.png`（刷怪笼）、`ancient_debris.png`（远古残骸）、`copper_torch.png`（铜火把，绿色火焰，1.21.9 起才有，网页拿它当绿色的火把）、`map.png`（地图）。深暗之域的噪音标记用 JAR 里的幽匿块贴图，只画第一帧（游戏网页里一直动的东西会让红包站外面那块毛玻璃每一帧都重新模糊）。
 
 另有 `inventory/enchanted_golden_apple.png`：用 Pillow 将上述 GIF 的第一帧解码为 RGBA，再保存为 32 × 32 PNG（970 字节，SHA-1 `f153666dd7ea093fb93c7575e7df1efbb6e4a896`）。这是原动画的静态首帧，用于 `prefers-reduced-motion`；没有缩放、改色或重画，已核对 PNG 与 GIF 第一帧的 RGBA 像素完全一致。该 PNG 是本地派生文件，来源记录中明确标注这一点。
 

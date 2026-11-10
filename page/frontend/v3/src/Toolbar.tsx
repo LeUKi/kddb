@@ -217,10 +217,11 @@ export function Toolbar({ level, card, onNeedDig }: { level: Level; card: Public
           event.preventDefault()
           putDown()
         }}>
-        {slot === 'poison' ? <span className="poison-spider" aria-hidden="true" /> : null}
+        {/* 中毒的动静：次数变了才动几下（一直动的话红包站外面的毛玻璃每一帧都要重新模糊） */}
+        {slot === 'poison' ? <><span key={`glow-${count}`} className="poison-glow" aria-hidden="true" /><span key={`spider-${count}`} className="poison-spider" aria-hidden="true" /></> : null}
         <ItemIcon kind={ICONS[slot]} size={30} />
         {shape ? <><span className="glint" aria-hidden="true" /><ShapeGlyph shape={shape} /></> : null}
-        {slot === 'poison' ? <span className="poison-bubbles" aria-hidden="true"><i /><i /><i /></span> : null}
+        {slot === 'poison' ? <span key={`bubbles-${count}`} className="poison-bubbles" aria-hidden="true"><i /><i /><i /></span> : null}
         {slot === 'pickaxe' && cooling.seconds ? <span className="cooling-veil" style={{ transform: `scaleY(${cooling.left})` }} aria-hidden="true" /> : null}
         {slot === 'pickaxe' && cooling.seconds && interval > 1 ? <span className="cooling-text" aria-hidden="true">{cooling.seconds}</span> : null}
         {slot === 'pickaxe' && haste > 0 ? <span className="haste-badge" aria-hidden="true"><ItemIcon kind="potion" size={12} /></span> : null}

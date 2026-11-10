@@ -369,7 +369,7 @@ button.eye-status { cursor: pointer; }
 
 @media (prefers-reduced-motion: reduce) {
   .jp-marker, .jp-marker::after, .map-block::before, .map-card::after,
-  .map-block, .map-card, .map-block.is-grown, .map-block.is-grown .map-card, .map-block.is-grown .map-cell, .map-block.is-grown .thumb-canvas, .map-cell.just-mine, .map-cell.just-other, .digging-pick, .cell-float, .new-marker, .toast, .sheen, .tool-slot, .tool-cell .tool-slot::after, .glint, .poison-spider, .poison-bubbles i, .tool-slot.is-poison::before, .lava-icon, .fixed-lava, .torch, .creeper, .creeper.is-swell, .creeper-flash, .tool-count, .map-cell.in-box, .card-noise img,
+  .map-block, .map-card, .map-block.is-grown, .map-block.is-grown .map-card, .map-block.is-grown .map-cell, .map-block.is-grown .thumb-canvas, .map-cell.just-mine, .map-cell.just-other, .digging-pick, .cell-float, .new-marker, .toast, .sheen, .tool-slot, .tool-cell .tool-slot::after, .glint, .poison-spider, .poison-bubbles i, .poison-glow, .lava-icon, .fixed-lava, .torch, .creeper, .creeper.is-swell, .creeper-flash, .tool-count, .map-cell.in-box, .card-noise img,
   .map-cell.revealed > .item-icon, .cell-who, .map-cell.just-other::after { animation: none !important; transition: none !important; }
   /* 不呼吸，直接亮着 */
   .map-view .map-block.has-eye::before, .map-view .map-block.is-end:not(.is-done)::before { opacity: 1; }
@@ -417,9 +417,11 @@ button.eye-status { cursor: pointer; }
 .tool-slot.is-haste { border-color: #d9c043; box-shadow: 0 0 0 2px #d9c04366, 0 0 12px #d9c04366; }
 .haste-badge { position: absolute; left: 2px; top: 2px; z-index: 2; }
 /* 附魔镐：一直流着的附魔紫光（按镐子的形状遮住），左上角画形状 */
-.tool-slot .glint, .shape-pick .glint { position: absolute; left: 50%; top: 50%; width: 30px; height: 30px; margin: -15px 0 0 -15px; -webkit-mask: var(--pick-mask) center / 100% 100% no-repeat; mask: var(--pick-mask) center / 100% 100% no-repeat; background: linear-gradient(115deg, transparent 30%, #aa5affee 46%, #ffb4ffcc 52%, transparent 68%) 0 0 / 300% 100%; mix-blend-mode: screen; animation: glint 2.4s linear infinite; pointer-events: none; }
+.tool-slot .glint, .shape-pick .glint { position: absolute; left: 50%; top: 50%; width: 30px; height: 30px; margin: -15px 0 0 -15px; -webkit-mask: var(--pick-mask) center / 100% 100% no-repeat; mask: var(--pick-mask) center / 100% 100% no-repeat; background: linear-gradient(115deg, transparent 30%, #aa5affee 46%, #ffb4ffcc 52%, transparent 68%) 0 0 / 300% 100%; mix-blend-mode: screen; animation: glint 2.4s linear 3; pointer-events: none; }
+.tool-slot.is-selected .glint { animation-name: glint-again; }
 .shape-pick .glint { width: 32px; height: 32px; margin: -16px 0 0 -16px; }
 @keyframes glint { from { background-position: 110% 0; } to { background-position: -40% 0; } }
+@keyframes glint-again { from { background-position: 110% 0; } to { background-position: -40% 0; } }
 .shape-glyph { position: absolute; left: 3px; top: 3px; z-index: 2; display: grid; grid-template-columns: repeat(3, 3px); gap: 1px; }
 .shape-glyph i { display: block; width: 3px; height: 3px; background: #ffffff26; }
 .shape-glyph i.on { background: #c9a6ff; }
@@ -431,11 +433,11 @@ button.eye-status { cursor: pointer; }
 .tool-slot.is-full .tool-bar { box-shadow: 0 0 6px #5fdc7c; }
 /* 中毒：刷怪笼里一只洞穴蜘蛛在转，冒绿色的泡，绿字写还剩几次 */
 .tool-slot.is-poison { box-shadow: inset 0 0 10px 1px #50dc5a80; }
-.tool-slot.is-poison::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle, #50dc5a47, transparent 70%); animation: poison-pulse 1.6s ease-in-out infinite; pointer-events: none; }
+.poison-glow { position: absolute; inset: 0; background: radial-gradient(circle, #50dc5a47, transparent 70%); animation: poison-pulse 1.6s ease-in-out 4; pointer-events: none; }
 @keyframes poison-pulse { 50% { opacity: .25; } }
-.poison-spider { position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px; background: var(--cave-spider) -70px -21px / 112px 56px; image-rendering: pixelated; animation: spider-spin 2.6s linear infinite; }
+.poison-spider { position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px; background: var(--cave-spider) -70px -21px / 112px 56px; image-rendering: pixelated; animation: spider-spin 2.6s linear 3; }
 @keyframes spider-spin { 25% { transform: scaleX(.08); } 50% { transform: scaleX(-1); } 75% { transform: scaleX(.08); } }
-.poison-bubbles i { position: absolute; bottom: 8px; z-index: 2; width: 3px; height: 3px; background: #55ff55; animation: bubble 1.6s linear infinite; }
+.poison-bubbles i { position: absolute; bottom: 8px; z-index: 2; width: 3px; height: 3px; background: #55ff55; animation: bubble 1.6s linear 4 both; }
 .poison-bubbles i:nth-child(1) { left: 10px; }
 .poison-bubbles i:nth-child(2) { left: 22px; animation-delay: .55s; }
 .poison-bubbles i:nth-child(3) { left: 32px; animation-delay: 1.1s; }
@@ -489,7 +491,7 @@ button.eye-status { cursor: pointer; }
 /* —— 火把（大家都看得见）：插在四格相交处，绿 0、黄 1–2、红 3–4 个危险；光照在旁边 4 格上 —— */
 .torch { position: absolute; z-index: 3; display: grid; place-items: center; width: 0; height: 0; pointer-events: none; }
 .torch::before { content: ''; position: absolute; width: 96px; height: 96px; border-radius: 50%; background: radial-gradient(circle, var(--torch-light) 0, transparent 68%); opacity: .55; pointer-events: none; }
-.torch > .item-icon { position: relative; filter: drop-shadow(0 0 1px #000) drop-shadow(0 0 3px var(--torch-light)); animation: torch-flicker 1.2s steps(4) infinite; }
+.torch > .item-icon { position: relative; filter: drop-shadow(0 0 1px #000) drop-shadow(0 0 3px var(--torch-light)); animation: torch-flicker 1.2s steps(4) 3; }
 .torch-0 { --torch-light: #7cf08a; }
 .torch-1 { --torch-light: #ffd75a; }
 .torch-2 { --torch-light: #ff5a3c; }
@@ -513,9 +515,11 @@ button.eye-status { cursor: pointer; }
 .map-cell.fixed-vault .item-icon { filter: drop-shadow(0 0 6px #6fd8ff88); }
 .map-cell.fixed-vault.is-spent .item-icon { filter: grayscale(.8) brightness(.7); }
 .vault-left { position: absolute; right: 3px; bottom: 1px; color: #fff; font-size: 13px; font-weight: 700; text-shadow: 1px 1px 0 #3f3f3f; }
-.map-cell.fixed-lava, .lava-icon { background-image: var(--lava); background-size: 100% 2000%; background-position: 0 0; image-rendering: pixelated; animation: lava-flow 3.8s steps(19) infinite alternate; }
+.map-cell.fixed-lava, .lava-icon { background-image: var(--lava); background-size: 100% 2000%; background-position: 0 0; image-rendering: pixelated;  }
 .lava-icon { display: inline-block; }
+.sculk-icon { display: inline-block; background-size: 100% 400%; background-position: 0 0; image-rendering: pixelated; }
 @keyframes lava-flow { to { background-position: 0 100%; } }
+.map-cell.just-burned { animation: lava-flow 1.9s steps(19) 2 alternate; }
 .map-cell.is-burned .burned-icon { animation: burn-away 1.8s ease-in forwards; }
 @keyframes burn-away { 40% { opacity: 1; filter: brightness(1.5) sepia(1) saturate(4) hue-rotate(-20deg); } to { opacity: 0; transform: translateY(6px) scale(.7); filter: brightness(.3); } }
 .card-noise { position: absolute; left: 14px; top: -2px; z-index: 4; display: flex; align-items: center; gap: 6px; padding: 2px 10px 2px 6px; color: #b9f6ff; font-size: 14px; font-weight: 600; background: #071216e6; border: 1px solid #1f6a73; border-radius: 999px; }
