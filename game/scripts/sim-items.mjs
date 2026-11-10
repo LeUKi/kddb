@@ -22,7 +22,7 @@ const open = (card, index) => card.opened[index] === null && !card.fixed?.[index
  * 跑一局。budget：按预计人数算奖池（看真的发出去多少）；不给时奖池给得很大、绿宝石固定 100 分，
  * 量“每次机会平均几份小奖”。
  */
-function play({ seed, items, players, chances = 20, level = "normal", interval = "1", budget }) {
+function play({ seed, items, players, chances = 20, level = "normal", interval = "1", budget, quit = false }) {
   const params = { players, initialChances: chances, level, interval, eyeEvery: 3, creeper: 0 };
   const pool = budget ?? 1e12;
   const rules = rulesOf(params, pool);
@@ -33,9 +33,9 @@ function play({ seed, items, players, chances = 20, level = "normal", interval =
   }
   const game = createGame({ seed: `sim-${seed}`, rules, pool, openedAt: 0, deadlineAt: null });
   const random = rng(seed * 7919 + 1);
-  const people = Array.from({ length: players }, (_, k) => newPlayer(game, k + 1, `p${k}`));
+  const people = Array.from({ length: players }, (_, k) => Object.assign(newPlayer(game, k + 1, `p${k}`), { goal: 4 + Math.floor(random() * 37) }));
   let now = 1_000_000;
-  const stats = { digs: 0, extra: 0, items: {}, biomes: {} };
+  const stats = { digs: 0, extra: 0, items: {}, biomes: {}, stalled: false };
   const cardList = () => Object.values(game.cards).filter((card) => !card.finished && !card.closed);
   const pickCell = () => {
     const cards = cardList();
@@ -85,7 +85,10 @@ function play({ seed, items, players, chances = 20, level = "normal", interval =
       if (items) useItems(player);
       const shape = ["h", "v", "x"].find((key) => (player.items?.pick[key] ?? 0) > 0);
       const at = pickCell();
-      if (!at) break;
+      if (!at) {
+        stats.stalled = true;
+        break;
+      }
       let out;
       if (shape) {
         out = use(player, `pick-${shape}`, { cardId: at.card.id, index: at.index });
@@ -96,6 +99,8 @@ function play({ seed, items, players, chances = 20, level = "normal", interval =
       }
       if (out?.ok) moved = true;
       if (!canDig(player) && !(player.items?.table > 0)) claim(game, player, now);
+      // 见好就收：每人心里有个数（4–40 份小奖之间），手上加箱子里的攒到了就领
+      else if (quit && totalOf(player) >= player.goal * rules.smallReward) claim(game, player, now);
     }
     if (!moved) break;
   }
@@ -103,6 +108,26 @@ function play({ seed, items, players, chances = 20, level = "normal", interval =
   for (const card of Object.values(game.cards)) stats.biomes[card.kind ?? "normal"] = (stats.biomes[card.kind ?? "normal"] ?? 0) + 1;
   const totals = people.map(totalOf).sort((a, b) => a - b);
   return { game, people, totals, stats, rules, left: budgetLeft(game) };
+}
+
+// node game/scripts/sim-items.mjs 60 stall：地图长不动的局有多少（卡都挖完了，还有人能挖）
+if (process.argv[3] === "stall") {
+  for (const [players, chances] of [[20, 20], [50, 20], [200, 10]]) {
+    for (const items of [false, true]) {
+      let stalled = 0, burned = 0, closed = 0;
+      for (let seed = 1; seed <= RUNS; seed++) {
+        const { stats, game } = play({ seed, items, players, chances, budget: 10000, quit: true });
+        if (stats.stalled) stalled += 1;
+        for (const card of Object.values(game.cards)) card.deck.forEach((kind, index) => {
+          if (kind !== "pearl") return;
+          if (card.opened[index]?.burn) burned += 1;
+          else if (card.closed && card.opened[index] === null) closed += 1;
+        });
+      }
+      console.log(`${players} 人 ${chances} 次 ${items ? "新" : "旧"}：地图长不动 ${stalled}/${RUNS} 局；珍珠被岩浆吞 ${burned}，被监守者关掉 ${closed}`);
+    }
+  }
+  process.exit(0);
 }
 
 const median = (list) => list[Math.floor(list.length / 2)];
@@ -145,4 +170,21 @@ for (const [players, chances, interval, items] of [[5, 20, "1", false], [5, 20, 
   if (!items) continue
   console.log(`      每人用道具：${Object.entries(item).map(([key, value]) => `${key} ${value.toFixed(2)}`).join("，")}`);
   console.log(`      每局的卡：${Object.entries(biomes).map(([key, value]) => `${key} ${value.toFixed(1)}`).join("，")}`);
+}
+
+// 3. 真人会见好就收：同样按预计人数算的奖池，旧局和新局发出去多少
+console.log("\n== 奖池 100.00、按预计人数算、每人攒到 4–40 份小奖就领 ==");
+for (const [players, chances, level] of [[20, 20, "easy"], [20, 20, "normal"], [20, 20, "tough"], [50, 20, "normal"], [200, 10, "normal"]]) {
+  const row = [];
+  for (const items of [false, true]) {
+    const shares = [];
+    const zero = [];
+    for (let seed = 1; seed <= RUNS; seed++) {
+      const { totals, game } = play({ seed, items, players, chances, level, budget: 10000, quit: true });
+      shares.push((10000 - budgetLeft(game)) / 10000);
+      zero.push(totals.filter((total) => total <= 0).length / players);
+    }
+    row.push(`${items ? "新" : "旧"} 发出 ${(mean(shares) * 100).toFixed(1)}%，0 分 ${(mean(zero) * 100).toFixed(0)}%`);
+  }
+  console.log(`${String(players).padStart(3)} 人 ${chances} 次 ${level.padEnd(6)}：${row.join("；")}`);
 }

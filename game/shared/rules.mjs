@@ -300,11 +300,11 @@ export function averageUnits(/** @type {Difficulty} */ difficulty, items = false
 
 /**
  * 有道具栏的局每次机会平均发出去的，是旧局的几成（docs/V3_ITEMS.md §7，game/scripts/sim-items.mjs
- * 2026-11-10 每种难度 60 局：简单 1.285/1.957、普通 1.048/1.770、困难 0.566/1.449 份小奖）。
- * 垃圾格、道具占了绿宝石的位置，困难的 TNT 又扣得多；绿宝石按这个比例变贵，同样的奖池、同样
- * 的人数，发出去的和旧局差不多。
+ * 2026-11-11 每种难度 60 局，地图不会长不动以后：简单 1.459/1.936、普通 1.179/1.752、困难 0.624/1.435
+ * 份小奖）。垃圾格、道具占了绿宝石的位置，困难的 TNT 又扣得多；绿宝石按这个比例变贵，同样的奖池、
+ * 同样的人数，发出去的和旧局差不多。
  */
-export const ITEMS_UNITS = /** @type {const} */ ({ easy: 0.66, normal: 0.59, tough: 0.39, hard: 0.59, hell: 0.39 });
+export const ITEMS_UNITS = /** @type {const} */ ({ easy: 0.75, normal: 0.67, tough: 0.43, hard: 0.67, hell: 0.43 });
 
 /** 绿宝石值多少分：大约 POOL_TARGET 的奖池够预计人数每人把机会挖完；至少 1 分。items：有道具栏的局。 */
 export function rewardFor(/** @type {number} */ pool, /** @type {number} */ players, /** @type {number} */ chances, /** @type {Difficulty} */ difficulty, items = false) {
@@ -1010,6 +1010,14 @@ function digCell(/** @type {Game} */ game, /** @type {Player} */ player, /** @ty
     text += `${text ? "。" : ""}噪音惊醒了监守者，${warden > 0 ? `手上的奖励被扣掉一半（-${formatPoints(warden)}），` : ""}这张卡关闭了`;
     publicText += "，惊醒了监守者，这张卡关闭了";
   }
+  // 地图不能长不动：监守者关掉的卡、岩浆里都可能把最后几颗珍珠带走；还能挖的卡上一颗都不剩时，
+  // 在这张卡旁边长一张新卡（有珍珠），大家还有地方挖（2026-11-11 模拟里人多的局有一成停住）
+  if (rules.items && !grown && !game.over && !pearlsLeft(game)) {
+    const place = placeFor(game, card, index);
+    grown = addCard(game, place.x, place.y);
+    text += `${text ? "。" : ""}矿洞里没有末影珍珠了，旁边长出一张新卡`;
+    publicText += "；矿洞里没有末影珍珠了，旁边长出一张新卡";
+  }
   if (budgetLeft(game) === 0) game.over = true;
 
   /** @type {Result} */
@@ -1030,6 +1038,14 @@ function digCell(/** @type {Game} */ game, /** @type {Player} */ player, /** @ty
  * 被它吞掉的格子都算岩浆），挑哪格由种子定，远古残骸吞不掉。被吞的格子翻开（uid 0），之后就没了。
  * @returns {{ index: number, kind: Kind }|null}
  */
+const UNBURNABLE = /** @type {ReadonlySet<Kind>} */ (new Set(["debris", "pearl", "eye"]));
+
+/** 还能挖的卡（没关）上还有没挖开的末影珍珠吗：没有了地图就长不动。 */
+function pearlsLeft(/** @type {Game} */ game) {
+  return Object.values(game.cards).some((card) => !card.closed
+    && card.deck.some((kind, at) => kind === "pearl" && card.opened[at] === null && card.fixed?.[at] === undefined));
+}
+
 function lavaFlow(/** @type {Game} */ game, /** @type {Card} */ card, /** @type {number} */ now) {
   const dug = dugOf(card);
   if (dug === 0 || dug % LAVA_EVERY !== 0) return null;
@@ -1038,7 +1054,8 @@ function lavaFlow(/** @type {Game} */ game, /** @type {Card} */ card, /** @type 
   /** @type {number[]} */
   const targets = [];
   for (let at = 0; at < card.deck.length; at++) {
-    if (card.opened[at] !== null || card.fixed?.[at] !== undefined || card.deck[at] === "debris") continue;
+    // 远古残骸烧不掉；末影珍珠、末影之眼也不吞（吞了地图就可能长不动）
+    if (card.opened[at] !== null || card.fixed?.[at] !== undefined || UNBURNABLE.has(card.deck[at])) continue;
     const row = Math.floor(at / size);
     const col = at % size;
     if ((row > 0 && lava(at - size)) || (row < size - 1 && lava(at + size)) || (col > 0 && lava(at - 1)) || (col < size - 1 && lava(at + 1)))

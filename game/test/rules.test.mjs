@@ -85,8 +85,8 @@ describe("规则和金额", () => {
   });
   it("有道具栏的局：垃圾格、道具占了绿宝石的位置，绿宝石按模拟的比例变贵", () => {
     for (const level of /** @type {const} */ (["easy", "normal", "tough"]))
-      assert.ok(averageUnits(level, true) < averageUnits(level) * 0.7, level);
-    assert.ok(rewardFor(100000, 20, 20, "normal", true) > rewardFor(100000, 20, 20, "normal") * 1.6);
+      assert.ok(averageUnits(level, true) < averageUnits(level) * 0.8, level);
+    assert.ok(rewardFor(100000, 20, 20, "normal", true) > rewardFor(100000, 20, 20, "normal") * 1.4);
     assert.equal(rulesOf({}, 100000).smallReward, rewardFor(100000, 20, 20, "normal", true));
   });
   it("旧判定器的参数照旧用：difficulty、smallReward、tntPercent、appleCap（null 不限）", () => {
@@ -1125,6 +1125,35 @@ describe("新局的道具（docs/V3_ITEMS.md §3）", () => {
     assert.match(dig(g, p, { cardId: card.id, index: 23, now: later() }).message, /监守者醒了，这张卡已经关闭/);
     const shown = publicCard(card);
     assert.deepEqual([shown.noise, shown.closed, shown.finished, shown.torches], [3, true, true, []]);
+  });
+
+  it("地图不会长不动：岩浆不吞末影珍珠和末影之眼；还能挖的卡上一颗珍珠都不剩时，在刚挖的卡旁边长一张新卡", () => {
+    const g = game();
+    lay(g.cards[1], {});
+    const nether = lay(biomeCard(g, "nether"), { 1: "pearl", 6: "eye" }, { 0: "lava" });
+    const p = newPlayer(g, 10001, "小明");
+    p.chances = 99;
+    for (const index of [35, 34, 33]) assert.deepEqual(dig(g, p, { cardId: nether.id, index, now: later() }).burned, []);
+    // 岩浆旁边只有珍珠（1）和末影之眼（6）：都不吞
+    assert.deepEqual([nether.opened[1], nether.opened[6]], [null, null]);
+
+    const h = game();
+    lay(h.cards[1], {});
+    const deep = lay(biomeCard(h, "deep"), { 5: "pearl" });
+    deep.wardenAt = 1;
+    const q = newPlayer(h, 10001, "小明");
+    const before = Object.keys(h.cards).length;
+    const loud = dig(h, q, { cardId: deep.id, index: 0, now: later() });
+    assert.ok(loud.ok && deep.closed);
+    // 卡关了，珍珠跟着关在里面：矿洞里没有能挖的珍珠了，旁边长出一张新卡（有珍珠）
+    assert.ok(loud.newCard);
+    assert.equal(loud.result.newCardId, loud.newCard.id);
+    assert.equal(Object.keys(h.cards).length, before + 1);
+    assert.ok(loud.newCard.deck.includes("pearl"));
+    assert.match(loud.feed.text, /矿洞里没有末影珍珠了，旁边长出一张新卡/);
+    // 新卡上有珍珠了：再挖别的不会再长
+    const next = dig(h, q, { cardId: 1, index: 0, now: later() });
+    assert.equal(next.newCard, null);
   });
 
   it("苦力怕：手上有分时按最后一次动的时刻倒数；到点（加 10 秒倒数、留 2 秒余量）才炸掉手上的 20%，回到预算", () => {
