@@ -1,13 +1,17 @@
 import type { Kind, Step } from './types'
 
 // 收益曲线（收益卡里）：每挖一格后手里多少分，连成一条线；钻石、金苹果、踩雷、盾牌挡住
-// 打上点。纯函数，测试直接算。
+// 的那几格在线上画物品的图标（以前是小圆点加一行图例，图例像坐标刻度，看不懂）。纯函数，测试直接算。
 
 export interface ChartBox { width: number; height: number; padX: number; padTop: number; padBottom: number }
 export const CHART: ChartBox = { width: 320, height: 132, padX: 8, padTop: 16, padBottom: 10 }
 
 export type Mark = 'big' | 'apple' | 'boom' | 'blocked'
-export interface Marker { x: number; y: number; mark: Mark; step: number }
+export interface Marker {
+  x: number; y: number; mark: Mark; step: number
+  /** 挖到的是什么、多了（少了）多少分 */
+  kind: Kind; amount: number
+}
 
 export interface Chart {
   /** 折线 */
@@ -48,7 +52,7 @@ export function chartOf(trail: Step[], box: ChartBox = CHART): Chart {
   const markers: Marker[] = []
   trail.forEach((step, index) => {
     const mark = markOf(step.k, step)
-    if (mark) markers.push({ x: round(xOf(index + 1)), y: round(yOf(step.p)), mark, step: index + 1 })
+    if (mark) markers.push({ x: round(xOf(index + 1)), y: round(yOf(step.p)), mark, step: index + 1, kind: step.k, amount: step.a })
   })
   let peakAt = 0
   values.forEach((value, index) => {
@@ -60,4 +64,21 @@ export function chartOf(trail: Step[], box: ChartBox = CHART): Chart {
     peak: values[peakAt] > 0 ? { x: round(xOf(peakAt)), y: round(yOf(values[peakAt])), points: values[peakAt] } : null,
     end: { x: round(xOf(last)), y: round(yOf(values[last])), points: values[last] },
   }
+}
+
+/** 图标画哪个：钻石、金苹果；踩雷画 TNT 或末影水晶；挡住画盾牌。 */
+export function iconOf(marker: Pick<Marker, 'mark' | 'kind'>): 'diamond' | 'apple' | 'tnt' | 'crystal' | 'shield' {
+  if (marker.mark === 'big') return 'diamond'
+  if (marker.mark === 'apple') return 'apple'
+  if (marker.mark === 'blocked') return 'shield'
+  return marker.kind === 'crystal' ? 'crystal' : 'tnt'
+}
+
+/** 点（指着）图标时说的那一句。money 由调用的地方给（分 → 两位小数）。 */
+export function markerWords(marker: Pick<Marker, 'mark' | 'kind' | 'amount' | 'step'>, money: (points: number) => string) {
+  const at = `第 ${marker.step} 格`
+  const bomb = marker.kind === 'crystal' ? '末影水晶' : 'TNT'
+  if (marker.mark === 'blocked') return `${at}：盾牌挡住了${marker.kind === 'crystal' ? '' : ' '}${bomb}`
+  if (marker.mark === 'boom') return `${at}：${bomb}，被炸掉 ${money(-marker.amount)}`
+  return `${at}：${marker.mark === 'big' ? '钻石' : '附魔金苹果'} +${money(marker.amount)}`
 }

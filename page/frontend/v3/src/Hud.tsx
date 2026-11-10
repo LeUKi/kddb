@@ -64,34 +64,77 @@ export function TopBar({ onRules }: { onRules: () => void }) {
   const settled = useAtomValue(settledAtom)
   const blocked = useAtomValue(blockedAtom)
   const cooling = useCooling()
+  const [confirming, setConfirming] = useState(false)
   const unit = hongbao?.unit ?? 'LDC'
-  if (!me) return null
-  const claimed = me.status === 'claimed'
+  const claimed = me?.status === 'claimed'
   // 手里没有分：领了也是 0，按钮不能点
-  const empty = !claimed && me.points <= 0
-  return <header className="top-bar">
+  const empty = !!me && !claimed && me.points <= 0
+  // 还能挖的时候领取要确认一次（剩下的机会作废）；停止挖掘、奖池分完、机会用完、再交一次都不用
+  const asks = !!me && !settled && !claimed && !empty && !blocked && me.chances > 0 && claiming === 'idle'
+  useEffect(() => {
+    if (!asks) setConfirming(false)
+  }, [asks])
+  if (!me) return null
+  return <header className={`top-bar${confirming ? ' is-confirming' : ''}`}>
     <div className="earned">
       <span>{settled ? '已领到' : '矿洞里的奖励'}</span>
       <strong><Tween value={settled ? Math.round(Number(settled.amount) * 100) : me.points} format={money} /> <small>{settled?.unit ?? unit}</small></strong>
     </div>
+    {/* 冷却（挖掘间隔 3 秒以上）只盖在镐子上、下面走一条，不占宽度：顶栏一变高，地图就跟着改大小、重新对准，看着像缩放跳了一下 */}
     <div className={`chances${cooling.seconds ? ' is-cooling' : ''}`} aria-label={`剩余机会 ${me.chances} 次${me.shield ? '，有盾牌' : ''}${cooling.seconds ? `，还要等 ${cooling.seconds} 秒` : ''}`}>
-      <ItemIcon kind="pickaxe" size={22} />
+      <span className="pick-slot">
+        <ItemIcon kind="pickaxe" size={22} />
+        {cooling.seconds ? <span className="cooling-text" aria-hidden="true">{cooling.seconds}</span> : null}
+      </span>
       <strong><Tween value={me.chances} /></strong>
       {me.shield ? <ItemIcon kind="shield" size={20} className="has-shield" /> : null}
-      {cooling.seconds ? <>
-        <span className="cooling-text">{cooling.seconds} 秒</span>
-        <span className="cooling-bar" style={{ transform: `scaleX(${cooling.left})` }} aria-hidden="true" />
-      </> : null}
+      {cooling.seconds ? <span className="cooling-bar" style={{ transform: `scaleX(${cooling.left})` }} aria-hidden="true" /> : null}
     </div>
     <div className="claim">
       {settled ? <span className="claim-done">领取完成</span>
-        : <button type="button" className="claim-button" disabled={claiming === 'working' || empty} onClick={() => void claim()}>
+        : <button type="button" className="claim-button" disabled={claiming === 'working' || empty} aria-expanded={asks ? confirming : undefined}
+          onClick={() => asks ? setConfirming(true) : void claim()}>
           {claiming === 'working' ? '正在领取' : claimed || claiming === 'filled' ? '再交一次' : empty && blocked ? '没有奖励' : blocked ? '领取' : '见好就收'}
         </button>}
     </div>
     <SoundButton />
     <button type="button" className="rules-button" onClick={onRules} aria-label="怎么玩">?</button>
+    {confirming ? <ClaimConfirm points={me.points} chances={me.chances} unit={unit}
+      onCancel={() => setConfirming(false)} onConfirm={() => {
+        setConfirming(false)
+        void claim()
+      }} /> : null}
   </header>
+}
+
+/**
+ * 见好就收的确认：领了就不能再挖，剩下的机会作废（有人误触过）。挂在顶栏下面，“领取”和原来的按钮
+ * 不在一个位置，连点两下第二下落在遮罩上，只是关掉。点遮罩、按 Esc、点“继续挖”都是不领。
+ */
+function ClaimConfirm({ points, chances, unit, onCancel, onConfirm }: { points: number; chances: number; unit: string; onCancel: () => void; onConfirm: () => void }) {
+  const stay = useRef<HTMLButtonElement>(null)
+  const cancel = useRef(onCancel)
+  cancel.current = onCancel
+  useEffect(() => {
+    stay.current?.focus({ preventScroll: true })
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') cancel.current()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+  return <>
+    <div className="confirm-backdrop" onClick={onCancel} aria-hidden="true" />
+    <motion.div className="claim-confirm" role="alertdialog" aria-modal="true" aria-labelledby="claim-confirm-title" aria-describedby="claim-confirm-text"
+      initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}>
+      <p id="claim-confirm-title" className="claim-confirm-title">领取 {money(points)} {unit}？</p>
+      <p id="claim-confirm-text">领取以后就不能再挖这个红包了，剩下的 {chances} 次机会作废。</p>
+      <div className="claim-confirm-actions">
+        <button ref={stay} type="button" onClick={onCancel}>继续挖</button>
+        <button type="button" className="is-primary" onClick={onConfirm}>领取</button>
+      </div>
+    </motion.div>
+  </>
 }
 
 /** 声音开关：记在本机；打开时响一下，让他知道有声音。 */
@@ -146,10 +189,13 @@ export function BottomBar({ card }: { card: PublicCard | null }) {
           </li>)}
       </ul>
     </div> : null}
+    {/* 手机上排成固定的几行（奖池和人数、截止和收益、末影之眼），文字变长变短、提示换成按钮都不换行：底栏一变高，地图就跟着改大小、重新对准 */}
     <div className="game-info">
-      <span>奖池还剩 <b><Tween value={game.left} format={money} /></b> {unit}</span>
-      <span>{game.stats.players} 人在挖 · {game.stats.claimed} 人已领</span>
-      <span>{deadlineWords(game.deadlineAt, game.wrapUpAt, now, game.over)}</span>
+      <span className="info-line">
+        <span>奖池还剩 <b><Tween value={game.left} format={money} /></b> {unit}</span>
+        <span className="info-people">{game.stats.players} 人在挖 · {game.stats.claimed} 人已领</span>
+      </span>
+      <span className="info-deadline">{deadlineWords(game.deadlineAt, game.wrapUpAt, now, game.over)}</span>
       {eye.kind === 'treasure' ? <button type="button" className="eye-status is-treasure" onClick={() => setFocus({ cardId: eye.card.id, at: Date.now() })}><ItemIcon kind="eye" size={14} />末地宝藏开了，点这里过去</button>
         : eye.kind === 'eye' ? <button type="button" className="eye-status" onClick={() => setFocus({ cardId: eye.card.id, at: Date.now() })}><ItemIcon kind="eye" size={14} />末影之眼藏在第 {eye.card.id} 张卡里</button>
           : eye.kind === 'coming' ? <span className="eye-status"><ItemIcon kind="eye" size={14} />{eye.cards === 1 ? '下一张新卡里藏着末影之眼' : `往后第 ${eye.cards} 张新卡里藏着末影之眼`}</span> : null}

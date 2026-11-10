@@ -36,6 +36,21 @@ test('盾牌挡住、金苹果、末影水晶打点；扣到 0 的雷也算；�
   assert.equal(flat.markers.length, 0)
 })
 
+test('线上的图标和说的话：钻石、金苹果、TNT 或末影水晶、挡住画盾牌', () => {
+  const trail = [{ k: 'diamond', a: 50, p: 50 }, { k: 'apple', a: 20, p: 70 }, { k: 'tnt', a: -7, p: 63 }, { k: 'crystal', a: 0, p: 63, b: 1 }, { k: 'crystal', a: -12, p: 51 }, { k: 'tnt', a: 0, p: 51, b: 1 }]
+  const markers = chart.chartOf(trail, box).markers
+  const money = points => (points / 100).toFixed(2)
+  assert.deepEqual(markers.map(marker => chart.iconOf(marker)), ['diamond', 'apple', 'tnt', 'shield', 'crystal', 'shield'])
+  assert.deepEqual(markers.map(marker => chart.markerWords(marker, money)), [
+    '第 1 格：钻石 +0.50',
+    '第 2 格：附魔金苹果 +0.20',
+    '第 3 格：TNT，被炸掉 0.07',
+    '第 4 格：盾牌挡住了末影水晶',
+    '第 5 格：末影水晶，被炸掉 0.12',
+    '第 6 格：盾牌挡住了 TNT',
+  ])
+})
+
 test('挖到什么放什么：挡住是格挡声，重复盾牌和望远镜转小奖是经验球，珍珠和眼跟着动画放', () => {
   const of = (kind, amount = 0, blocked = false) => sound.soundOfResult({ kind, amount, blocked })
   assert.equal(of('emerald', 10), 'emerald')

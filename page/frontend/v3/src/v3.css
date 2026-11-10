@@ -6,23 +6,36 @@ body { overflow: hidden; overscroll-behavior: none; }
 /* —— 上面一条 —— */
 .top-bar { position: relative; z-index: 5; display: flex; align-items: center; gap: 14px; padding: 10px 14px; background: #1a2229e6; border-bottom: 1px solid #3a4148; }
 .earned { display: grid; min-width: 0; }
-.earned > span { color: var(--muted); font-size: 12px; line-height: 1.4; }
-.earned strong { font-size: 24px; font-weight: 650; line-height: 1.1; font-variant-numeric: tabular-nums; letter-spacing: -.5px; }
+.earned > span { overflow: hidden; color: var(--muted); font-size: 12px; line-height: 1.4; white-space: nowrap; text-overflow: ellipsis; }
+.earned strong { font-size: 24px; font-weight: 650; line-height: 1.1; font-variant-numeric: tabular-nums; letter-spacing: -.5px; white-space: nowrap; }
+/* 顶栏只排一行，高度不随内容变：它一变高，地图就跟着改大小、重新对准（冷却时看着像缩放跳了一下）。挤的时候只有“矿洞里的奖励”这几个字省略 */
+.top-bar > * { flex: none; }
+.top-bar > .earned { flex: 0 1 auto; }
 .earned small { color: var(--muted); font-size: 13px; font-weight: 400; }
 .chances { display: flex; align-items: center; gap: 6px; padding: 6px 10px; background: #242d34; border: 1px solid #56636b; border-radius: 8px; }
 .chances strong { font-size: 20px; font-variant-numeric: tabular-nums; }
-/* 挖掘间隔拉长时（3 秒以上）：机会旁边倒数几秒，下面一条走完就能挖；地图上的格子暗一些 */
+/* 挖掘间隔拉长时（3 秒以上）：镐子上盖一层写还要等几秒，下面一条走完就能挖；地图上的格子暗一些。都不占宽度 */
 .chances { position: relative; overflow: hidden; }
-.cooling-text { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pick-slot { position: relative; display: inline-grid; flex: none; }
+.cooling-text { position: absolute; inset: -2px; display: grid; place-items: center; color: #fff; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; text-shadow: 0 1px 2px #000; background: #13191fb8; border-radius: 4px; }
 .cooling-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--gold); transform-origin: left center; transition: transform .2s linear; }
 .map-view.is-cooling .map-cell.covered:enabled { filter: brightness(.72) saturate(.7); cursor: progress; }
 .map-view.is-cooling .map-cell.covered:enabled:hover { border-color: inherit; filter: brightness(.8) saturate(.7); }
 .rules-money { margin: 0; color: var(--ink); font-size: 14px; }
 .has-shield { margin-left: 2px; }
 .claim { margin-left: auto; }
-.claim-button { padding: 9px 16px; color: #1b1408; font-weight: 650; background: linear-gradient(#f1c57f, #d79b4f); border: 0; border-radius: 8px; box-shadow: 0 2px 0 #8a5d2a, 0 6px 16px #e9b56b33; }
+.claim-button { padding: 9px 16px; color: #1b1408; white-space: nowrap; font-weight: 650; background: linear-gradient(#f1c57f, #d79b4f); border: 0; border-radius: 8px; box-shadow: 0 2px 0 #8a5d2a, 0 6px 16px #e9b56b33; }
 .claim-button:disabled { filter: grayscale(.4) brightness(.8); }
-.claim-done { color: #b4d3b2; font-weight: 600; }
+.claim-done { color: #b4d3b2; font-weight: 600; white-space: nowrap; }
+/* 见好就收的确认：挂在顶栏下面，遮罩盖住地图和底栏（顶栏这时升到最上面） */
+.top-bar.is-confirming { z-index: 21; }
+.confirm-backdrop { position: fixed; inset: 0; background: #05090d73; }
+.claim-confirm { position: absolute; top: calc(100% + 6px); right: 10px; display: grid; gap: 6px; width: min(300px, calc(100vw - 20px)); padding: 12px 14px; background: linear-gradient(#222b33, #1b2228); border: 1px solid #56636b; border-radius: 10px; box-shadow: 0 12px 32px #000a; }
+.claim-confirm p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
+.claim-confirm .claim-confirm-title { color: var(--ink); font-size: 16px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.claim-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.claim-confirm-actions button { padding: 8px 16px; color: var(--ink); background: #242d34; border: 1px solid #56636b; border-radius: 8px; }
+.claim-confirm-actions .is-primary { color: #1b1408; font-weight: 650; background: linear-gradient(#f1c57f, #d79b4f); border: 0; box-shadow: 0 2px 0 #8a5d2a; }
 .rules-button { width: 32px; height: 32px; color: var(--ink); background: #242d34; border: 1px solid #56636b; border-radius: 50%; }
 /* 声音开关：关掉时喇叭旁边是叉，开着时是声波 */
 .sound-button { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; color: var(--ink); background: #242d34; border: 1px solid #56636b; border-radius: 50%; }
@@ -208,6 +221,7 @@ button.eye-status { cursor: pointer; }
 .card-left li.is-out { opacity: .35; }
 .game-info { display: flex; align-items: center; gap: 12px; min-width: 0; overflow: hidden; color: var(--muted); font-size: 13px; white-space: nowrap; }
 .game-info b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.info-line { display: inline-flex; gap: 12px; min-width: 0; }
 .summary-toggle { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; padding: 3px 9px; color: var(--ink); background: #242d34; border: 1px solid #56636b; border-radius: 6px; }
 .card-left li.is-crystal { color: #d9b8f0; }
 
@@ -228,19 +242,21 @@ button.eye-status { cursor: pointer; }
 .summary-chart svg { display: block; width: 100%; height: 132px; overflow: visible; }
 .chart-base { stroke: #ffffff26; stroke-width: 1; stroke-dasharray: 3 4; vector-effect: non-scaling-stroke; }
 .chart-line { fill: none; stroke: #e9b56b; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
-.chart-mark { stroke: #151b20; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
-.mark-big { fill: #7fd8e6; }
-.mark-apple { fill: #f6cf5a; }
-.mark-boom { fill: #ff7a66; }
-.mark-blocked { fill: #d6d0c4; }
-.chart-peak { position: absolute; margin: -22px 0 0 8px; padding: 1px 5px; color: #f3cc8f; font-size: 11px; white-space: nowrap; background: #11171dcc; border-radius: 4px; transform: translateX(-50%); pointer-events: none; }
+/* 图和上面的标注、图标按同一个框算位置（百分比） */
+.chart-plot { position: relative; height: 132px; }
+.chart-zero { position: absolute; left: -2px; margin-top: -13px; color: var(--muted); font-size: 10px; line-height: 1; pointer-events: none; }
+/* 钻石、金苹果、TNT、末影水晶、盾牌直接画在线上；点一下说这一格挖到了什么 */
+.chart-icon { position: absolute; display: grid; place-items: center; width: 22px; height: 22px; padding: 0; background: none; border: 0; border-radius: 50%; cursor: pointer; }
+.chart-icon .item-icon { filter: drop-shadow(0 1px 0 #000) drop-shadow(0 0 2px #000c); }
+.chart-icon.is-picked { background: #ffffff1a; box-shadow: 0 0 0 1px #e9b56b; }
+.chart-tip { position: absolute; z-index: 2; margin-top: -32px; padding: 2px 6px; color: var(--ink); font-size: 11px; white-space: nowrap; background: #11171df2; border: 1px solid #56636b; border-radius: 4px; transform: translateX(-50%); pointer-events: none; }
+.chart-tip.is-right { transform: translateX(-100%); }
+.chart-tip.is-left { transform: none; }
+.chart-peak { position: absolute; margin: -28px 0 0; padding: 1px 5px; color: #f3cc8f; font-size: 11px; white-space: nowrap; background: #11171dcc; border-radius: 4px; transform: translateX(-50%); pointer-events: none; }
 /* 最高点靠边时标签往里放，不出框 */
 .chart-peak.is-right { transform: translateX(-100%); }
 .chart-peak.is-left { transform: none; }
 .summary-chart figcaption { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; color: var(--muted); font-size: 11px; }
-.chart-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px 8px; }
-.chart-legend > span { display: inline-flex; align-items: center; gap: 3px; }
-.legend-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; }
 .summary-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 0; }
 .summary-stats div { display: grid; gap: 2px; padding: 7px 6px; text-align: center; background: #151b20; border: 1px solid #2f383f; border-radius: 8px; }
 .summary-stats dt { color: var(--muted); font-size: 11px; }
@@ -307,22 +323,40 @@ button.eye-status { cursor: pointer; }
 @keyframes toast-in { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translateX(-50%); } }
 
 @media (max-width: 480px) {
-  .top-bar { gap: 10px; padding: 8px 10px; }
-  .earned strong { font-size: 20px; }
-  .claim-button { padding: 8px 12px; }
+  /* 360 宽的手机上也放得下一行（三位数的奖励、有盾牌、冷却中） */
+  .top-bar { gap: 6px; padding: 8px 10px; }
+  .earned > span { font-size: 11px; }
+  .earned strong { font-size: clamp(16px, 5vw, 20px); }
+  .earned small { font-size: 11px; }
+  .chances { gap: 4px; padding: 5px 7px; }
+  .chances strong { font-size: 18px; }
+  .claim-button { padding: 8px 10px; font-size: 14px; }
+  .sound-button, .rules-button { width: 28px; height: 28px; }
   .bottom-bar { padding: 6px 10px 8px; }
   /* 手机上卡几乎占满宽度：缩放按钮小一号、不写字，正好落在卡下面的空白里，不压格子 */
   .zoom-float { right: 6px; bottom: 6px; gap: 3px; padding: 3px; }
   .zoom-float button { width: 32px; height: 32px; font-size: 16px; }
   .zoom-float span { display: none; }
-  .game-info { flex-wrap: wrap; row-gap: 2px; white-space: normal; }
+  /* 底栏固定几行：奖池和人数一行，截止和收益一行，开了末地宝藏再一行；长了省略，不换行（高度一变，地图就重新对准） */
+  .game-info { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "line line" "deadline summary" "eye eye"; align-items: center; white-space: nowrap; }
+  .info-line { grid-area: line; gap: 10px; overflow: hidden; }
+  .info-people { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .info-deadline { grid-area: deadline; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .game-info .summary-toggle { grid-area: summary; margin-left: 0; }
+  .game-info .eye-status { grid-area: eye; justify-self: start; max-width: 100%; overflow: hidden; }
+  .game-info .eye-status, .game-info .summary-toggle { box-sizing: border-box; height: 22px; line-height: 1; }
   /* 卡片信息固定两行（标题一行、剩下的一行）：换卡时底栏不变高，地图不跟着改大小 */
   .card-info { flex-direction: column; align-items: stretch; gap: 2px; }
   .card-left { flex-wrap: nowrap; }
   .card-left li { min-width: 0; }
-  .game-info { gap: 4px 10px; }
+  .game-info { gap: 3px 10px; }
   .summary { padding: 14px 12px 12px; }
   .summary-stats { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* 再窄（320 一类的老手机）：奖励后面的单位不写，单位在“怎么玩”和收益卡里有 */
+@media (max-width: 340px) {
+  .earned small { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

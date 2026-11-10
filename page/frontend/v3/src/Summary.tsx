@@ -2,8 +2,7 @@ import { useAtomValue } from 'jotai'
 import { motion } from 'motion/react'
 import { useEffect, useMemo, useState } from 'react'
 import { ItemIcon } from '../../src/ItemIcon'
-import type { Mark } from './chart'
-import { CHART, chartOf } from './chart'
+import { CHART, chartOf, iconOf, markerWords } from './chart'
 import { hongbaoAtom, loadSummary, settledAtom, uidAtom } from './state'
 import type { Summary } from './types'
 import { money } from './types'
@@ -12,14 +11,14 @@ import { money } from './types'
 // 用完而手里没分）自动弹一次。打开时才向游戏站要数据、才画曲线，平时不占资源。排成一张
 // 能直接截图分享的卡：红包名、领到多少、收益曲线、我的数据、全场前几名。
 
-const MARK_NAMES: Record<Mark, string> = { big: '钻石', apple: '金苹果', boom: '踩雷', blocked: '盾牌挡住' }
-
 export function SummaryCard({ reason, onClose }: { reason: 'button' | 'end'; onClose: () => void }) {
   const hongbao = useAtomValue(hongbaoAtom)
   const settled = useAtomValue(settledAtom)
   const uid = useAtomValue(uidAtom)
   const [summary, setSummary] = useState<Summary | null>(null)
   const [problem, setProblem] = useState('')
+  // 点了哪个图标（显示那一格挖到了什么）；电脑上指着也有提示
+  const [picked, setPicked] = useState<number | null>(null)
   const unit = settled?.unit ?? hongbao?.unit ?? 'LDC'
 
   const load = () => {
@@ -59,24 +58,37 @@ export function SummaryCard({ reason, onClose }: { reason: 'button' | 'end'; onC
               <span>{me.name}{settled || me.status === 'claimed' ? '' : me.points > 0 ? ' · 还在矿洞里，没领' : ''}</span>
             </p>
             {chart ? <figure className="summary-chart" aria-label={`收益曲线：挖了 ${me.digs} 格，最高 ${money(chart.peak?.points ?? 0)}，最后 ${money(chart.end.points)}`}>
-              <svg viewBox={`0 0 ${CHART.width} ${CHART.height}`} preserveAspectRatio="none" aria-hidden="true">
-                <defs>
-                  <linearGradient id="summary-fill" x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="0" stopColor="#e9b56b" stopOpacity=".38" />
-                    <stop offset="1" stopColor="#e9b56b" stopOpacity="0" />
-                  </linearGradient>
-                </defs>
-                <line x1={CHART.padX} x2={CHART.width - CHART.padX} y1={chart.baseY} y2={chart.baseY} className="chart-base" />
-                <motion.path d={chart.area} fill="url(#summary-fill)" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5, duration: 0.5 }} />
-                <motion.path d={chart.line} className="chart-line" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }} />
-                {chart.markers.map(marker => <motion.circle key={marker.step} cx={marker.x} cy={marker.y} r={marker.mark === 'big' ? 3.6 : 3.2} className={`chart-mark mark-${marker.mark}`}
-                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.25 + (marker.step / Math.max(1, me.digs)) * 0.7 }} />)}
-              </svg>
-              {chart.peak ? <span className={`chart-peak${chart.peak.x > CHART.width * 0.7 ? ' is-right' : chart.peak.x < CHART.width * 0.3 ? ' is-left' : ''}`} style={{ left: `${(chart.peak.x / CHART.width) * 100}%`, top: `${(chart.peak.y / CHART.height) * 100}%` }}>最高 {money(chart.peak.points)}</span> : null}
+              <div className="chart-plot">
+                <svg viewBox={`0 0 ${CHART.width} ${CHART.height}`} preserveAspectRatio="none" aria-hidden="true">
+                  <defs>
+                    <linearGradient id="summary-fill" x1="0" x2="0" y1="0" y2="1">
+                      <stop offset="0" stopColor="#e9b56b" stopOpacity=".38" />
+                      <stop offset="1" stopColor="#e9b56b" stopOpacity="0" />
+                    </linearGradient>
+                  </defs>
+                  <line x1={CHART.padX} x2={CHART.width - CHART.padX} y1={chart.baseY} y2={chart.baseY} className="chart-base" />
+                  <motion.path d={chart.area} fill="url(#summary-fill)" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5, duration: 0.5 }} />
+                  <motion.path d={chart.line} className="chart-line" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }} />
+                </svg>
+                <span className="chart-zero" style={{ top: `${(chart.baseY / CHART.height) * 100}%` }} aria-hidden="true">0</span>
+                {chart.peak ? <span className={`chart-peak${side(chart.peak.x)}`} style={{ left: `${(chart.peak.x / CHART.width) * 100}%`, top: `${(chart.peak.y / CHART.height) * 100}%` }}>最高 {money(chart.peak.points)}</span> : null}
+                {/* 钻石、金苹果、踩雷、盾牌挡住直接画图标，点一下（电脑上指着）说这一格挖到了什么 */}
+                {chart.markers.map(marker => {
+                  const words = markerWords(marker, money)
+                  return <motion.button key={marker.step} type="button" className={`chart-icon${picked === marker.step ? ' is-picked' : ''}`} title={words} aria-label={words} aria-pressed={picked === marker.step}
+                    style={{ left: `${(marker.x / CHART.width) * 100}%`, top: `${(marker.y / CHART.height) * 100}%`, x: '-50%', y: '-50%' }}
+                    initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.25 + (marker.step / Math.max(1, me.digs)) * 0.7, duration: 0.25 }}
+                    onClick={() => setPicked(now => now === marker.step ? null : marker.step)}>
+                    <ItemIcon kind={iconOf(marker)} size={16} />
+                  </motion.button>
+                })}
+                {(() => {
+                  const marker = chart.markers.find(item => item.step === picked)
+                  return marker ? <span className={`chart-tip${side(marker.x)}`} style={{ left: `${(marker.x / CHART.width) * 100}%`, top: `${(marker.y / CHART.height) * 100}%` }} role="status">{markerWords(marker, money)}</span> : null
+                })()}
+              </div>
               <figcaption>
                 <span>第 1 格</span>
-                <span className="chart-legend">{(['big', 'apple', 'boom', 'blocked'] as Mark[]).filter(mark => chart.markers.some(marker => marker.mark === mark)).map(mark =>
-                  <span key={mark}><i className={`legend-dot mark-${mark}`} />{MARK_NAMES[mark]}</span>)}</span>
                 <span>第 {me.digs} 格</span>
               </figcaption>
             </figure>
@@ -104,4 +116,9 @@ export function SummaryCard({ reason, onClose }: { reason: 'button' | 'end'; onC
       </div>
     </motion.section>
   </div>
+}
+
+/** 贴着图左右两头的提示往里靠，不出框。 */
+function side(x: number) {
+  return x > CHART.width * 0.7 ? ' is-right' : x < CHART.width * 0.3 ? ' is-left' : ''
 }

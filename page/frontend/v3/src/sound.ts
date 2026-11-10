@@ -1,8 +1,9 @@
 import { atom } from 'jotai'
 
 // 音效（docs/V3_MAP.md §6）：Minecraft 1.21.4 的原声（来源见 docs/MINECRAFT_ASSETS.md），
-// 用 Web Audio 放。浏览器要等他点过一下才让出声，所以第一次点按时才建 AudioContext；
-// 用到哪个才下载、解码哪个，解出来的留着。右上角能静音，记在本机。
+// 用 Web Audio 放。一进网页就在后台把全部声音文件下好（只是字节，二十几个、约 400 KB；静音时不下）；
+// 浏览器要等他点过一下才让出声，所以第一次点按时才建 AudioContext，这时把下好的全部解码，解出来的留着。
+// 以前用到哪个才下载、解码哪个，又是晚了 0.4 秒就不放，每种声音的第一次常常没响。右上角能静音，记在本机。
 
 export type Sound =
   | 'dig' | 'emerald' | 'diamond' | 'apple' | 'totem' | 'tnt' | 'crystal' | 'shield' | 'block'
@@ -28,8 +29,8 @@ const SOUNDS: Record<Sound, { files: string[]; volume: number; pitch?: number }>
   click: { files: ['random/click'], volume: 0.3 },
 }
 
-/** 先下好的（最常听到的）；别的用到才下。 */
-const WARM: Sound[] = ['dig', 'emerald', 'diamond', 'tnt']
+/** 全部声音文件（几种动作共用的只下一次）。 */
+const FILES = [...new Set(Object.values(SOUNDS).flatMap(spec => spec.files))]
 /** 解码慢了就不放了：晚一大截再响，对不上画面。 */
 const LATE_MS = 400
 const MUTED_KEY = 'kddb:v3:muted'
@@ -46,6 +47,7 @@ export const mutedAtom = atom(readMuted())
 
 let muted = readMuted()
 let context: AudioContext | null = null
+const bytes = new Map<string, Promise<ArrayBuffer | null>>()
 const buffers = new Map<string, Promise<AudioBuffer | null>>()
 
 export function setMuted(next: boolean) {
@@ -55,29 +57,61 @@ export function setMuted(next: boolean) {
   } catch {
     // 记不住就只管这一次
   }
+  if (!next) prefetch()
 }
 
 const urlOf = (file: string) => new URL(`assets/minecraft/1.21.4/sounds/${file}.mp3`, document.baseURI).href
 
+/** 下载一个文件的字节（低优先级，不和地图、图标抢）；没下到下次再试。 */
+function fetchBytes(file: string) {
+  let data = bytes.get(file)
+  if (!data) {
+    data = fetch(urlOf(file), { priority: 'low' } as RequestInit)
+      .then(response => response.ok ? response.arrayBuffer() : null)
+      .catch(() => null)
+      .then(result => {
+        if (!result) bytes.delete(file)
+        return result
+      })
+    bytes.set(file, data)
+  }
+  return data
+}
+
+/** 全部下好；已经能出声（点过一下）就顺手解码。静音时不下，打开声音时再来一遍。 */
+function prefetch() {
+  if (muted) return
+  for (const file of FILES) void (context ? load(file) : fetchBytes(file))
+}
+
+/** 解码（要有 AudioContext）；解出来的留着，没解出来下次再试。字节解一次就用掉了，所以每个文件只解一次。 */
 function load(file: string) {
   let buffer = buffers.get(file)
   if (!buffer) {
     const audio = context
-    buffer = audio
-      ? fetch(urlOf(file)).then(response => response.arrayBuffer()).then(data => audio.decodeAudioData(data)).catch(() => null)
-      : Promise.resolve(null)
-    if (audio) buffers.set(file, buffer)
+    if (!audio) return Promise.resolve(null)
+    buffer = fetchBytes(file)
+      .then(data => data ? audio.decodeAudioData(data) : null)
+      .catch(() => null)
+      .then(result => {
+        if (!result) {
+          buffers.delete(file)
+          bytes.delete(file)
+        }
+        return result
+      })
+    buffers.set(file, buffer)
   }
   return buffer
 }
 
-/** 第一次点按、按键时建好（并恢复）AudioContext，顺手把常用的几个下好。 */
+/** 第一次点按、按键时建好（并恢复）AudioContext，把下好的声音全部解码。 */
 function unlock() {
   if (!context) {
     const Context = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
     if (!Context) return
     context = new Context()
-    for (const sound of WARM) for (const file of SOUNDS[sound].files) void load(file)
+    prefetch()
   }
   if (context.state === 'suspended') void context.resume()
 }
@@ -85,6 +119,7 @@ function unlock() {
 export function installSound() {
   window.addEventListener('pointerdown', unlock, { capture: true, passive: true })
   window.addEventListener('keydown', unlock, { capture: true })
+  prefetch()
 }
 
 /** 放一个音效；静音、还没点过、网页在后台时什么都不做。delay 是过多少毫秒再放。 */
