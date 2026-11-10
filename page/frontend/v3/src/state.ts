@@ -426,7 +426,7 @@ export async function applyItem(item: string, body: { cardId?: number; index?: n
       const reward = answer.reward?.kind
       store.set(dialogAtom, { type: 'vault', text: answer.text ?? '宝库开了', kind: reward === 'small' ? 'emerald' : reward ?? null })
     }
-    else if (answer.text && !answer.updates?.length && item !== 'spyglass' && item !== 'map') toast(answer.text, 'good')
+    else if (answer.text && !answer.updates?.length && item !== 'spyglass' && item !== 'map' && item !== 'ender') toast(answer.text, 'good')
     if (answer.claimNow) window.setTimeout(() => void claim(true), 1200)
     else if (digs && outOfPicks(answer.me) && totalOf(answer.me) <= 0) window.setTimeout(showEnd, 1200)
     return true

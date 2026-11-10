@@ -326,10 +326,11 @@ button.eye-status { cursor: pointer; }
 .guide-actions button { padding: 8px 14px; border-radius: 8px; border: 1px solid #56636b; color: var(--ink); background: #242d34; }
 .guide-actions .guide-start, .guide-actions .guide-next { color: #1b1408; font-weight: 650; background: linear-gradient(#f1c57f, #d79b4f); border: 0; }
 
-.toast { position: fixed; left: 50%; bottom: 84px; z-index: 30; max-width: min(92vw, 420px); padding: 9px 14px; color: var(--ink); font-size: 14px; background: #11171df2; border: 1px solid #56636b; border-radius: 8px; transform: translateX(-50%); animation: toast-in .25s var(--ease-out); }
+/* 放在顶栏下面：下面是工具条和道具的提示框，放在那里会叠在一起 */
+.toast { position: fixed; left: 50%; top: 68px; z-index: 30; max-width: min(92vw, 420px); padding: 9px 14px; color: var(--ink); font-size: 14px; background: #11171df2; border: 1px solid #56636b; border-radius: 8px; transform: translateX(-50%); animation: toast-in .25s var(--ease-out); }
 .toast.tone-good { border-color: #6f9a63; }
 .toast.tone-bad { border-color: #a35d50; }
-@keyframes toast-in { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translateX(-50%); } }
+@keyframes toast-in { from { opacity: 0; transform: translate(-50%, -8px); } to { opacity: 1; transform: translateX(-50%); } }
 
 @media (max-width: 480px) {
   /* 360 宽的手机上也放得下一行（三位数的奖励） */
@@ -478,11 +479,11 @@ button.eye-status { cursor: pointer; }
 }
 
 /* —— 地图上拿着道具：预览（附魔镐金框、望远镜青框、火把照亮 4 格、钥匙对着宝库），挖过的格子虚线跳过 —— */
-.map-cell.in-box { z-index: 1; border-color: #f3cc8f; box-shadow: inset 0 0 0 2px #f3cc8f, 0 0 12px #f3cc8f80; filter: brightness(1.15); }
-.map-cell.in-skip::before { content: ''; position: absolute; inset: 3px; border: 2px dashed #f3cc8fa6; border-radius: 2px; pointer-events: none; }
-.map-cell.in-look { z-index: 1; border-color: #8fe3f0; box-shadow: inset 0 0 0 2px #8fe3f0, 0 0 12px #8fe3f080; }
-.map-cell.in-torch { z-index: 1; box-shadow: inset 0 0 0 1px #ffd76a99; filter: brightness(1.22) sepia(.25); }
-.map-cell.in-key { z-index: 1; box-shadow: inset 0 0 0 2px #8fe3f0, 0 0 12px #8fe3f080; }
+.map-card .map-cell.in-box { z-index: 1; border-color: #f3cc8f; box-shadow: inset 0 0 0 2px #f3cc8f, 0 0 12px #f3cc8f80; filter: brightness(1.15); }
+.map-card .map-cell.in-skip::before { content: ''; position: absolute; inset: 3px; border: 2px dashed #f3cc8fa6; border-radius: 2px; pointer-events: none; }
+.map-card .map-cell.in-look { z-index: 1; border-color: #8fe3f0; box-shadow: inset 0 0 0 2px #8fe3f0, 0 0 12px #8fe3f080; }
+.map-card .map-cell.in-torch { z-index: 1; box-shadow: inset 0 0 0 1px #ffd76a99; filter: brightness(1.22) sepia(.25); }
+.map-card .map-cell.in-key { z-index: 1; box-shadow: inset 0 0 0 2px #8fe3f0, 0 0 12px #8fe3f080; }
 .map-card .map-cell.is-aim { cursor: crosshair; }
 
 /* —— 火把（大家都看得见）：插在四格相交处，绿 0、黄 1–2、红 3–4 个危险；光照在旁边 4 格上 —— */
