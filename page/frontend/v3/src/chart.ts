@@ -9,6 +9,8 @@ export const CHART: ChartBox = { width: 320, height: 132, padX: 8, padTop: 16, p
 export type Mark = 'big' | 'apple' | 'boom' | 'blocked'
 export interface Marker {
   x: number; y: number; mark: Mark; step: number
+  /** 第几次挖（逐格记录里还有中毒、末影箱、宝库、苦力怕、监守者这些不是挖的，不算） */
+  dig?: number
   /** 挖到的是什么、多了（少了）多少分 */
   kind: Kind; amount: number
 }
@@ -36,6 +38,9 @@ const markOf = (kind: Kind, step: Step): Mark | null => {
   return null
 }
 
+/** 逐格记录里不是挖格子的几种（有道具栏的局）：中毒、苦力怕、监守者、末影箱、宝库 */
+const NOT_DIGS = new Set<string>(['poison', 'creeper', 'warden', 'ender', 'vault'])
+
 /** 从 0 分开始，第 i 格挖完是 trail[i - 1].p；横轴按挖的次数平分。 */
 export function chartOf(trail: Step[], box: ChartBox = CHART): Chart {
   const values = [0, ...trail.map(step => step.p)]
@@ -50,9 +55,11 @@ export function chartOf(trail: Step[], box: ChartBox = CHART): Chart {
   const baseY = round(yOf(0))
   const area = `${line}L${round(xOf(values.length - 1))},${baseY}L${round(xOf(0))},${baseY}Z`
   const markers: Marker[] = []
+  let digs = 0
   trail.forEach((step, index) => {
+    if (!NOT_DIGS.has(step.k)) digs += 1
     const mark = markOf(step.k, step)
-    if (mark) markers.push({ x: round(xOf(index + 1)), y: round(yOf(step.p)), mark, step: index + 1, kind: step.k, amount: step.a })
+    if (mark) markers.push({ x: round(xOf(index + 1)), y: round(yOf(step.p)), mark, step: index + 1, dig: digs, kind: step.k, amount: step.a })
   })
   let peakAt = 0
   values.forEach((value, index) => {
@@ -75,8 +82,8 @@ export function iconOf(marker: Pick<Marker, 'mark' | 'kind'>): 'diamond' | 'appl
 }
 
 /** 点（指着）图标时说的那一句。money 由调用的地方给（分 → 两位小数）。 */
-export function markerWords(marker: Pick<Marker, 'mark' | 'kind' | 'amount' | 'step'>, money: (points: number) => string) {
-  const at = `第 ${marker.step} 格`
+export function markerWords(marker: Pick<Marker, 'mark' | 'kind' | 'amount' | 'step' | 'dig'>, money: (points: number) => string) {
+  const at = `第 ${marker.dig ?? marker.step} 格`
   const bomb = marker.kind === 'crystal' ? '末影水晶' : 'TNT'
   if (marker.mark === 'blocked') return `${at}：盾牌挡住了${marker.kind === 'crystal' ? '' : ' '}${bomb}`
   if (marker.mark === 'boom') return `${at}：${bomb}，被炸掉 ${money(-marker.amount)}`

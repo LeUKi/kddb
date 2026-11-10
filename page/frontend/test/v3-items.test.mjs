@@ -8,10 +8,12 @@ import { createServer } from 'vite'
 let server
 let items
 let live
+let chart
 before(async () => {
   server = await createServer({ root: fileURLToPath(new URL('../', import.meta.url)), configFile: false, server: { middlewareMode: true, watch: null }, appType: 'custom', logLevel: 'silent' })
   items = await server.ssrLoadModule('/v3/src/items.ts')
   live = await server.ssrLoadModule('/v3/src/live.ts')
+  chart = await server.ssrLoadModule('/v3/src/chart.ts')
 })
 after(() => server.close())
 
@@ -101,3 +103,42 @@ test('监守者醒了：卡关了就算挖完', () => {
   assert.equal(after.noise, 3)
   assert.equal(after.finished, true)
 })
+
+test('整局补回来时：开的格子没变，但火把、宝库变了，也换成新的那一份（card 推送漏了靠这个补）', () => {
+  const mine = card(2, { vaults: { 1: 4 } })
+  const fresh = card(2, { vaults: { 1: 3 }, torches: [{ at: 3, level: 0, name: 'b' }] })
+  const merged = live.mergeState(game([mine]), { ...game([fresh]), seq: 1 }, new Map())
+  assert.deepEqual(merged.game.cards[0].vaults, { 1: 3 })
+  assert.equal(merged.game.cards[0].torches.length, 1)
+  // 什么都没变：沿用手上那一份（同一个对象，卡不重画）
+  const same = live.mergeState(game([mine]), { ...game([card(2, { vaults: { 1: 4 } })]), seq: 1 }, new Map())
+  assert.equal(same.game.cards[0], mine)
+})
+
+test('格子推送带着宝库还能开几次：跟着改', () => {
+  const trial = card(2, { kind: 'trial', fixed: { 1: 'vault' }, vaults: { 1: 4 } })
+  const step = { type: 'cell', seq: 1, cardId: 1, index: 0, cell: { kind: 'emerald', uid: 7, name: 'b', at: 5 }, newCard: null, text: '', left: 990, over: false, stats, vaults: { 1: 2 } }
+  assert.deepEqual(live.mergeLive(game([trial]), new Map(), [step]).game.cards[0].vaults, { 1: 2 })
+})
+
+test('收益图：第几格只数挖的，中毒、末影箱、宝库这些不算', () => {
+  const trail = [
+    { k: 'emerald', a: 10, p: 10 }, { k: 'poison', a: -1, p: 9 }, { k: 'ender', a: -4, p: 5 }, { k: 'diamond', a: 50, p: 55 },
+  ]
+  const marker = chart.chartOf(trail).markers.find(item => item.kind === 'diamond')
+  assert.equal(marker.dig, 2)
+  assert.match(chart.markerWords(marker, value => String(value)), /^第 2 格：钻石/)
+})
+
+test('手里还有附魔台就不算挖不动（换得到附魔镐）', () => {
+  const me = { chances: 0, shield: false, peeks: [], points: 0, digs: 3, status: 'playing', lastResult: null, items: { torch: 0, map: 0, potion: 0, ender: 0, table: 1, key: 0, pick: { h: 0, v: 0, x: 0 } } }
+  assert.equal(items.outOfPicks(me), false)
+  assert.equal(items.outOfPicks({ ...me, items: { ...me.items, table: 0 } }), true)
+})
+
+test('宝库：卡挖完了照样能开（关了的不行）', () => {
+  assert.equal(items.vaultsLeft(card(2, { finished: true, vaults: { 1: 1 } })), true)
+  assert.equal(items.vaultsLeft(card(2, { finished: true, vaults: { 1: 0 } })), false)
+  assert.equal(items.vaultsLeft(card(2, { closed: true, vaults: { 1: 2 } })), false)
+})
+

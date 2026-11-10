@@ -97,7 +97,7 @@ export class GameApi {
   use(body: { item: string; cardId?: number; index?: number; choice?: Shape }) {
     return this.call<
       | {
-        ok: true; me: Me; blocked?: string | null; text?: string; claimNow?: boolean
+        ok: true; me: Me; blocked?: string | null; text?: string; claimNow?: boolean; left?: number
         updates?: LiveStep[]; results?: DigResult[]; peek?: Peek; card?: PublicCard
         reward?: { kind: 'small' | 'diamond' | 'table' | 'shield'; amount: number }
       }
@@ -107,7 +107,7 @@ export class GameApi {
 
   /** 苦力怕倒数完了：游戏站核对时间，扣掉手上的 20%（lost 是扣了多少）。 */
   creeper() {
-    return this.call<{ ok: true; me: Me; lost: number } | { ok: false; message: string; me: Me }>('POST', 'creeper', {})
+    return this.call<{ ok: true; me: Me; lost: number; left?: number } | { ok: false; message: string; me: Me }>('POST', 'creeper', {})
   }
 
   /** 手上到第 seq 条，后面漏了：游戏站给漏的那几条，或者（太多、刚重启）给整局。 */

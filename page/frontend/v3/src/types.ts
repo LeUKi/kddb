@@ -116,6 +116,7 @@ export interface LiveCell {
   newCard: PublicCard | null; text: string; left: number; over: boolean; stats: Stats
   /** 有道具栏的局：这张卡的火把（变了颜色、灭了）、被岩浆吞掉的格子、噪音、监守者醒了 */
   torches?: Torch[]; burned?: { index: number; kind: Kind }[]; noise?: number; closed?: boolean
+  vaults?: Record<string, number>
 }
 /** 火把插上、宝库开了：整张卡换一下（不带序号） */
 export interface LiveCard { type: 'card'; card: PublicCard; left?: number; over?: boolean }

@@ -427,6 +427,8 @@ export async function applyItem(item: string, body: { cardId?: number; index?: n
       store.set(dialogAtom, { type: 'vault', text: answer.text ?? '宝库开了', kind: reward === 'small' ? 'emerald' : reward ?? null })
     }
     else if (answer.text && !answer.updates?.length && item !== 'spyglass' && item !== 'map' && item !== 'ender') toast(answer.text, 'good')
+    // 最后再改奖池还剩多少（附魔镐每格的推送里是那一格当时的数）
+    setLeft(answer.left)
     if (answer.claimNow) window.setTimeout(() => void claim(true), 1200)
     else if (digs && outOfPicks(answer.me) && totalOf(answer.me) <= 0) window.setTimeout(showEnd, 1200)
     return true
@@ -443,12 +445,19 @@ export async function applyItem(item: string, body: { cardId?: number; index?: n
   }
 }
 
+/** 奖池还剩多少：末影箱毁掉的、中毒和苦力怕扣的回到奖池，游戏站不推送，从回答里改。 */
+function setLeft(left: number | undefined) {
+  const game = store.get(gameAtom)
+  if (left !== undefined && game && game.left !== left) store.set(gameAtom, { ...game, left })
+}
+
 /** 苦力怕倒数完了：游戏站核对时间，炸掉手上的 20%。 */
 export async function creeperBoom() {
   if (!api) return null
   try {
     const answer = await api.creeper()
     setMe(answer.me)
+    if (answer.ok) setLeft(answer.left)
     return answer.ok ? answer.lost : null
   } catch {
     return null

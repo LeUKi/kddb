@@ -228,6 +228,6 @@ function floatText(result: DigResult) {
     coal: '+1 煤炭', stick: '+1 木棍', map: '+1 藏宝图', potion: '+1 急迫药水', key: '+1 钥匙', ender: '+1 末影箱',
     cobweb: '被蜘蛛网缠住了', spawner: '中毒了', minecart: '箱子矿车',
   }
-  if (result.kind === 'coal' || result.kind === 'stick') return result.text.includes('满了') ? '满了' : got[result.kind] ?? ''
+  if (result.kind === 'coal' || result.kind === 'stick') return result.text.includes('已经够了') ? '够了，不算' : got[result.kind] ?? ''
   return got[result.kind] ?? ''
 }

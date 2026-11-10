@@ -408,6 +408,32 @@ describe("道具和区块（docs/V3_ITEMS.md §4）", () => {
     assert.equal(ended.message, "红包已经结束了");
   });
 
+  it("红包暂停时苦力怕不来：creeperMs 是 null，炸不了，暂停期间问一次就重新计时；恢复以后从那时起算", async () => {
+    const { one } = await room();
+    await one.dig(info, 10001, "xiaoming", { cardId: 1, index: 0 }, NOW);
+    const paused = { ...info, paused: true };
+    const seen = await one.state(paused, 10001, "xiaoming", NOW + 50_000);
+    assert.equal(seen.me.creeperMs, null);
+    const blast = await one.creeper(paused, 10001, "xiaoming", NOW + 200_000);
+    assert.deepEqual([blast.ok, blast.message, /** @type {any} */ (blast.me).creeperMs], [false, "红包暂停了，稍后再试", null]);
+    // 恢复以后：从暂停期间最后问的那一刻（NOW + 200 秒）重新算，不会马上炸
+    const back = await one.creeper(info, 10001, "xiaoming", NOW + 201_000);
+    assert.deepEqual([back.ok, back.message], [false, "苦力怕还没到时候"]);
+    assert.equal(/** @type {any} */ (back.me).creeperMs, 59_000);
+  });
+
+  it("推送和回答：试炼密室的格子推送带着宝库还能开几次；用道具的回答带着奖池还剩多少", async () => {
+    const { one, game, me } = await room();
+    const trial = biome(game, "trial");
+    const cell = trial.deck.findIndex((_, index) => !trial.fixed?.[index]);
+    const dug = await one.dig(info, 10001, "xiaoming", { cardId: trial.id, index: cell }, NOW, { compact: true });
+    assert.deepEqual(/** @type {any} */ (dug.cell).vaults, { 22: 4, 26: 4 });
+    me.items.ender = 1;
+    const stored = await one.use(info, 10001, "xiaoming", { item: "ender" }, NOW + 2000);
+    assert.equal(stored.answer.ok, true);
+    assert.equal(stored.answer.left, game.pool - game.used);
+  });
+
   it("没有这种道具、乱给的形状：不改东西", async () => {
     const { one, storage } = await room();
     const out = await one.use(info, 10001, "xiaoming", { item: "sword" }, NOW);

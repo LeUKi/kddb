@@ -15,7 +15,7 @@ import { useCooling } from './Hud'
 import { aimAtom, blockedAtom, dig, focusRequestAtom, freshAtom, gameAtom, heldAtom, hongbaoAtom, meAtom, newCardAtom, peekedAtom, pendingAtom, putDown, settledAtom, slotMenuAtom, store, uidAtom } from './state'
 import { Toolbar } from './Toolbar'
 import { aimInfo, anchorFor, torchHoverAtom, applyAt } from './aim'
-import { shapeOf } from './items'
+import { shapeOf, vaultsLeft } from './items'
 import { FollowTip } from './Tips'
 import { Creeper } from './Creeper'
 import type { DigResult, Peek, PublicCard, Torch } from './types'
@@ -538,7 +538,7 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
           key={card.id}
           card={card}
           focused={current}
-          diggable={level === 2 && current && !card.finished && !blocked && me?.status === 'playing'}
+          diggable={level === 2 && current && !blocked && me?.status === 'playing' && (!card.finished || (held === 'key' && vaultsLeft(card)))}
           detail={(detailScale && near) || ready}
           names={level === 2 && current}
           current={current}

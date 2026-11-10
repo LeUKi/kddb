@@ -10,7 +10,7 @@ import { makeCursors } from './cursor'
 import { ShapeGlyph } from './Dialogs'
 import { useCooling } from './Hud'
 import type { Held, Slot } from './items'
-import { CRAFT_NEED, countOf, isHeld, SHIELD_CAP, shapeOf, SLOT_NAMES, SLOT_USE, slotsOf } from './items'
+import { CRAFT_NEED, countOf, isHeld, SHIELD_CAP, shapeOf, SLOT_NAMES, SLOT_USE, slotsOf, vaultsLeft } from './items'
 import { play } from './sound'
 import { aimAtom, blockedAtom, dialogAtom, gameAtom, hasteUntilAtom, heldAtom, meAtom, putDown, settledAtom, slotMenuAtom, toast, applyItem } from './state'
 import type { Me, PublicCard } from './types'
@@ -307,7 +307,7 @@ function tipOf({ held, menu, me, level, card, aimSet, interval, items, blocked }
     const title = SLOT_NAMES[held]
     const what = held === 'torch' ? '格子之间的缝（插在离得最近的角上）' : held === 'key' ? '一个宝库' : '一格'
     const words = level !== 2 ? '放大到一张卡上，再点格子。'
-      : card?.finished ? '这张卡挖完了，换一张没挖完的卡。'
+      : card?.finished && !(held === 'key' && vaultsLeft(card)) ? '这张卡挖完了，换一张没挖完的卡。'
         : touch ? (aimSet ? `再点一次${shapeOf(held) ? '框的中间' : '同一处'}就用，点别处换位置；拖动还是挪地图。` : `点${what}，先放上去看看。`)
           : `指到哪里预览到哪里，点一下就用；右键或 Esc 放下。`
     const action = held === 'torch' ? '插上' : held === 'spyglass' ? '看' : held === 'key' ? '开' : '挖'

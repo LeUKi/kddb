@@ -658,8 +658,10 @@ function addShield(/** @type {Player} */ player) {
 }
 
 function useShield(/** @type {Player} */ player) {
-  if (player.shields !== undefined) player.shields = Math.max(0, player.shields - 1);
-  player.shield = shieldsOf(player) > 0;
+  if (player.shields !== undefined) {
+    player.shields = Math.max(0, player.shields - 1);
+    player.shield = player.shields > 0;
+  } else player.shield = false; // 以前开的局只有一面
 }
 
 /** 两次挖掘之间至少隔多少毫秒（旧局没有这个参数，是 1 秒）。 */
@@ -1061,6 +1063,11 @@ function lavaFlow(/** @type {Game} */ game, /** @type {Card} */ card, /** @type 
     if ((row > 0 && lava(at - size)) || (row < size - 1 && lava(at + size)) || (col > 0 && lava(at - 1)) || (col < size - 1 && lava(at + 1)))
       targets.push(at);
   }
+  // 旁边能吞的都吞不了时（只挨着远古残骸、末影珍珠、末影之眼），岩浆从这张卡别处冒出来：要是这一次
+  // 不流，大家就知道岩浆旁边那几格是大奖（审查发现的漏洞）
+  if (targets.length === 0)
+    for (let at = 0; at < card.deck.length; at++)
+      if (card.opened[at] === null && card.fixed?.[at] === undefined && !UNBURNABLE.has(card.deck[at])) targets.push(at);
   if (targets.length === 0) return null;
   const target = targets[randomOf(game.seed, `lava:${card.id}:${dug}`)(0, targets.length - 1)];
   card.opened[target] = { uid: 0, name: "", at: now, burn: 1 };
@@ -1216,6 +1223,7 @@ function itemEffect(
       const wrong = onCard();
       if (wrong || !card) return { ok: false, message: wrong ?? "没有这张卡" };
       if (card.fixed?.[index] !== undefined) return { ok: false, message: "这一格大家都看得见，换一格" };
+      if (card.closed) return { ok: false, message: "监守者醒了，这张卡已经关闭，看了也挖不了" };
       if (card.opened[index] !== null) return { ok: false, message: "这一格已经被挖开了，换一格" };
       if (player.peeks.some((peek) => peek.cardId === card.id && peek.index === index)) return { ok: false, message: "这一格你已经看过了，换一格" };
       player.spyglasses = (player.spyglasses ?? 0) - 1;

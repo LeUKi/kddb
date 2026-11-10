@@ -39,6 +39,11 @@ export function finishedOf(card: Pick<PublicCard, 'fixed' | 'closed'>, cells: Pu
   return !!card.closed || cells.every((cell, index) => cell !== null || !!card.fixed?.[index])
 }
 
+/** 火把、宝库、噪音、关没关：整局里这些变了也要换成新的那一份（card 推送没有序号，漏了只能靠整局补）。 */
+function sameExtras(a: PublicCard, b: PublicCard) {
+  return JSON.stringify([a.torches ?? null, a.vaults ?? null, a.noise ?? null, !!a.closed]) === JSON.stringify([b.torches ?? null, b.vaults ?? null, b.noise ?? null, !!b.closed])
+}
+
 /** 两份同一张卡开的是不是同样那些格子。 */
 function sameOpened(a: PublicCard, b: PublicCard) {
   return a.cells.length === b.cells.length && a.cells.every((cell, index) => !cell === !b.cells[index])
@@ -95,7 +100,7 @@ export function mergeLive(game: PublicGame, ahead: Map<number, LiveStep>, messag
         put(step.card)
         if (!card?.cells[index] && step.card.cells[index]) opened.push({ cardId, index, uid })
       }
-    } else if (card && (!card.cells[index] || step.torches || step.burned || step.noise !== undefined || step.closed)) {
+    } else if (card && (!card.cells[index] || step.torches || step.burned || step.noise !== undefined || step.closed || step.vaults)) {
       const cells = card.cells.slice()
       const left = { ...card.left }
       const take = (kind: Kind) => {
@@ -116,6 +121,7 @@ export function mergeLive(game: PublicGame, ahead: Map<number, LiveStep>, messag
       const next = {
         ...card, cells, left,
         ...(step.torches ? { torches: step.torches } : {}),
+        ...(step.vaults ? { vaults: step.vaults } : {}),
         ...(step.noise !== undefined ? { noise: Math.max(card.noise ?? 0, step.noise) } : {}),
         ...(step.closed ? { closed: true } : {}),
       }
@@ -133,8 +139,8 @@ export function mergeLive(game: PublicGame, ahead: Map<number, LiveStep>, messag
       // 火把、宝库变了：换成这一份，格子只增不减（这条可能比手上的格子晚）
       const card = find(message.card.id)
       put(card ? unionCard(card, message.card) : message.card)
-      // 宝库开出的奖励也从奖池里出：剩下的跟着它（不带序号，只会更少）
-      if (message.left !== undefined) next = { ...next, left: Math.min(next.left, message.left), over: next.over || !!message.over }
+      // 宝库开出的奖励也从奖池里出：剩下的跟着它（推送按先后到，用最新的）
+      if (message.left !== undefined) next = { ...next, left: message.left, over: next.over || !!message.over }
       continue
     }
     if (message.type === 'claim') {
@@ -166,7 +172,7 @@ export function mergeState(current: PublicGame | null, next: PublicGame, ahead: 
   const before = new Map(current?.cards.map(card => [card.id, card]))
   const cards = next.cards.map(card => {
     const kept = before.get(card.id)
-    return kept && kept.finished === card.finished && sameOpened(kept, card) ? kept : card
+    return kept && kept.finished === card.finished && sameOpened(kept, card) && sameExtras(kept, card) ? kept : card
   })
   const rest = [...ahead.values()].filter(step => step.seq > next.seq).sort((a, b) => a.seq - b.seq)
   ahead.clear()

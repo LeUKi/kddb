@@ -29,25 +29,44 @@ export function Creeper() {
     return () => window.clearInterval(timer)
   }, [active, at])
 
-  const coming = active && at !== null && now >= at
-  const left = active && at !== null ? at + CREEPER_WARN_MS - now : CREEPER_WARN_MS
+  // 只在看得见的时候来：网页在后台（切走的标签页、锁屏回来）时不倒数，回来以后从头给 10 秒（审查发现：
+  // 后台里倒数没人看见，手机锁屏回来一打开就炸了）
+  const [visible, setVisible] = useState(() => document.visibilityState === 'visible')
+  useEffect(() => {
+    const onChange = () => setVisible(document.visibilityState === 'visible')
+    document.addEventListener('visibilitychange', onChange)
+    return () => document.removeEventListener('visibilitychange', onChange)
+  }, [])
+  /** 本机：苦力怕在画面上探头的时刻（从这时起倒数 10 秒） */
+  const [shownAt, setShownAt] = useState<number | null>(null)
+  const due = active && at !== null && now >= at
+  // 游戏站给了新的时刻（挖了、用了道具、没炸成）：重新来过
+  const lastAt = useRef(at)
+  useEffect(() => {
+    const changed = lastAt.current !== at
+    lastAt.current = at
+    if (!due || !visible || changed) setShownAt(due && visible ? Date.now() : null)
+    else setShownAt(value => value ?? Date.now())
+  }, [due, visible, at])
+  const coming = due && visible && shownAt !== null
+  const left = coming && shownAt !== null ? shownAt + CREEPER_WARN_MS - now : CREEPER_WARN_MS
 
   useEffect(() => {
-    if (!coming || at === null || hissed.current === at) return
-    hissed.current = at
+    if (!coming || shownAt === null || hissed.current === shownAt) return
+    hissed.current = shownAt
     play('fuse')
-  }, [coming, at])
+  }, [coming, shownAt])
 
   useEffect(() => {
-    if (!coming || at === null || left > 0 || booming.current === at) return
-    booming.current = at
+    if (!coming || shownAt === null || left > 0 || booming.current === shownAt) return
+    booming.current = shownAt
     void creeperBoom().then(lost => {
       if (!lost) return
       setFlash(Date.now())
       play('tnt')
       toast(`苦力怕炸掉了手上的 ${money(lost)}`, 'bad')
     })
-  }, [coming, at, left])
+  }, [coming, shownAt, left])
 
   useEffect(() => {
     if (!flash) return

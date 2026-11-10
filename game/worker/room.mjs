@@ -36,14 +36,14 @@ import { BOT_BASE, BOT_COUNT, pickCell } from "./bots.mjs";
  * 推送第 2 版：只说变了的那一格（网页自己把它放到卡上、减掉剩下的数、看挖完没有），
  * 一条两百字节左右；第 1 版每条带整张卡（谁挖的名字每格一份），挖满的 7×7 卡一条一千五。
  * 新局另有（docs/V3_ITEMS.md §4）：torches（这张卡插过火把时，亮着的那些，颜色按现在算）、
- * burned（这一挖让岩浆吞掉的格子）、noise 和 closed（深暗之域的卡）。
+ * burned（这一挖让岩浆吞掉的格子）、noise 和 closed（深暗之域的卡）、vaults（试炼密室的宝库还能开几次）。
  * @typedef {{
  *   type: "cell", seq: number, cardId: number, index: number,
  *   cell: { kind: string, uid: number, name: string, at: number },
  *   newCard: ReturnType<typeof publicCard>|null, text: string,
  *   left: number, over: boolean, stats: Game["stats"],
  *   torches?: ReturnType<typeof publicTorches>, burned?: CellOut["burned"],
- *   noise?: number, closed?: boolean,
+ *   noise?: number, closed?: boolean, vaults?: Record<string, number>,
  * }} CellMessage
  */
 /** 内存里留最近这么多条第 2 版推送，网页漏了几条时按序号补（GET /since），不用重读整局。 */
@@ -139,7 +139,18 @@ export class MineRoom {
     const game = await this.gameFor(info);
     const player = await this.playerOf(game, uid, name);
     if (touch && game.rules.items) player.activeAt = now;
-    return { game: publicGame(game), me: privatePlayer(player, game, now), blocked: this.blocked(info, game, player, now) };
+    return { game: publicGame(game), me: this.me(info, game, player, now), blocked: this.blocked(info, game, player, now) };
+  }
+
+  /**
+   * 给本人看的（privatePlayer）：红包结束、暂停时苦力怕不来（creeperMs 是 null），暂停期间他来问一次
+   * 就从这一刻重新计时，恢复以后不会马上炸（审查发现：暂停时照样倒数，恢复后一秒就扣）。
+   */
+  me(/** @type {Info} */ info, /** @type {Game} */ game, /** @type {Player} */ player, /** @type {number} */ now) {
+    const mine = privatePlayer(player, game, now);
+    if (info.status === "active" && !info.paused) return mine;
+    if (game.rules.items && info.paused) player.activeAt = now;
+    return { ...mine, ...("creeperMs" in mine ? { creeperMs: null } : {}) };
   }
 
   /** 现在为什么不能挖（能挖时 null）：红包结束、暂停也算。 */
@@ -162,7 +173,7 @@ export class MineRoom {
       const card = game.cards[at.cardId];
       return {
         answer: {
-          ok: false, message, me: privatePlayer(player, game, now), blocked: this.blocked(info, game, player, now),
+          ok: false, message, me: this.me(info, game, player, now), blocked: this.blocked(info, game, player, now),
           ...(card ? { card: publicCard(card) } : {}),
         },
         broadcast: null,
@@ -187,7 +198,7 @@ export class MineRoom {
     // 挖的人直接拿到这次的变化（update），不等推送
     return {
       answer: {
-        ok: true, result: out.result, me: privatePlayer(player, game, now), claimNow: out.claimNow,
+        ok: true, result: out.result, me: this.me(info, game, player, now), claimNow: out.claimNow,
         blocked: this.blocked(info, game, player, now), update: compact ? cell : broadcast,
       },
       broadcast,
@@ -221,6 +232,8 @@ export class MineRoom {
       ...(card.torches && card.torches.length > 0 ? { torches: publicTorches(card) } : {}),
       ...(out.burned.length > 0 ? { burned: out.burned } : {}),
       ...(card.kind === "deep" ? { noise: dugOf(card), closed: Boolean(card.closed) } : {}),
+      // 宝库还能开几次：card 推送没有序号，漏了补不回来；这张卡上再挖一格就跟着改过来
+      ...(card.vaults ? { vaults: { ...card.vaults } } : {}),
     };
     this.remember(cell);
     return { broadcast, cell };
@@ -243,7 +256,7 @@ export class MineRoom {
       const card = at.cardId === undefined ? undefined : game.cards[at.cardId];
       return {
         answer: {
-          ok: false, message, me: privatePlayer(player, game, now), blocked: this.blocked(info, game, player, now),
+          ok: false, message, me: this.me(info, game, player, now), blocked: this.blocked(info, game, player, now),
           ...(card ? { card: publicCard(card) } : {}),
         },
         pushes: [],
@@ -286,7 +299,8 @@ export class MineRoom {
       }
     }
     await this.storage.put(entries);
-    return { answer: { ...answer, me: privatePlayer(player, game, now), blocked: this.blocked(info, game, player, now) }, pushes };
+    // left：末影箱毁掉的、中毒扣的回到奖池，没有推送，网页从这里改奖池还剩多少
+    return { answer: { ...answer, left: game.pool - game.used, me: this.me(info, game, player, now), blocked: this.blocked(info, game, player, now) }, pushes };
   }
 
   /**
@@ -297,14 +311,14 @@ export class MineRoom {
     const game = await this.gameFor(info);
     const player = await this.playerOf(game, uid, name);
     const refused = (/** @type {string} */ message) =>
-      ({ ok: false, message, lost: 0, me: privatePlayer(player, game, now), blocked: this.blocked(info, game, player, now) });
+      ({ ok: false, message, lost: 0, me: this.me(info, game, player, now), blocked: this.blocked(info, game, player, now) });
     if (info.status !== "active") return refused("红包已经结束了");
     if (info.paused) return refused("红包暂停了，稍后再试");
     const out = creeperBlast(game, player, now);
     if (!out.ok) return refused(out.message);
     const { cards: _cards, ...meta } = game;
     await this.storage.put({ game: meta, [`player:${uid}`]: player });
-    return { ok: true, lost: out.lost, text: out.text, me: privatePlayer(player, game, now), blocked: this.blocked(info, game, player, now) };
+    return { ok: true, lost: out.lost, text: out.text, left: game.pool - game.used, me: this.me(info, game, player, now), blocked: this.blocked(info, game, player, now) };
   }
 
   /**
@@ -390,10 +404,10 @@ export class MineRoom {
     const game = await this.gameFor(info);
     const player = await this.playerOf(game, uid, name);
     if (info.status !== "active" && player.status !== "claimed")
-      return { answer: { ok: false, message: "红包已经结束了，没领的奖励作废", me: privatePlayer(player, game, now) }, broadcast: null };
+      return { answer: { ok: false, message: "红包已经结束了，没领的奖励作废", me: this.me(info, game, player, now) }, broadcast: null };
     // 手里没有分（手上加末影箱）：不签凭证（交上去只会在红包里记一笔“领取 0.00”）
     if (player.status !== "claimed" && totalOf(player) <= 0)
-      return { answer: { ok: false, message: "手里还没有奖励，不用领取", me: privatePlayer(player, game, now) }, broadcast: null };
+      return { answer: { ok: false, message: "手里还没有奖励，不用领取", me: this.me(info, game, player, now) }, broadcast: null };
     await this.topOf(game);
     const first = player.status !== "claimed";
     // 领的是手上加末影箱
@@ -407,7 +421,7 @@ export class MineRoom {
       await this.storage.put({ game: meta, [`player:${uid}`]: player });
     }
     return {
-      answer: { ok: true, voucher, points, me: privatePlayer(player, game, now) },
+      answer: { ok: true, voucher, points, me: this.me(info, game, player, now) },
       broadcast: first ? { type: "claim", name: player.name, points, stats: game.stats } : null,
     };
   }

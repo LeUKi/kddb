@@ -1127,15 +1127,41 @@ describe("新局的道具（docs/V3_ITEMS.md §3）", () => {
     assert.deepEqual([shown.noise, shown.closed, shown.finished, shown.torches], [3, true, true, []]);
   });
 
+  it("以前开的局：盾牌挡一次就用掉（新局才叠）", () => {
+    const g = game();
+    delete g.rules.items;
+    lay(g.cards[1], { 0: "shield", 1: "tnt", 2: "tnt" });
+    const p = newPlayer(g, 10001, "小明");
+    p.chances = 9;
+    assert.ok(dig(g, p, { cardId: 1, index: 0, now: later() }).ok);
+    assert.equal(p.shield, true);
+    assert.equal(dig(g, p, { cardId: 1, index: 1, now: later() }).result.blocked, true);
+    assert.equal(p.shield, false);
+    assert.equal(dig(g, p, { cardId: 1, index: 2, now: later() }).result.blocked, false);
+  });
+
+  it("监守者关了的卡：望远镜也不能看（看了也挖不了）", () => {
+    const g = game();
+    const deep = lay(biomeCard(g, "deep"), {});
+    deep.closed = true;
+    const p = newPlayer(g, 10001, "小明");
+    p.spyglasses = 1;
+    assert.match(useItem(g, p, { item: "spyglass", cardId: deep.id, index: 3, now: later() }).message, /已经关闭/);
+    assert.equal(p.spyglasses, 1);
+  });
+
   it("地图不会长不动：岩浆不吞末影珍珠和末影之眼；还能挖的卡上一颗珍珠都不剩时，在刚挖的卡旁边长一张新卡", () => {
     const g = game();
     lay(g.cards[1], {});
     const nether = lay(biomeCard(g, "nether"), { 1: "pearl", 6: "eye" }, { 0: "lava" });
     const p = newPlayer(g, 10001, "小明");
     p.chances = 99;
-    for (const index of [35, 34, 33]) assert.deepEqual(dig(g, p, { cardId: nether.id, index, now: later() }).burned, []);
-    // 岩浆旁边只有珍珠（1）和末影之眼（6）：都不吞
+    for (const index of [35, 34]) assert.deepEqual(dig(g, p, { cardId: nether.id, index, now: later() }).burned, []);
+    const third = dig(g, p, { cardId: nether.id, index: 33, now: later() });
+    // 岩浆旁边只有珍珠（1）和末影之眼（6）：都不吞；岩浆从别处冒出来（这一次不流就泄露了旁边是什么）
     assert.deepEqual([nether.opened[1], nether.opened[6]], [null, null]);
+    assert.equal(third.burned.length, 1);
+    assert.ok(![1, 6].includes(third.burned[0].index), String(third.burned[0].index));
 
     const h = game();
     lay(h.cards[1], {});

@@ -2,7 +2,7 @@
 // 和真的用。地图（点格子、指着格子）和提示框里的“用”按钮共用。
 import { atom } from 'jotai'
 import type { Held } from './items'
-import { cornerCells, cornerOf, diggable, shapeCells, shapeOf, clampCenter } from './items'
+import { cornerCells, cornerOf, diggable, shapeCells, shapeOf, clampCenter, vaultsLeft } from './items'
 import { aimAtom, gameAtom, heldAtom, meAtom, store, toast, applyItem } from './state'
 import type { Me, PublicCard, Torch } from './types'
 
@@ -17,7 +17,8 @@ export interface AimInfo { cells: number[]; skip: number[]; ok: boolean; words: 
  * 火把离得最近的那个角（返回角右下的格子）、望远镜和钥匙就是这一格。卡关了、挖完了是 null。
  */
 export function anchorFor(held: Held, card: PublicCard, index: number, qx: 0 | 1, qy: 0 | 1): number | null {
-  if (card.closed || card.finished) return null
+  // 卡挖完了，宝库照样能用钥匙开
+  if (card.closed || (card.finished && !(held === 'key' && vaultsLeft(card)))) return null
   const shape = shapeOf(held)
   if (shape) {
     const { row, col } = clampCenter(card.size, Math.floor(index / card.size), index % card.size, shape)

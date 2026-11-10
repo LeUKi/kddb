@@ -79,6 +79,11 @@ export function cornerCells(size: number, at: number) {
   return [at - size - 1, at - size, at - 1, at]
 }
 
+/** 这张卡上还有能开的宝库（卡挖完了宝库照样能开）。 */
+export function vaultsLeft(card: PublicCard) {
+  return !card.closed && Object.values(card.vaults ?? {}).some(left => left > 0)
+}
+
 /** 这一格能不能挖（没开、不是装饰、宝库、岩浆；卡没关）。 */
 export function diggable(card: PublicCard, index: number) {
   return !card.closed && card.cells[index] === null && !card.fixed?.[index]
@@ -130,8 +135,8 @@ export function countOf(me: Me, slot: Slot): number {
   }
 }
 
-/** 镐子和附魔镐都用完了：这一局挖不动了。 */
+/** 镐子和附魔镐都用完了、手里也没有附魔台（换得到附魔镐）：这一局挖不动了（游戏站的 canDig）。 */
 export function outOfPicks(me: Me) {
   const pick = me.items?.pick
-  return me.chances <= 0 && (!pick || pick.h + pick.v + pick.x <= 0)
+  return me.chances <= 0 && (!pick || pick.h + pick.v + pick.x <= 0) && (me.items?.table ?? 0) <= 0
 }
