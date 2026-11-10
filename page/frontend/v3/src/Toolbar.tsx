@@ -232,7 +232,9 @@ export function Toolbar({ level, card, onNeedDig }: { level: Level; card: Public
   }
 
   const tip = tipOf({ held, menu, me, level, card, aimSet: !!aim, interval, items, blocked })
-  return <div className={`toolbar${playing ? '' : ' is-done'}`} ref={box} role="toolbar" aria-label="工具条">
+  // 手里只有镐子：后面那一截不画（空着是一个小框）；量的东西还在，第一件道具来了照样长出来
+  const alone = active.length + shownPassive.length === 0
+  return <div className={`toolbar${playing ? '' : ' is-done'}${alone ? ' is-alone' : ''}`} ref={box} role="toolbar" aria-label="工具条">
     {slotView('pickaxe')}
     <span className="toolbar-divider is-pin" aria-hidden="true" />
     <div className="toolbar-scroll-wrap">

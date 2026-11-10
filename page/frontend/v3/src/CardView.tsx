@@ -187,9 +187,9 @@ export const CardView = memo(function CardView({ card, focused, diggable, detail
     })}
     {(card.torches ?? []).map(torch => <span key={torch.at} className={`torch torch-${torch.level}`} style={torchAt(torch.at)} role="img"
       aria-label={torch.level === 0 ? '绿色火把：这 4 格里没有危险' : torch.level === 1 ? '黄色火把：这 4 格里有 1～2 个危险' : '红色火把：这 4 格里有 3～4 个危险'}>
-      <ItemIcon kind={torch.level === 0 ? 'torch-green' : torch.level === 1 ? 'torch' : 'torch-red'} size={Math.round(side * 0.55)} />
+      <ItemIcon kind={torch.level === 0 ? 'torch-green' : torch.level === 1 ? 'torch' : 'torch-red'} size={Math.round(side * 0.85)} />
     </span>)}
-    {ghost ? <span className="torch torch-ghost" style={ghost} aria-hidden="true"><ItemIcon kind="torch" size={Math.round(side * 0.55)} /></span> : null}
+    {ghost ? <span className="torch torch-ghost" style={ghost} aria-hidden="true"><ItemIcon kind="torch" size={Math.round(side * 0.85)} /></span> : null}
     {card.closed ? <div className="card-closed" aria-hidden="true"><span>监守者醒了</span></div> : null}
     </div>
   </div>
