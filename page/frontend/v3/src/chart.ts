@@ -104,7 +104,7 @@ export function pointAt(chart: Pick<Chart, 'points'>, x: number) {
 
 /** 拖到的那一步说的那一句：第几次挖、挖到什么、加减多少、之后待领取多少。names 是物品名（网页给）。 */
 export function pointWords(point: Point, money: (points: number) => string, names: Partial<Record<string, string>>) {
-  if (point.step === 0) return '开始：待领取 0.00'
+  if (point.step === 0) return `开始：待领取 ${money(0)}`
   const what = point.dig ? `第 ${point.dig} 次挖 · ${names[point.kind] ?? ''}` : STEP_NAMES[point.kind] ?? ''
   const change = point.amount > 0 ? ` +${money(point.amount)}` : point.amount < 0 ? ` ${money(point.amount)}` : ''
   return `${what}${change} · 待领取 ${money(point.points)}`
@@ -115,7 +115,9 @@ export const COLORS: Record<string, string> = {
   emerald: '#41d36b', diamond: '#4fe0e0', apple: '#ffcf40', debris: '#c47b55', minecart: '#c99b5c', vault: '#6fd8ff', pearl: '#2fa78f', eye: '#9ccf4a',
   blocked: '#8fb4ff', tnt: '#e8473d', crystal: '#d77bff', poison: '#b6d34a', creeper: '#5fbf4f', warden: '#2aa3ad', ender: '#3c8f7f', other: '#5b6068',
 }
-const keyOf = (point: Pick<Point, 'kind' | 'blocked' | 'amount'>) => (point.blocked ? 'blocked' : point.amount === 0 ? 'other' : point.kind)
+/** 踩到 TNT、末影水晶却没扣到（手上是 0）也算踩雷，照它的颜色画 */
+const isBomb = (point: Pick<Point, 'kind'>) => point.kind === 'tnt' || point.kind === 'crystal'
+const keyOf = (point: Pick<Point, 'kind' | 'blocked' | 'amount'>) => (point.blocked ? 'blocked' : point.amount === 0 && !isBomb(point) ? 'other' : point.kind)
 export const colorOf = (point: Pick<Point, 'kind' | 'blocked' | 'amount'>) => COLORS[keyOf(point)] ?? COLORS.other
 
 /**
@@ -141,7 +143,7 @@ export function barsOf(chart: Pick<Chart, 'points'>) {
   const most = Math.max(1, ...steps.map(point => Math.abs(point.amount)))
   return steps.map(point => ({
     x: point.x, step: point.step, color: colorOf(point),
-    size: point.blocked ? 0.6 : point.amount === 0 ? 0 : Math.sign(point.amount) * (0.25 + 0.75 * Math.sqrt(Math.abs(point.amount) / most)),
+    size: point.blocked ? 0.6 : point.amount === 0 ? (isBomb(point) ? -0.25 : 0) : Math.sign(point.amount) * (0.25 + 0.75 * Math.sqrt(Math.abs(point.amount) / most)),
   }))
 }
 

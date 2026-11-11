@@ -5,7 +5,7 @@ import { ItemIcon } from '../../src/ItemIcon'
 import { mutedAtom, play, setMuted } from './sound'
 import { blockedAtom, chestNoteAtom, claim, claimingAtom, creeperShownAtom, digIntervalAtom, heldAtom, focusRequestAtom, gameAtom, hongbaoAtom, itemsVersionAtom, meAtom, readyAtAtom, settledAtom, slowUntilAtom, summaryOpenAtom, totalOf } from './state'
 import { outOfPicks } from './items'
-import { money } from './types'
+import { money, unitsOf } from './types'
 import { crystalPercent, eyeStatus } from './eye'
 
 /**
@@ -99,7 +99,7 @@ export function TopBar({ onRules }: { onRules: () => void }) {
   return <header className={`top-bar${confirming ? ' is-confirming' : ''}`}>
     <div className="earned">
       <span>{settled ? '已领到' : '待领取'}</span>
-      <strong><Tween value={settled ? Math.round(Number(settled.amount) * 100) : me.points} format={money} /> <small>{settled?.unit ?? unit}</small>
+      <strong><Tween value={settled ? unitsOf(settled.amount) : me.points} format={money} /> <small>{settled?.unit ?? unit}</small>
         {chest > 0 && !settled ? <button type="button" className="chest-plus" onClick={() => setChestNote(value => value ? 0 : Date.now())} aria-expanded={chestNote > 0}
           aria-label={`末影箱里存着 ${money(chest)}，炸不到，领取时一起加上`}><ItemIcon kind="ender" size={12} />+{money(chest)}</button> : null}
       </strong>
@@ -265,7 +265,7 @@ export function Rules({ onClose, onPractice }: { onClose: () => void; onPractice
           <dt><ItemIcon kind="ender" size={18} /> 末影箱</dt><dd>末地宝藏里有；待领取的一半存进去（谁都炸不到，领取时一起算），另一半退回奖池</dd>
           <dt><ItemIcon kind="cobweb" size={18} /> 蜘蛛网、刷怪笼</dt><dd>废弃矿井里有：蜘蛛网让下一次多等 {(rules.items ?? 0) >= 2 ? 10 : 5} 秒；刷怪笼让你中毒，之后 3 次每挖一次扣待领取的 5%</dd>
           <dt><ItemIcon kind="lava" size={18} /> 下界、深暗之域</dt><dd>下界每挖 3 格岩浆流一格，吞掉的格子就没了，远古残骸烧不掉；深暗之域每挖一格噪音加一，噪音进了危险区（卡下面的噪音条）就随时可能惊醒监守者：挖出这一下的人，待领取的奖励扣掉一半，那张卡关掉。点卡上面区块名字旁边的问号能看说明</dd>
-          {rules.creeper !== 0 ? <><dt><ItemIcon kind="spawner" size={18} /> 苦力怕</dt><dd>有待领取的奖励、开着网页却 {rules.creeper ?? 60} 秒没挖也没用道具，苦力怕会来，10 秒内不挖就炸掉待领取的 20%{(rules.items ?? 0) >= 2 ? '（至少 0.01）。关了网页、离开 5 分钟以上又没领取的，苦力怕每分钟来一次，直到炸完' : ''}</dd></> : null}</>
+          {rules.creeper !== 0 ? <><dt><ItemIcon kind="spawner" size={18} /> 苦力怕</dt><dd>有待领取的奖励、开着网页却 {rules.creeper ?? 60} 秒没挖也没用道具，苦力怕会来，10 秒内不挖就炸掉待领取的 20%{(rules.items ?? 0) >= 2 ? `（至少 ${money(1)}）。关了网页、离开 5 分钟以上又没领取的，苦力怕每分钟来一次，直到炸完` : ''}</dd></> : null}</>
           : <><dt><ItemIcon kind="shield" size={18} /> 盾牌</dt><dd>挡下一次 TNT；已经有了就转成一份小奖</dd>
             <dt><ItemIcon kind="spyglass" size={18} /> 望远镜</dt><dd>看到这张卡上一个没开的格子，只有你看得见</dd></>}
         <dt><ItemIcon kind="pearl" size={18} /> 末影珍珠</dt><dd>旁边长出一张新卡</dd>

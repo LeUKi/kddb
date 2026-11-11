@@ -109,6 +109,12 @@ describe("规则和金额", () => {
     assert.equal(amountOf("7"), 700);
     assert.equal(formatPoints(1234), "12.34");
     assert.equal(formatPoints(5), "0.05");
+    // 三方积分：数是多少个最小单位，小数位跟着最小单位（同红包站的 tools.money.format）
+    assert.equal(formatPoints(2000, "1"), "2000");
+    assert.equal(formatPoints(3, "0.5"), "1.5");
+    assert.equal(formatPoints(3, "100"), "300");
+    assert.equal(formatPoints(-7, "0.25"), "-1.75");
+    assert.equal(formatPoints(1234, "0.01"), "12.34");
   });
 });
 

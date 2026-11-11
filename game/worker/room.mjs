@@ -23,6 +23,7 @@ import { BOT_BASE, BOT_COUNT, pickCell } from "./bots.mjs";
  * @typedef {{
  *   id: string, status: 'active'|'ended'|'draft', paused?: boolean,
  *   params?: Record<string, unknown>, unit?: string, pool?: string,
+ *   step?: string, units?: { pool: number, unclaimed: number|null },
  *   openedAt?: string, deadlineAt?: string|null,
  *   scope?: import("./scope.mjs").Scope|null,
  * }} Info
@@ -111,10 +112,14 @@ export class MineRoom {
     if (this.game) return this.game;
     if (info.status === "draft" || !info.openedAt || !info.pool)
       throw new RoomError(409, "红包还没开放");
+    // 记账按多少个最小单位（docs/V3_ITEMS.md §11）：红包信息的 units 就是这个数；LDC 和🐟的最小单位是 0.01，
+    // 就是分，和 pool 换算出来的一样（没有 units 的旧红包站照旧按 pool 换算）。三方积分红包记下最小单位，写给人看的数照它写
+    const pool = info.units?.pool ?? amountOf(info.pool);
+    const step = info.step && info.step !== "0.01" ? info.step : null;
     const game = createGame({
       seed: this.tools.seed(),
-      rules: rulesOf(info.params ?? {}, amountOf(info.pool)),
-      pool: amountOf(info.pool),
+      rules: { ...rulesOf(info.params ?? {}, pool), ...(step ? { step } : {}) },
+      pool,
       openedAt: Date.parse(info.openedAt),
       deadlineAt: info.deadlineAt ? Date.parse(info.deadlineAt) : null,
     });

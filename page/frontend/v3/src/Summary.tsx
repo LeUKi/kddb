@@ -5,6 +5,7 @@ import { ItemIcon } from '../../src/ItemIcon'
 import type { IconKind } from '../../src/game'
 import type { Point } from './chart'
 import { barsOf, CHART, chartOf, colorOf, legendOf, picksOf, pointAt, pointWords, statsOf } from './chart'
+import { factsOf, quipOf } from './quips'
 import { hongbaoAtom, loadSummary, settledAtom, uidAtom } from './state'
 import type { Summary } from './types'
 import { KIND_NAMES, money } from './types'
@@ -42,6 +43,8 @@ export function SummaryCard({ reason, onClose }: { reason: 'button' | 'end'; onC
   const bars = useMemo(() => (chart ? barsOf(chart) : []), [chart])
   const legend = useMemo(() => (chart ? legendOf(chart) : []), [chart])
   const six = useMemo(() => (summary?.me.trail?.length ? statsOf(summary.me.trail) : null), [summary])
+  // 一局的评语（quips.ts）：挖过才有；同一局每次打开都是同一条
+  const quip = useMemo(() => (summary && summary.me.digs > 0 ? quipOf(factsOf(summary, uid), `${hongbao?.id ?? ''}:${uid ?? ''}:${summary.me.digs}`, money) : null), [summary, uid, hongbao?.id])
   /** 线上挂的里面加得最多、扣得最多的那一下写数 */
   const bestPick = picks.reduce<Point | null>((most, point) => (point.amount > 0 && (!most || point.amount > most.amount) ? point : most), null)
   const worstPick = picks.reduce<Point | null>((most, point) => (point.amount < 0 && (!most || point.amount < most.amount) ? point : most), null)
@@ -71,6 +74,12 @@ export function SummaryCard({ reason, onClose }: { reason: 'button' | 'end'; onC
               {headline ? <span className="summary-figure"><strong>{headline}</strong> <small>{unit}</small></span> : <strong className="is-none">这一局没挖到奖励</strong>}
               <span>{me.name}{settled || me.status === 'claimed' ? '' : me.points > 0 ? ' · 还在矿洞里，没领' : ''}</span>
             </p>
+            {/* 一局的评语：原版“进度达成”的样子，称号 + 一句（docs/V3_ITEMS.md §12） */}
+            {quip ? <div className="summary-quip" role="note">
+              <span className="quip-frame" aria-hidden="true"><ItemIcon kind={quip.icon} size={24} /></span>
+              <strong>{quip.title}</strong>
+              <span>{quip.line}</span>
+            </div> : null}
             {chart ? <figure className="summary-chart" aria-label={`收益曲线：挖了 ${me.digs} 格，最高 ${money(chart.peak?.points ?? 0)}，最后 ${money(chart.end.points)}`}>
               <div className="chart-plot">
                 <svg viewBox={`0 0 ${CHART.width} ${CHART.height}`} preserveAspectRatio="none" aria-hidden="true">

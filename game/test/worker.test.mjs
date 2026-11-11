@@ -113,6 +113,19 @@ describe("一局", () => {
     assert.equal(game.left, 10000);
     assert.equal(me.chances, 3);
   });
+  it("三方积分红包（docs/V3_ITEMS.md §11）：预算按红包信息的 units（多少个最小单位），说的数按最小单位写", async () => {
+    const points = { ...info, unit: "星星", pool: "2000", step: "1", units: { pool: 2000, unclaimed: 2000 } };
+    const room = new MineRoom(memory(), tools);
+    const { game } = await room.state(points, 10001, "xiaoming", NOW);
+    assert.equal(game.pool, 2000);
+    assert.equal(game.rules.step, "1");
+    const { answer } = await room.dig(points, 10001, "xiaoming", { cardId: 1, index: 0 }, NOW);
+    assert.equal(answer.ok, true);
+    if (answer.result.amount > 0) assert.match(answer.result.text, new RegExp(`\\+${answer.result.amount}(?!\\.)`));
+    // LDC 红包照旧：没有 step
+    const plain = await new MineRoom(memory(), tools).state(info, 10001, "xiaoming", NOW);
+    assert.equal(plain.game.rules.step, undefined);
+  });
   it("挖一格：存下牌面、人和这一挖，推给大家的不带别人的私事", async () => {
     const storage = memory();
     const room = new MineRoom(storage, tools);

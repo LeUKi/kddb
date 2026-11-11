@@ -24,6 +24,32 @@
       }
     },
     {
+      "name": "三方积分红包：凭证上的数是多少个最小单位，按积分的写法说",
+      "hongbao": {
+        "openedAt": "2026-10-24T11:00:00+08:00",
+        "points": {
+          "name": "星星",
+          "unit": "星星",
+          "step": "1"
+        }
+      },
+      "input": "kd3.1792810800000.10000.500.k1.UaP4LtFYytqC80vOTVZj4RyL7baI6a_Lfhm5IZGBvjgk8In5j2-wUQnND7SxhrUsjkgOgzTv54-3UxO07GaKsA",
+      "expect": {
+        "add": 500,
+        "settle": true,
+        "settled": 500,
+        "message": "领取 500",
+        "announce": "领走了 500",
+        "view": {
+          "summary": "1 人领取，共领走 500",
+          "data": {
+            "claimed": 1,
+            "amount": 500
+          }
+        }
+      }
+    },
+    {
       "name": "不是凭证：不加钱、不结算，说去网页领",
       "hongbao": {
         "openedAt": "2026-10-24T11:00:00+08:00"

@@ -7,10 +7,12 @@ import { createServer } from 'vite'
 let server
 let chart
 let sound
+let quips
 before(async () => {
   server = await createServer({ root: fileURLToPath(new URL('../', import.meta.url)), configFile: false, server: { middlewareMode: true, watch: null }, appType: 'custom', logLevel: 'silent' })
   chart = await server.ssrLoadModule('/v3/src/chart.ts')
   sound = await server.ssrLoadModule('/v3/src/sound.ts')
+  quips = await server.ssrLoadModule('/v3/src/quips.ts')
 })
 after(async () => { await server?.close() })
 
@@ -97,4 +99,50 @@ test('最大的一笔和扣得最多的一下（中毒、苦力怕也算）；�
   assert.equal(chart.pointWords(chart.pointAt(out, 29), money, names), '第 2 次挖 · 钻石 +0.50 · 待领取 0.60')
   assert.equal(chart.pointWords(chart.pointAt(out, 72), money, names), '苦力怕 -0.18 · 待领取 0.72')
   assert.equal(chart.pointWords(chart.pointAt(out, 100), money, names), '第 6 次挖 · 绿宝石 +0.10 · 待领取 0.82')
+})
+
+test('一局的评语：60 条以上，称号不长、一句不长；挑最少见的条件，同一局每次一样，数换进句子', () => {
+  const all = Object.values(quips.QUIPS).flatMap(group => group.lines)
+  assert.ok(all.length >= 60, String(all.length))
+  for (const [title, line] of all) {
+    assert.ok([...title].length >= 2 && [...title].length <= 6, title)
+    // 换进去的数按 4 个字算
+    assert.ok([...line.replace(/\{\w+\}/g, '1234')].length <= 34, line)
+  }
+  const money = points => (points / 100).toFixed(2)
+  const summary = (trail, extra = {}) => ({ me: { name: '我', status: 'playing', points: trail.at(-1)?.p ?? 0, digs: trail.filter(step => !['poison', 'creeper', 'warden', 'ender', 'vault'].includes(step.k)).length, trail, best: 0, tnt: 0, blocked: 0, lost: 0, ...extra }, top: [], over: false })
+  // 第一下就是钻石，又有 3 颗钻石：第一下钻石更少见
+  const diamonds = [{ k: 'diamond', a: 50, p: 50 }, { k: 'diamond', a: 50, p: 100 }, { k: 'emerald', a: 10, p: 110 }, { k: 'diamond', a: 50, p: 160 }]
+  const facts = quips.factsOf(summary(diamonds), 7)
+  assert.deepEqual(quips.keysOf(facts).slice(0, 2), ['firstDiamond', 'diamonds'])
+  const one = quips.quipOf(facts, 'hb1:7:4', money)
+  assert.equal(one.key, 'firstDiamond')
+  assert.deepEqual(quips.quipOf(facts, 'hb1:7:4', money), one)
+  // 过山车：数换进句子
+  const coaster = [{ k: 'emerald', a: 10, p: 10 }, { k: 'debris', a: 0, p: 10 }, { k: 'apple', a: 90, p: 100 }, { k: 'emerald', a: 10, p: 110 }, { k: 'tnt', a: -80, p: 30 }, { k: 'emerald', a: 10, p: 40 }]
+  const ride = quips.factsOf(summary(coaster), 7)
+  assert.ok(quips.keysOf(ride).includes('coaster'))
+  for (let n = 0; n < 9; n++) {
+    const text = quips.quipOf({ ...ride, debris: false }, `s${n}`, money)
+    assert.equal(text.key, 'coaster')
+    assert.ok(!text.line.includes('{'), text.line)
+    assert.ok(text.line.includes('1.10') && text.line.includes('0.40'), text.line)
+  }
+  // 挖了 12 格一分没有；全场第一；什么都没对上
+  const nothing = Array.from({ length: 12 }, () => ({ k: 'spyglass', a: 0, p: 0 }))
+  assert.equal(quips.quipOf(quips.factsOf(summary(nothing), 7), 'x', money).key, 'empty')
+  const top = { ...summary([{ k: 'emerald', a: 10, p: 10 }]), top: [{ uid: 7, name: '我', points: 10 }] }
+  assert.equal(quips.quipOf(quips.factsOf(top, 7), 'x', money).key, 'top')
+  assert.equal(quips.quipOf(quips.factsOf(summary([{ k: 'emerald', a: 10, p: 10 }]), 7), 'x', money).key, 'gained')
+  // 没有逐格记录的老局：只按游戏站给的几个数
+  const old = { me: { name: '我', status: 'claimed', points: 30, digs: 3, trail: null, best: 20, tnt: 0, blocked: 0, lost: 0 }, top: [], over: false }
+  assert.equal(quips.quipOf(quips.factsOf(old, 7), 'x', money).key, 'quick')
+})
+
+test('手上是 0 时踩到 TNT（没扣到）也算踩雷：条形码里是红的、往下一小截，图例算进 TNT', () => {
+  const out = chart.chartOf([{ k: 'tnt', a: 0, p: 0 }, { k: 'emerald', a: 10, p: 10 }, { k: 'coal', a: 0, p: 10 }], box)
+  const bars = chart.barsOf(out)
+  assert.deepEqual([bars[0].color, bars[0].size], [chart.COLORS.tnt, -0.25])
+  assert.deepEqual(chart.legendOf(out).map(entry => entry.key), ['emerald', 'tnt', 'other'])
+  assert.equal(chart.statsOf([{ k: 'tnt', a: 0, p: 0 }, { k: 'emerald', a: 10, p: 10 }]).longest, 1)
 })

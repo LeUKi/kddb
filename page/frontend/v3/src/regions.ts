@@ -2,7 +2,7 @@
 // 纯函数，网页和测试共用。
 import type { IconKind } from '../../src/game'
 import type { Kind, PublicCard, Rules } from './types'
-import { BIOME_NAMES } from './types'
+import { BIOME_NAMES, currentStep, decimalsOf, stepMinor } from './types'
 
 /** 卡上面那一行的名字：区块名，普通卡是第几张。 */
 export const regionName = (card: Pick<PublicCard, 'id' | 'kind'>) => (card.kind ? BIOME_NAMES[card.kind] : `第 ${card.id} 张卡`)
@@ -68,7 +68,10 @@ export function worthOf(card: Pick<PublicCard, 'left'>, rules: Pick<Rules, 'smal
 
 /** “还藏着约 X”：1 以上取一位小数，不到 1 取两位（10000 → "100.0"，85 → "0.85"）。 */
 export function aboutMoney(points: number) {
-  return points >= 100 ? (Math.round(points / 10) / 10).toFixed(1) : (points / 100).toFixed(2)
+  // 按这个红包的最小单位换成分再估（三方积分红包是多少个最小单位，docs/V3_ITEMS.md §11）；整数的积分只写整数
+  const minor = points * stepMinor(currentStep())
+  if (decimalsOf(currentStep()) === 0) return String(Math.round(minor / 100))
+  return minor >= 100 ? (Math.round(minor / 10) / 10).toFixed(1) : (minor / 100).toFixed(2)
 }
 
 /** 卡下面列出来的宝贝（最多 4 样，按这个先后）：值钱的、能长出新卡的。 */

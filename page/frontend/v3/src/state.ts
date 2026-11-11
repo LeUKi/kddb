@@ -9,6 +9,7 @@ import { mergeCard, mergeLive, mergeState } from './live'
 import type { Held, Slot } from './items'
 import { outOfPicks } from './items'
 import type { DigResult, Kind, Live, LiveStep, Me, PublicGame, Shape, State } from './types'
+import { setMoneyStep } from './types'
 import { money } from './types'
 
 export const store = createStore()
@@ -138,6 +139,8 @@ export async function start() {
   store.set(phaseAtom, 'starting')
   try {
     const { hongbao } = await hb.ready()
+    // 三方积分红包：数都是多少个最小单位，按它的最小单位写（游戏站的 rules.step 到了以后以它为准）
+    setMoneyStep(hongbao.step)
     store.set(hongbaoAtom, hongbao)
     hb.on('hongbao', next => store.set(hongbaoAtom, next))
     hb.on('me', acceptMe)
@@ -207,6 +210,7 @@ let catching: Promise<void> | null = null
 /** 把合好的整局放进去：别人新开的格子闪一下，新卡长出来，奖池分完了就结束。 */
 function commit(merge: Merge) {
   const before = store.get(gameAtom)
+  setMoneyStep(merge.game.rules.step)
   store.set(gameAtom, merge.game)
   const uid = store.get(uidAtom)
   const now = Date.now()

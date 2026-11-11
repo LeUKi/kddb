@@ -871,6 +871,22 @@
       "sha256": "cf15400bedf3176ba4d9f7d62f5308fbcd182790dfdd666d8d4de18d02ce00ef",
       "width": 16,
       "height": 16
+    },
+    {
+      "path": "textures/gui/sprites/toast/advancement.png",
+      "source": "assets/minecraft/textures/gui/sprites/toast/advancement.png",
+      "bytes": 157,
+      "sha256": "15a959d338d8ce98c1381f95d34f7143377669bcadae1198900bea88144d6634",
+      "width": 160,
+      "height": 32
+    },
+    {
+      "path": "textures/gui/sprites/advancements/goal_frame_obtained.png",
+      "source": "assets/minecraft/textures/gui/sprites/advancements/goal_frame_obtained.png",
+      "bytes": 216,
+      "sha256": "5389c9209dafc7e227ee50111fdb4a20fadb32a1c9bf9f4f99acbb4368adac65",
+      "width": 26,
+      "height": 26
     }
   ],
   "source": "Mojang Minecraft Java Edition client JAR; unchanged extracted bytes",

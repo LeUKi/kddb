@@ -260,6 +260,11 @@ button.eye-status { cursor: pointer; }
 .summary-amount strong.is-none { color: var(--ink); font-size: 20px; }
 .summary-amount small { color: var(--muted); font-size: 14px; }
 .summary-amount span { color: var(--muted); font-size: 13px; }
+/* 一局的评语：原版进度提示的底图（九宫格拉伸）和进度框 */
+.summary-quip { display: grid; grid-template-columns: 38px 1fr; gap: 1px 10px; align-items: center; padding: 2px 6px 2px 2px; border: 8px solid transparent; border-image: var(--toast-bg) 4 fill / 8px stretch; image-rendering: pixelated; }
+.quip-frame { grid-row: span 2; display: grid; place-items: center; width: 38px; height: 38px; background: var(--goal-frame) center / 100% 100%; image-rendering: pixelated; }
+.summary-quip strong { color: #fcfc54; font-size: 14px; line-height: 1.3; }
+.summary-quip > span:last-child { color: #fff; font-size: 13px; line-height: 1.45; }
 .summary-chart { position: relative; margin: 0; padding: 8px 8px 6px; background: #151b20; border: 1px solid #2f383f; border-radius: 8px; }
 .summary-chart svg { display: block; width: 100%; height: 132px; overflow: visible; }
 .chart-base { stroke: #ffffff26; stroke-width: 1; stroke-dasharray: 3 4; vector-effect: non-scaling-stroke; }

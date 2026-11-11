@@ -14,6 +14,7 @@ let chart
 let regions
 let mcfont
 let layout
+let types
 before(async () => {
   server = await createServer({ root: fileURLToPath(new URL('../', import.meta.url)), configFile: false, server: { middlewareMode: true, watch: null }, appType: 'custom', logLevel: 'silent' })
   items = await server.ssrLoadModule('/v3/src/items.ts')
@@ -22,6 +23,7 @@ before(async () => {
   regions = await server.ssrLoadModule('/v3/src/regions.ts')
   mcfont = await server.ssrLoadModule('/v3/src/mcfont.ts')
   layout = await server.ssrLoadModule('/v3/src/layout.ts')
+  types = await server.ssrLoadModule('/v3/src/types.ts')
 })
 after(() => server.close())
 
@@ -302,4 +304,29 @@ test('区块的样子（layout.ts）：铁轨按游戏站给的形状、以前�
   assert.ok([...sculk.values()].every(frame => frame >= 0 && frame <= 3))
   assert.deepEqual([...layout.sculkOf({ ...deep })], [...sculk])
   assert.equal(layout.sculkOf({ id: 1, kind: 'mine', size: 6 }).size, 0)
+})
+
+test('三方积分红包（docs/V3_ITEMS.md §11）：数是多少个最小单位，写法跟着最小单位；余量的“约”也一样', () => {
+  assert.equal(types.formatUnits(10000), '100.00')
+  assert.equal(types.formatUnits(2000, '1'), '2000')
+  assert.equal(types.formatUnits(3, '0.5'), '1.5')
+  assert.equal(types.formatUnits(3, '100'), '300')
+  assert.equal(types.formatUnits(-7, '0.25'), '-1.75')
+  try {
+    types.setMoneyStep('1')
+    assert.equal(types.money(1234), '1234')
+    // 红包站说领到 "66"（积分）：就是 66 个最小单位
+    assert.equal(types.unitsOf('66'), 66)
+    assert.equal(regions.aboutMoney(1234), '1234')
+    types.setMoneyStep('0.5')
+    assert.equal(types.money(3), '1.5')
+    assert.equal(regions.aboutMoney(3), '1.5')
+    types.setMoneyStep(undefined)
+    assert.equal(types.unitsOf('12.34'), 1234)
+    assert.equal(types.money(1234), '12.34')
+    assert.equal(regions.aboutMoney(1234), '12.3')
+    assert.equal(regions.aboutMoney(40), '0.40')
+  } finally {
+    types.setMoneyStep(undefined)
+  }
 })

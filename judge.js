@@ -1,12 +1,15 @@
 // 矿洞夺宝 v3 · 代码协议第五版。游戏在自己的服务上（hbweb-kddb.lafi.sh/v3/）记分，
-// 这里只做一件事：领取时核对游戏站签的凭证，按凭证上的分结算（docs/V3_MAP.md）。
-// 金额单位是分；凭证上的“分”就是这个单位。
+// 这里只做一件事：领取时核对游戏站签的凭证，按凭证上的数结算（docs/V3_MAP.md）。
+// 金额是多少个最小单位（meta.points，docs/V3_ITEMS.md §11）：LDC 和🐟的最小单位是 0.01，就是分；
+// 三方积分红包按那种积分的最小单位。凭证上的数也是这个单位，游戏站按红包信息的 units 记账。
 
 /** @type {import("./judge").Meta} */
 export const meta = {
   name: "矿洞夺宝",
   description: "一张不断长大的矿洞地图，大家一起挖宝，见好就收",
   page: "https://hbweb-kddb.lafi.sh/v3/",
+  // 能用在三方积分红包上：金额都是多少个最小单位（游戏站、凭证、这里一样）
+  points: true,
 };
 
 /**
@@ -104,7 +107,7 @@ const PUBLIC_KEYS = /** @type {Record<string, JsonWebKey>} */ ({
   },
 });
 
-/** kd3.<开放时间毫秒>.<LINUX DO ID>.<分>.<钥匙编号>.<签名> */
+/** kd3.<开放时间毫秒>.<LINUX DO ID>.<多少个最小单位>.<钥匙编号>.<签名> */
 const VOUCHER = /^kd3\.(\d{1,15})\.(\d{1,15})\.(\d{1,15})\.([a-z0-9]{1,8})\.([A-Za-z0-9_-]{86})$/;
 
 /** @type {Map<string, Promise<CryptoKey>>} */

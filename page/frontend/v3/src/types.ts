@@ -64,6 +64,10 @@ export interface Rules {
   items?: 1 | 2
   /** 多少秒不挖苦力怕会来；0 不来 */
   creeper?: number
+  /** 2：区块里固定格子的新摆法（docs/V3_ITEMS.md §10）；旧局没有 */
+  layout?: 2
+  /** 三方积分红包的最小单位（"1"、"0.5"、"100"…），所有的数都是多少个最小单位；LDC 和🐟红包没有（就是 0.01） */
+  step?: string
 }
 export interface PublicGame {
   seq: number; rules: Rules; pool: number; left: number
@@ -133,10 +137,42 @@ export type LiveStep = LiveCell | LiveDig
 export interface LiveDrain { type: 'drain'; uids: number[]; left: number; over: boolean }
 export type Live = LiveStep | LiveCard | LiveDrain | { type: 'claim'; name: string; points: number; stats: Stats }
 
-/** 10000 → "100.00"。 */
+/**
+ * 写给人看的数（docs/V3_ITEMS.md §11）：数是多少个最小单位，小数位跟着最小单位，同红包站的 tools.money.format：
+ * LDC 和🐟 10000 → "100.00"；最小单位 "1" 时 2000 → "2000"，"0.5" 时 3 → "1.5"，"100" 时 3 → "300"。
+ */
+export function formatUnits(points: number, step = '0.01') {
+  const minor = Math.abs(points) * stepMinor(step)
+  const digits = decimalsOf(step)
+  const text = `${Math.floor(minor / 100)}.${String(minor % 100).padStart(2, '0')}`
+  return (points < 0 ? '-' : '') + (digits === 2 ? text : text.slice(0, text.length - (2 - digits) - (digits === 0 ? 1 : 0)))
+}
+/** 一个最小单位是多少分（"0.01" → 1，"1" → 100，"0.5" → 50） */
+export function stepMinor(step = '0.01') {
+  const [whole, fraction = ''] = step.split('.')
+  return Number(whole) * 100 + Number(fraction.padEnd(2, '0')) || 1
+}
+/** 写几位小数：整数的积分不写，0.5 写一位，LDC 两位 */
+export function decimalsOf(step = '0.01') {
+  const minor = stepMinor(step)
+  return minor % 100 === 0 ? 0 : minor % 10 === 0 ? 1 : 2
+}
+
+/** 这个红包的最小单位：开局时按游戏站的规则（rules.step）或红包站给的 hongbao.step 定，money() 都按它写 */
+let moneyStep = '0.01'
+export function setMoneyStep(step: string | null | undefined) {
+  moneyStep = step || '0.01'
+}
+export const currentStep = () => moneyStep
+
+/** 红包站给的金额字符串（"12.34"、积分 "66"）换回多少个最小单位（同 money() 的单位）。 */
+export function unitsOf(text: string) {
+  return Math.round((Number(text) * 100) / stepMinor(moneyStep))
+}
+
+/** 待领取这些数写给人看：按这个红包的最小单位（LDC 10000 → "100.00"）。 */
 export function money(points: number) {
-  const abs = Math.abs(points)
-  return `${points < 0 ? '-' : ''}${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, '0')}`
+  return formatUnits(points, moneyStep)
 }
 
 /** 铁轨一格连着哪两边（原版 rail 的叫法）：ns、ew 直道，ne、se、sw、nw 弯道。 */
