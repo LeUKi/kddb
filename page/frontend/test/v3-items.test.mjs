@@ -255,3 +255,14 @@ test('原版乱码：字宽从字图量出来，乱码只换成同样宽的字�
   assert.equal(mcfont.shadowOf('#ffaa00'), '#3f2a00')
   assert.equal(mcfont.shadowOf('#ffffff'), '#3f3f3f')
 })
+
+test('工具条两头的箭头：只按格子排出来的长度算，放得下就没有；差 4 像素以内不算', () => {
+  // 收起的那一格浮起来、把 scrollWidth 撑到 121 的那一刻：按排版只有 48，没有箭头
+  assert.deepEqual(items.edgesOf(0, 48, 48), { start: false, end: false })
+  assert.deepEqual(items.edgesOf(0, 51, 48), { start: false, end: false })
+  assert.deepEqual(items.edgesOf(0, 300, 200), { start: false, end: true })
+  assert.deepEqual(items.edgesOf(50, 300, 200), { start: true, end: true })
+  assert.deepEqual(items.edgesOf(98, 300, 200), { start: true, end: false })
+  // 滚过了头（浮起来的格子撑出来的地方）也不会两头都亮
+  assert.deepEqual(items.edgesOf(60, 48, 48), { start: false, end: false })
+})

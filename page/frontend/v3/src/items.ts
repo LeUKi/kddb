@@ -247,3 +247,14 @@ export function outOfPicks(me: Me) {
   const pick = me.items?.pick
   return me.chances <= 0 && (!pick || pick.h + pick.v + pick.x <= 0) && (me.items?.table ?? 0) <= 0
 }
+
+/**
+ * 工具条两头还有没有（渐隐、箭头）：position 是滚了多少，content 是格子排出来的长度，client 是看得见的长度。
+ * content 要按排版算（offsetWidth，不算 transform），不能用 scrollWidth：收起的那一格会先浮起来
+ * （popLayout 的 position: absolute）、动画里的格子带着位移，都会把 scrollWidth 撑大，工具条明明放得下却
+ * 冒出箭头，点了也滚不动；它们走了以后工具条大小不变，没人再量，箭头就一直留着（2026-11-11 用户）。
+ */
+export function edgesOf(position: number, content: number, client: number) {
+  const room = Math.max(0, content - client)
+  return { start: room > 4 && position > 4, end: room > 4 && position < room - 4 }
+}

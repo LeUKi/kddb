@@ -8,7 +8,7 @@ import { makeCursors } from './cursor'
 import { ShapeGlyph } from './Dialogs'
 import { useCooling } from './Hud'
 import type { Slot } from './items'
-import { classOf, CRAFT_NEED, countOf, isHeld, SHIELD_CAP, shapeOf, skipsGuide, SLOT_ICONS, SLOT_NAMES, slotsOf } from './items'
+import { classOf, CRAFT_NEED, countOf, edgesOf, isHeld, SHIELD_CAP, shapeOf, skipsGuide, SLOT_ICONS, SLOT_NAMES, slotsOf } from './items'
 import { play } from './sound'
 import { blockedAtom, dialogAtom, digIntervalAtom, hasGameAtom, hasteUntilAtom, heldAtom, itemsGameAtom, itemsVersionAtom, meAtom, putDown, settledAtom, store, toast } from './state'
 import type { Me } from './types'
@@ -26,6 +26,8 @@ export const Toolbar = memo(function Toolbar({ level, onNeedDig }: { level: Leve
   const me = useAtomValue(meAtom)
   // 只订阅规则里用到的：别人每挖一格 gameAtom 都换，工具条不该跟着重画、重新量一遍（2026-11-11 量过）
   const hasGame = useAtomValue(hasGameAtom)
+  /** 有格子可画（不然是个空框） */
+  const shown = !!me && hasGame
   const items = useAtomValue(itemsGameAtom)
   const version = useAtomValue(itemsVersionAtom)
   const interval = useAtomValue(digIntervalAtom)
@@ -126,15 +128,10 @@ export const Toolbar = memo(function Toolbar({ level, onNeedDig }: { level: Leve
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  // 放不下时：两头渐隐、箭头（哪头还有就显示哪头）
+  // 放不下时：两头渐隐、箭头（哪头还有就显示哪头）。按格子排出来的长度量（items.ts edgesOf）
   const measure = () => {
-    const element = scroller.current
-    if (!element) return
-    const vertical = isVertical(element)
-    const position = vertical ? element.scrollTop : element.scrollLeft
-    const room = vertical ? element.scrollHeight - element.clientHeight : element.scrollWidth - element.clientWidth
-    const next = { start: position > 4, end: position < room - 4 }
-    setEnds(before => (before.start === next.start && before.end === next.end ? before : next))
+    const next = scrollEdges(scroller.current)
+    if (next) setEnds(before => (before.start === next.start && before.end === next.end ? before : next))
   }
   // 只在格子变了时量；大小变了有 ResizeObserver；合成的水滴流完再量一次（流的时候垫的壳会撑出地方）
   useLayoutEffect(measure, [orderKey])
@@ -156,7 +153,7 @@ export const Toolbar = memo(function Toolbar({ level, onNeedDig }: { level: Leve
     if (element.firstElementChild) observer.observe(element.firstElementChild)
     const onWheel = (event: WheelEvent) => {
       // 竖着滚轮也能横着滚（横屏时工具条本来就是竖的）
-      if (element.scrollWidth > element.clientWidth + 2 && Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
+      if (!isVertical(element) && overflowOf(element) > 2 && Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
         element.scrollLeft += event.deltaY
         event.preventDefault()
       }
@@ -169,7 +166,9 @@ export const Toolbar = memo(function Toolbar({ level, onNeedDig }: { level: Leve
       observer.disconnect()
       element.removeEventListener('wheel', onWheel)
     }
-  }, [])
+    // 还没有游戏时工具条只是个空框（下面提前 return），没有可量的；有了再装
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shown])
   const scrollBy = (sign: 1 | -1) => {
     const element = scroller.current
     if (!element) return
@@ -185,7 +184,7 @@ export const Toolbar = memo(function Toolbar({ level, onNeedDig }: { level: Leve
     element?.scrollIntoView?.({ block: 'nearest', inline: 'nearest', behavior: reduced ? 'auto' : 'smooth' })
   }, [held, reduced])
 
-  if (!me || !hasGame) return <div className="toolbar" ref={box} />
+  if (!shown) return <div className="toolbar" ref={box} />
   const haste = Math.max(0, hasteUntil - Date.now())
 
   const slotView = (slot: Slot) => {
@@ -466,6 +465,22 @@ function useCraftDrop(me: Me | null, version: number, reduced: boolean, drop: Dr
 /** 横屏时工具条是竖的（样式里只让它上下滚）。按样式判断，不按内容：格子长出来时会高出一两个像素。 */
 function isVertical(element: HTMLElement) {
   return getComputedStyle(element).overflowX === 'hidden'
+}
+
+/** 格子排出来比看得见的长多少（offsetWidth：不算 transform，不算收起时浮起来的那一格；见 items.ts edgesOf）。 */
+function overflowOf(element: HTMLElement) {
+  const slots = element.firstElementChild
+  if (!(slots instanceof HTMLElement)) return 0
+  return isVertical(element) ? slots.offsetHeight - element.clientHeight : slots.offsetWidth - element.clientWidth
+}
+
+/** 工具条两头还有没有。 */
+function scrollEdges(element: HTMLElement | null) {
+  const slots = element?.firstElementChild
+  if (!element || !(slots instanceof HTMLElement)) return null
+  return isVertical(element)
+    ? edgesOf(element.scrollTop, slots.offsetHeight, element.clientHeight)
+    : edgesOf(element.scrollLeft, slots.offsetWidth, element.clientWidth)
 }
 
 /** Minecraft 物品栏那种像素数字（带阴影），右下角。 */
