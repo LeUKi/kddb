@@ -1,7 +1,7 @@
 import { useAtomValue } from 'jotai'
 import { useEffect, useRef, useState } from 'react'
 import { play } from './sound'
-import { creeperAtAtom, creeperBoom, meAtom, settledAtom, toast, totalOf } from './state'
+import { creeperAtAtom, creeperBoom, creeperShownAtom, meAtom, settledAtom, store, toast, totalOf } from './state'
 import { money } from './types'
 
 /** 苦力怕探头以后倒数多久（游戏站核对时也是 10 秒）。 */
@@ -55,6 +55,11 @@ export function Creeper() {
     else setShownAt(value => value ?? Date.now())
   }, [due, visible, at])
   const coming = due && visible && shownAt !== null
+  // 顶上那一行它最优先：步骤条、通知让开
+  useEffect(() => {
+    store.set(creeperShownAtom, coming)
+    return () => store.set(creeperShownAtom, false)
+  }, [coming])
   const left = coming && shownAt !== null ? shownAt + CREEPER_WARN_MS - now : CREEPER_WARN_MS
 
   useEffect(() => {

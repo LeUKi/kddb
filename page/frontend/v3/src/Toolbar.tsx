@@ -8,9 +8,9 @@ import { makeCursors } from './cursor'
 import { ShapeGlyph } from './Dialogs'
 import { useCooling } from './Hud'
 import type { Slot } from './items'
-import { CRAFT_NEED, countOf, isHeld, isTaught, SHIELD_CAP, shapeOf, SLOT_ICONS, SLOT_NAMES, SLOT_USE, slotsOf } from './items'
+import { classOf, CRAFT_NEED, countOf, isHeld, SHIELD_CAP, shapeOf, skipsGuide, SLOT_ICONS, SLOT_NAMES, slotsOf } from './items'
 import { play } from './sound'
-import { blockedAtom, dialogAtom, digIntervalAtom, hasGameAtom, hasteUntilAtom, heldAtom, itemsGameAtom, meAtom, putDown, settledAtom, toast } from './state'
+import { blockedAtom, dialogAtom, digIntervalAtom, hasGameAtom, hasteUntilAtom, heldAtom, itemsGameAtom, meAtom, putDown, settledAtom, store, toast } from './state'
 import type { Me } from './types'
 
 /**
@@ -64,15 +64,16 @@ export const Toolbar = memo(function Toolbar({ level, onNeedDig }: { level: Leve
     if (held && levelNow.current !== 2) needDig.current()
   }, [held])
 
+  // 点一格：按道具的类走流程（docs/ITEM_UX.md §4）
   const tap = (slot: Slot) => {
-    const use = SLOT_USE[slot]
-    // 拿着东西时点镐子、再点拿着的那格：放回去
+    const kind = classOf(slot)
+    // 在选位置这一步时点镐子、再点那一格：取消
     if (held && (slot === 'pickaxe' || held === slot)) {
       putDown()
       play('click')
       return
     }
-    if (use === 'base' || use === 'passive') {
+    if (kind === 'base' || kind === 'passive') {
       setDialog({ type: 'item', slot })
       return
     }
@@ -80,18 +81,17 @@ export const Toolbar = memo(function Toolbar({ level, onNeedDig }: { level: Leve
       toast(blocked ?? '已经领取了，不能再用')
       return
     }
+    if (held) putDown()
     if (isHeld(slot)) {
-      putDown()
-      if (!isTaught(slot)) {
-        setDialog({ type: 'item', slot, teach: true })
+      if (!skipsGuide(slot)) {
+        setDialog({ type: 'item', slot, mode: 'enter' })
         return
       }
       setHeld(slot)
       play('click')
       return
     }
-    if (held) putDown()
-    if (use === 'dialog') setDialog({ type: slot === 'ender' ? 'ender' : 'table' })
+    if (kind === 'choice') setDialog({ type: slot === 'ender' ? 'ender' : 'table' })
     else setDialog({ type: 'item', slot })
   }
   const tapRef = useRef(tap)
@@ -104,6 +104,8 @@ export const Toolbar = memo(function Toolbar({ level, onNeedDig }: { level: Leve
     const onKey = (event: KeyboardEvent) => {
       if (event.target instanceof HTMLInputElement || event.metaKey || event.ctrlKey || event.altKey) return
       if (event.key === 'Escape') {
+        // 开着弹窗时 Esc 只关弹窗（步骤条的问号打开的引导关掉以后还在这一步）
+        if (event.defaultPrevented || store.get(dialogAtom)) return
         putDown()
         return
       }

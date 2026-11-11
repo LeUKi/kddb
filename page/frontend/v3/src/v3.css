@@ -546,6 +546,11 @@ button.eye-status { cursor: pointer; }
 .top-hint { position: absolute; left: 50%; top: 8px; z-index: 7; display: flex; align-items: center; gap: 8px; width: max-content; max-width: min(380px, calc(100% - 24px)); padding: 7px 8px 7px 10px; font-size: 12.5px; translate: -50% 0; }
 .top-hint p { flex: 1 1 auto; min-width: 0; }
 .top-hint > button { flex: none; padding: 5px 12px; color: var(--ink); background: #2a2234; border: 1px solid #5b4a75; border-radius: 8px; }
+/* 步骤条（docs/ITEM_UX.md §3.3）：瞄准类选位置时顶上一直在；能确认时字是金色的，不能用时是灰红 */
+.step-bar { gap: 6px; max-width: min(460px, calc(100% - 24px)); }
+.step-bar.is-ready p { color: #ffe9a8; }
+.step-bar.is-bad p { color: #ffb4a8; }
+.step-bar > .step-help { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; font-weight: 700; border-radius: 50%; }
 
 /* —— 弹窗：末影箱、附魔台、宝库开出的东西 —— */
 .item-dialog-backdrop { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 16px; background: #000a; }
@@ -574,6 +579,8 @@ button.eye-status { cursor: pointer; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 .dialog-actions button { padding: 7px 16px; color: var(--ink); background: #2a2234; border: 1px solid #5b4a75; border-radius: 8px; }
 .dialog-actions button.is-primary { color: #1b1408; background: var(--gold); border-color: var(--gold); font-weight: 600; }
+/* “不再提示”：靠左的文字按钮（docs/ITEM_UX.md §3.2） */
+.dialog-actions button.is-quiet { margin-right: auto; padding-left: 2px; padding-right: 6px; color: #b9a6d9; background: none; border-color: transparent; }
 
 /* —— 苦力怕：从地图右边探头，“嘶……”；最后几秒胀大、闪白；炸的时候整块白一下 —— */
 .creeper { position: absolute; right: 0; top: 34%; z-index: 5; width: 64px; height: 64px; transform: translateX(120%); transition: transform .5s cubic-bezier(.3, 1.5, .5, 1); pointer-events: none; filter: drop-shadow(0 3px 6px #000); }

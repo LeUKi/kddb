@@ -36,26 +36,69 @@ export const SLOT_ICONS: Record<Slot, IconKind> = {
 }
 
 /**
- * 对准格子用的道具第一次使用时弹窗教一次（docs/V3_ITEMS.md §5，用户选的 B）；之后点一下就是使用。
- * 三种附魔镐算一种。记在这台设备上（存不了就每次都教，不影响玩）。
+ * 道具分五类（docs/ITEM_UX.md §2），类决定点了以后走哪个流程：瞄准（引导 → 选位置）、即用（确认弹窗）、
+ * 抉择（专属弹窗）、被动（说明弹窗）、基础（镐子）。
  */
-const TAUGHT_KEY = 'kddb:v3:taught'
-const teachGroup = (slot: Held) => (shapeOf(slot) ? 'pick' : slot)
-function taughtList(): string[] {
+export type ItemClass = 'aim' | 'instant' | 'choice' | 'passive' | 'base'
+export function classOf(slot: Slot): ItemClass {
+  const use = SLOT_USE[slot]
+  return use === 'base' ? 'base' : use === 'confirm' ? 'instant' : use === 'dialog' ? 'choice' : use === 'passive' ? 'passive' : 'aim'
+}
+
+/**
+ * 道具登记表（docs/ITEM_UX.md §6）：弹窗右上角的数量、一两句它做什么；瞄准类还有点什么、步骤条上的一句。
+ * 新道具在这里加一行，工具条、弹窗、步骤条都照着它画。
+ */
+export function aboutSlot(slot: Slot, me: Me, items: boolean, interval: number, blocked: string | null): { count: string; words: string } {
+  const count = countOf(me, slot)
+  switch (slot) {
+    case 'pickaxe': return { count: `还剩 ${me.chances} 次`, words: blocked ?? `点一格没挖开的格子就是挖，用 1 次机会${interval > 1 ? `；每次至少隔 ${interval} 秒` : ''}。` }
+    case 'pick-h': case 'pick-v': case 'pick-x': return { count: `还能用 ${count} 次`, words: `一次挖开${SHAPE_NAMES[shapeOf(slot)!]}里没挖开的格子，挖过的跳过；不花镐子的机会。` }
+    case 'spyglass': return { count: `还有 ${count} 个`, words: '看一格里是什么，只有你看得见，不花机会。' }
+    case 'torch': return { count: `还有 ${count} 个`, words: '插在两格之间的缝上，照亮旁边 4 格：绿色是没有危险，黄色 1～2 个，红色 3～4 个（TNT、末影水晶、刷怪笼）。大家都看得见。' }
+    case 'key': return { count: `还有 ${count} 把`, words: '点试炼密室里的宝库开它，开出一样东西；每个宝库每人只能开一次。' }
+    case 'map': return { count: `还有 ${count} 张`, words: '随机标出地图上一格奖励（绿宝石常见，钻石少见），只有你看得见，镜头会飞过去。' }
+    case 'potion': return { count: `还有 ${count} 瓶`, words: '用了以后 10 秒里，每次挖只要隔 1 秒。' }
+    case 'ender': return { count: `还有 ${count} 个`, words: '手上的奖励一半存进去（炸不到），一半毁掉。' }
+    case 'table': return { count: `还有 ${count} 个`, words: '随机给两种附魔镐，挑一种。' }
+    case 'shield': return { count: `${count}/${items ? SHIELD_CAP : 1} 面`, words: `踩到 TNT 或末影水晶时自动挡下一次，用掉一面。${items ? `最多带 ${SHIELD_CAP} 面，再挖到换成一份小奖。` : '再挖到就换成一份小奖。'}` }
+    case 'coal': case 'stick': return { count: `${count}/${CRAFT_NEED}`, words: `煤炭、木棍都攒满 ${CRAFT_NEED} 个，自动做成一个火把；满了再挖到不算。` }
+    case 'poison': return { count: `还有 ${count} 次`, words: '接下来每挖一次，扣手上 5%，盾牌挡不住。' }
+  }
+}
+
+/** 瞄准类：在地图上点什么（步骤条上没预览时的那一句）。 */
+export const AIM_WHAT: Record<Held, string> = {
+  'pick-h': '点一格，框住的格子一起挖开', 'pick-v': '点一格，框住的格子一起挖开', 'pick-x': '点一格，框住的格子一起挖开',
+  spyglass: '点一格，看看里面是什么', torch: '点两格之间的缝，照亮旁边 4 格', key: '点试炼密室里的宝库',
+}
+/** 瞄准类：点的是什么（引导弹窗里“怎么用”那句） */
+export const AIM_TARGET: Record<Held, string> = { 'pick-h': '格子', 'pick-v': '格子', 'pick-x': '格子', spyglass: '格子', torch: '缝', key: '宝库' }
+
+/** 有鼠标（指着就能预览）还是触屏（点一下预览） */
+export const hasMouse = () => typeof window !== 'undefined' && !!window.matchMedia?.('(hover: hover) and (pointer: fine)').matches
+
+/**
+ * 瞄准类的引导弹窗（docs/ITEM_UX.md §4）：每次使用都先弹，选了“不再提示”就直接进入选位置；
+ * 步骤条上的问号随时能再打开。三种附魔镐算一种。记在这台设备上（存不了就照旧弹，不影响玩）。
+ */
+const SKIP_KEY = 'kddb:v3:skip-guide'
+const guideGroup = (slot: Held) => (shapeOf(slot) ? 'pick' : slot)
+function skipList(): string[] {
   try {
-    const list: unknown = JSON.parse(localStorage.getItem(TAUGHT_KEY) ?? '[]')
+    const list: unknown = JSON.parse(localStorage.getItem(SKIP_KEY) ?? '[]')
     return Array.isArray(list) ? list.filter((item): item is string => typeof item === 'string') : []
   } catch {
     return []
   }
 }
-export const isTaught = (slot: Held) => taughtList().includes(teachGroup(slot))
-export function markTaught(slot: Held) {
+export const skipsGuide = (slot: Held) => skipList().includes(guideGroup(slot))
+export function skipGuide(slot: Held) {
   try {
-    const list = taughtList()
-    if (!list.includes(teachGroup(slot))) localStorage.setItem(TAUGHT_KEY, JSON.stringify([...list, teachGroup(slot)]))
+    const list = skipList()
+    if (!list.includes(guideGroup(slot))) localStorage.setItem(SKIP_KEY, JSON.stringify([...list, guideGroup(slot)]))
   } catch {
-    // 存不了：下次再教一遍
+    // 存不了：下次照旧弹引导
   }
 }
 

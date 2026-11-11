@@ -16,7 +16,7 @@ import { aimAtom, blockedAtom, dig, focusRequestAtom, freshAtom, gameAtom, heldA
 import { Toolbar } from './Toolbar'
 import { aimInfo, anchorFor, torchHoverAtom, applyAt } from './aim'
 import { shapeOf, vaultsLeft } from './items'
-import { FollowTip } from './Tips'
+import { FollowTip, StepBar } from './Tips'
 import { Creeper } from './Creeper'
 import { ChestNote } from './Hud'
 import type { DigResult, Peek, PublicCard, Torch } from './types'
@@ -601,6 +601,7 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
     {banner ? <p className="map-banner" role="status">{banner}</p>
       : level !== 2 ? <p className="map-hint">点一张卡放大过去，放大以后才能挖</p> : null}
     <FollowTip box={box} />
+    <StepBar />
     <ChestNote />
     <Creeper />
     </div>

@@ -4,10 +4,10 @@ import type { ReactNode } from 'react'
 import { useEffect, useRef } from 'react'
 import type { IconKind } from '../../src/game'
 import { ItemIcon } from '../../src/ItemIcon'
-import type { Held, Slot } from './items'
-import { CRAFT_NEED, countOf, isHeld, markTaught, SHAPE_NAMES, SHAPES, SHIELD_CAP, shapeOf, SLOT_ICONS, SLOT_NAMES } from './items'
+import type { Held } from './items'
+import { aboutSlot, AIM_TARGET, hasMouse, isHeld, SHAPE_NAMES, SHAPES, shapeOf, skipGuide, SLOT_ICONS, SLOT_NAMES } from './items'
 import { applyItem, blockedAtom, dialogAtom, digIntervalAtom, heldAtom, itemsGameAtom, meAtom } from './state'
-import type { Me, Shape } from './types'
+import type { Shape } from './types'
 import { money } from './types'
 
 /**
@@ -27,7 +27,10 @@ export function ItemDialogs() {
     if (!dialog) return
     first.current?.focus({ preventScroll: true })
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setDialog(null)
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setDialog(null)
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -50,11 +53,16 @@ export function ItemDialogs() {
       {held === 'torch' ? <TorchDemo /> : null}
       <p>{about.words}</p>
       {held ? <p className="item-how">{howToAim(held)}</p> : null}
+      {/* 按钮（docs/ITEM_UX.md §3.2）：主按钮在最右；“不再提示”只在瞄准类进入前的引导里，靠左 */}
       <div className="dialog-actions">
-        {held && dialog.teach ? <>
+        {held && dialog.mode === 'enter' ? <>
+          <button type="button" className="is-quiet" onClick={() => {
+            skipGuide(held)
+            close()
+            setHeld(held)
+          }}>不再提示</button>
           <button type="button" ref={first} onClick={close}>取消</button>
           <button type="button" className="is-primary" onClick={() => {
-            markTaught(held)
             close()
             setHeld(held)
           }}>使用</button>
@@ -130,31 +138,12 @@ export function ShapeGlyph({ shape, big = false }: { shape: Shape; big?: boolean
   </span>
 }
 
-/** 工具条上一格的说明：右上角的数量、一段话。 */
-function aboutSlot(slot: Slot, me: Me, items: boolean, interval: number, blocked: string | null): { count: string; words: string } {
-  const count = countOf(me, slot)
-  switch (slot) {
-    case 'pickaxe': return { count: `还剩 ${me.chances} 次`, words: blocked ?? `点一格没挖开的格子就是挖，用 1 次机会${interval > 1 ? `；每次至少隔 ${interval} 秒` : ''}。` }
-    case 'pick-h': case 'pick-v': case 'pick-x': return { count: `还能用 ${count} 次`, words: `一次挖开${SHAPE_NAMES[shapeOf(slot)!]}里没挖开的格子，挖过的跳过；不花镐子的机会。` }
-    case 'spyglass': return { count: `还有 ${count} 个`, words: '看一格里是什么，只有你看得见，不花机会。' }
-    case 'torch': return { count: `还有 ${count} 个`, words: '插在两格之间的缝上，照亮旁边 4 格：绿色是没有危险，黄色 1～2 个，红色 3～4 个（TNT、末影水晶、刷怪笼）。大家都看得见。' }
-    case 'key': return { count: `还有 ${count} 把`, words: '点试炼密室里的宝库开它，开出一样东西；每个宝库每人只能开一次。' }
-    case 'map': return { count: `还有 ${count} 张`, words: '随机标出地图上一格奖励（绿宝石常见，钻石少见），只有你看得见，镜头会飞过去。' }
-    case 'potion': return { count: `还有 ${count} 瓶`, words: '用了以后 10 秒里，每次挖只要隔 1 秒。' }
-    case 'shield': return { count: `${count}/${items ? SHIELD_CAP : 1} 面`, words: `踩到 TNT 或末影水晶时自动挡下一次，用掉一面。${items ? `最多带 ${SHIELD_CAP} 面，再挖到换成一份小奖。` : '再挖到就换成一份小奖。'}` }
-    case 'coal': case 'stick': return { count: `${count}/${CRAFT_NEED}`, words: `煤炭、木棍都攒满 ${CRAFT_NEED} 个，自动做成一个火把；满了再挖到不算。` }
-    case 'poison': return { count: `还有 ${count} 次`, words: '接下来每挖一次，扣手上 5%，盾牌挡不住。' }
-    default: return { count: '', words: '' }
-  }
-}
-
-/** 点了“使用”以后怎么用：触屏点两下（预览、确认），鼠标指着点一下。道具的按钮都叫“使用”（2026-11-11 用户：“拿起来”难懂）。 */
+/** 使用以后怎么选位置：触屏点两下（预览、确认），鼠标指着点一下（docs/ITEM_UX.md §4）。 */
 function howToAim(held: Held) {
-  const touch = !window.matchMedia?.('(hover: hover) and (pointer: fine)').matches
-  const where = held === 'torch' ? '缝' : held === 'key' ? '宝库' : '格子'
-  return touch
-    ? `点“使用”以后，在地图上点${where}预览位置，同一处再点一次确认；再点工具条上的它就取消。`
-    : `点“使用”以后，指到哪里预览到哪里，点一下确认；右键、Esc 或再点它取消。`
+  const where = AIM_TARGET[held]
+  return hasMouse()
+    ? `使用以后，指到哪里预览到哪里，点一下确认。顶上会一直有说明和取消。`
+    : `使用以后，在地图上点${where}预览位置，同一处再点一次确认。顶上会一直有说明和取消。`
 }
 
 /** 火把：3×3 的小格子，亮着四格，火把插在中间那个角上。 */

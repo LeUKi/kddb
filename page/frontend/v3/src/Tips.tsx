@@ -1,20 +1,21 @@
-import { useAtomValue } from 'jotai'
+import { useAtomValue, useSetAtom } from 'jotai'
+import { motion } from 'motion/react'
 import type { RefObject } from 'react'
 import { useEffect, useRef, useState } from 'react'
+import { ItemIcon } from '../../src/ItemIcon'
 import { aimInfo, torchHoverAtom, torchWords } from './aim'
 import { useCooling } from './Hud'
-import { aimAtom, gameAtom, heldAtom, meAtom, store } from './state'
+import { AIM_WHAT, hasMouse, SLOT_ICONS, SLOT_NAMES } from './items'
+import { aimAtom, aimedCardAtom, creeperShownAtom, dialogAtom, heldAtom, meAtom, putDown } from './state'
 
 /**
- * 电脑上跟着指针的小提示（docs/V3_ITEMS.md §5）：拿着道具时说这一下会怎样（挖开几格、跳过几格、
- * 能不能插火把），指到火把上说颜色的意思，指到宝库上说还能开几次，镐子冷却时说还要等几秒。
+ * 电脑上跟着指针的小提示（docs/V3_ITEMS.md §5）：指到火把上说颜色的意思，指到宝库上说还能开几次，
+ * 镐子冷却时说还要等几秒。选位置这一步时不出（步骤条在说）。
  * 只有鼠标有；样式和工具条上的提示框一样。位置直接改样式，不让地图跟着重画。
  */
 export function FollowTip({ box }: { box: RefObject<HTMLDivElement | null> }) {
   const held = useAtomValue(heldAtom)
-  const aim = useAtomValue(aimAtom)
   const torch = useAtomValue(torchHoverAtom)
-  const me = useAtomValue(meAtom)
   const cooling = useCooling()
   const tip = useRef<HTMLDivElement>(null)
   const [inside, setInside] = useState(false)
@@ -45,13 +46,40 @@ export function FollowTip({ box }: { box: RefObject<HTMLDivElement | null> }) {
     }
   }, [box])
 
+  // 选位置这一步时不出：顶上的步骤条已经在说这一下会怎样（docs/ITEM_UX.md §3.3，免得说两遍）
   let text = ''
-  if (torch) text = torchWords(torch)
-  else if (held && aim) {
-    // 不订阅整局（每次推送都换）：指针一动、换了位置就重新算
-    const card = store.get(gameAtom)?.cards.find(item => item.id === aim.cardId)
-    if (card) text = aimInfo(held, card, aim.index, me).words
-  } else if (!held && vault) text = vault
-  else if (!held && cooling.seconds) text = `还要等 ${cooling.seconds} 秒才能再挖`
+  if (held) text = ''
+  else if (torch) text = torchWords(torch)
+  else if (vault) text = vault
+  else if (cooling.seconds) text = `还要等 ${cooling.seconds} 秒才能再挖`
   return <div ref={tip} className="follow-tip" hidden={!inside || !text} aria-hidden="true">{text}</div>
+}
+
+/**
+ * 步骤条（docs/ITEM_UX.md §3.3）：瞄准类道具在选位置这一步时，地图顶上一直有一行：这件道具、现在该做什么
+ * （没预览时说点什么，预览以后说这一下会怎样、怎么确认，不能用时说为什么）、问号（再看引导）、取消。
+ * 手机和电脑一样。苦力怕来了时让开。
+ */
+export function StepBar() {
+  const held = useAtomValue(heldAtom)
+  const aim = useAtomValue(aimAtom)
+  const card = useAtomValue(aimedCardAtom)
+  const me = useAtomValue(meAtom)
+  const creeper = useAtomValue(creeperShownAtom)
+  const setDialog = useSetAtom(dialogAtom)
+  if (!held || creeper) return null
+  let line = AIM_WHAT[held]
+  let tone = ''
+  if (aim && card) {
+    const info = aimInfo(held, card, aim.index, me)
+    line = info.ok ? `${info.words}，${hasMouse() ? '点一下确认' : '同一处再点一次确认'}` : info.words
+    tone = info.ok ? ' is-ready' : ' is-bad'
+  }
+  return <motion.div key={held} className={`item-tip top-hint step-bar${tone}`} role="status"
+    initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.16 }}>
+    <ItemIcon kind={SLOT_ICONS[held]} size={22} />
+    <p><b>{SLOT_NAMES[held]}</b>{line}</p>
+    <button type="button" className="step-help" aria-label={`${SLOT_NAMES[held]}怎么用`} onClick={() => setDialog({ type: 'item', slot: held, mode: 'help' })}>?</button>
+    <button type="button" onClick={putDown}>取消</button>
+  </motion.div>
 }

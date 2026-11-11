@@ -3,7 +3,7 @@ import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 
 import { memo, useEffect, useRef, useState } from 'react'
 import { ItemIcon } from '../../src/ItemIcon'
 import { mutedAtom, play, setMuted } from './sound'
-import { blockedAtom, chestNoteAtom, claim, claimingAtom, digIntervalAtom, focusRequestAtom, gameAtom, hongbaoAtom, meAtom, readyAtAtom, settledAtom, summaryOpenAtom, totalOf } from './state'
+import { blockedAtom, chestNoteAtom, claim, claimingAtom, creeperShownAtom, digIntervalAtom, heldAtom, focusRequestAtom, gameAtom, hongbaoAtom, meAtom, readyAtAtom, settledAtom, summaryOpenAtom, totalOf } from './state'
 import { outOfPicks } from './items'
 import type { Kind, PublicCard } from './types'
 import { BIOME_NAMES, KIND_NAMES, KINDS, money } from './types'
@@ -287,7 +287,7 @@ export function Rules({ onClose, onPractice }: { onClose: () => void; onPractice
           <dt><ItemIcon kind="crystal" size={18} /> 末影水晶</dt><dd>藏在末地宝藏里，一张{rules.endMix === 2 ? '一到两颗' : '一颗'}；踩中扣掉还没领的奖励的 {crystalPercent(rules)}%（TNT 的两倍，盾牌能挡）</dd></> : null}
       </dl> : null}
       <p className="rules-tip">拖动地图平移，滚轮或捏合缩放。点旁边的卡就能换过去，方向键也行；+/- 缩放。全图那一级能看到所有的卡，不能拖动。</p>
-      <p className="rules-tip">工具条浮在地图左下角（横屏在左边）：第 1 格是镐子，上面是剩下的机会；挖到的道具排在后面，放不下时可以滑。点一格弹出它的说明，点“使用”就用。对格子用的道具点“使用”以后去地图上点（第一次会先说明，以后点一下工具条就是使用）：手机上先点一下预览，同一处再点一次确认；电脑上指着就能预览，点一下确认。再点它、Esc 或右键取消。拖动永远是挪地图。电脑上按 1–9 选。</p>
+      <p className="rules-tip">工具条浮在地图左下角（横屏在左边）：第 1 格是镐子，上面是剩下的机会；挖到的道具排在后面，放不下时可以滑。点一格弹出它的说明，点“使用”就用。对格子用的道具点“使用”以后，顶上一直有一行说明和取消，去地图上点：手机上先点一下预览，同一处再点一次确认；电脑上指着就能预览，点一下确认。说明弹窗里选“不再提示”就直接开始，顶上的问号能再看。取消也可以再点它、按 Esc 或点右键。拖动永远是挪地图。电脑上按 1–9 选。</p>
       <div className="rules-actions">
         <button type="button" className="rules-practice" onClick={onPractice}>练习一下</button>
         <button type="button" onClick={onClose}>知道了</button>
@@ -304,8 +304,11 @@ export function ChestNote() {
   const [shown, setShown] = useAtom(chestNoteAtom)
   const me = useAtomValue(meAtom)
   const settled = useAtomValue(settledAtom)
+  // 顶上一次一条：苦力怕、步骤条在时让开，之后再出来（docs/ITEM_UX.md §3.3）
+  const held = useAtomValue(heldAtom)
+  const creeper = useAtomValue(creeperShownAtom)
   const chest = me?.chest ?? 0
-  if (!shown || chest <= 0 || settled) return null
+  if (!shown || chest <= 0 || settled || held || creeper) return null
   return <motion.div key={shown} className="item-tip top-hint chest-note" role="status" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}>
     <ItemIcon kind="ender" size={22} />
     <p><b className="is-green">+{money(chest)} 在末影箱里</b>炸不到，金苹果也不翻它，领取时一起加上。</p>

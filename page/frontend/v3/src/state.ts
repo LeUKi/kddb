@@ -57,14 +57,24 @@ export const aimAtom = atom<{ cardId: number; index: number } | null>(null)
 export const peekedAtom = atom<{ cell: string; at: number; words?: string } | null>(null)
 /** 弹窗：末影箱、附魔台、宝库开出的东西 */
 export type Dialog = { type: 'ender' } | { type: 'table' } | { type: 'vault'; text: string; kind: Kind | 'table' | null }
-  /** 工具条上点一格（用户选的 B）：药水、藏宝图确认；被动的和镐子只说明；对准格子的第一次拿起来时 teach，教一次 */
-  | { type: 'item'; slot: Slot; teach?: boolean }
+  /**
+   * 工具条上点一格（docs/ITEM_UX.md）：即用类确认，被动类和镐子说明；瞄准类的引导，enter 是进入选位置前
+   * （有“不再提示”和“使用”），help 是步骤条上的问号（只有“知道了”，关掉回到这一步）
+   */
+  | { type: 'item'; slot: Slot; mode?: 'enter' | 'help' }
 export const dialogAtom = atom<Dialog | null>(null)
 /** 本机时间：苦力怕什么时候来（null 是不来）、急迫药水到什么时候 */
 export const creeperAtAtom = atom<number | null>(null)
 export const hasteUntilAtom = atom(0)
 /** 末影箱的说明开着（打开的时刻，0 是收起）：存进去时打开，点“知道了”收起 */
 export const chestNoteAtom = atom(0)
+/** 苦力怕正在画面上（顶上那一行它最优先，步骤条和通知让开） */
+export const creeperShownAtom = atom(false)
+/** 选位置这一步预览到的那张卡（只在它变了时重画步骤条，不跟着每次推送） */
+export const aimedCardAtom = atom(get => {
+  const aim = get(aimAtom)
+  return aim ? get(gameAtom)?.cards.find(card => card.id === aim.cardId) ?? null : null
+})
 
 /** 放下道具（再点它、用完、Esc、右键）。 */
 export function putDown() {
