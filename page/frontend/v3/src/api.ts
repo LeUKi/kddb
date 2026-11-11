@@ -12,12 +12,19 @@ export class ApiError extends Error {
   }
 }
 
+/** 游戏站的票据管 2 小时（game/worker/auth.mjs TICKET_TTL_MS）：用了这么久的，实时连接重连前先换一张。 */
+const TICKET_FRESH_MS = 110 * 60_000
+/** 重连前认人失败，过这么久再试（不频繁去问红包站）。 */
+const REHELLO_MS = 5 * 60_000
+
 /**
  * 认人（docs/V3_MAP.md §4）：要一个 nonce → hb.identity → /hello 换游戏站的票据。
  * 之后的请求都带票据；票据过期（401）时再走一遍，不会再问他。
  */
 export class GameApi {
   ticket: string | null = null
+  /** 这张票据什么时候拿到的（本机时间） */
+  ticketAt = 0
   uid: number | null = null
 
   constructor(readonly hongbao: string) {}
@@ -34,6 +41,7 @@ export class GameApi {
     if (!identity.identified) throw new ApiError(401, identity.message ?? identityWords[identity.reason] ?? '身份确认失败，稍后再试')
     const answer = await this.raw<State & { ticket: string; uid: number }>('POST', 'hello', undefined, `Bearer ${identity.token}`)
     this.ticket = answer.ticket
+    this.ticketAt = Date.now()
     this.uid = answer.uid
     return answer
   }
@@ -122,17 +130,36 @@ export class GameApi {
     >('POST', 'claim')
   }
 
-  /** 实时推送：断了就退避重连，连上时 onOpen（网页借机按序号补上断开时漏的）。 */
+  /**
+   * 实时推送：断了就退避重连，连上时 onOpen（网页借机按序号补上断开时漏的）。票据快过期了（页面开着
+   * 快 2 小时，比如游戏站发版时连接断了）先重新认人换一张：以前拿着过期票据每 30 秒重连一次，一直 401，
+   * 要等自己挖一下才好（2026-11-11 生产上看到 3 个人这样）。认人失败（不在红包页、没登录）5 分钟后再试。
+   */
   live(onMessage: (message: Live) => void, onOpen: () => void) {
     let socket: WebSocket | null = null
     let closed = false
     let delay = 1000
     let timer: ReturnType<typeof setTimeout> | undefined
-    const open = () => {
-      if (closed || !this.ticket) return
+    const retry = (after = delay) => {
+      timer = setTimeout(() => void open(), after)
+      delay = Math.min(delay * 2, 30_000)
+    }
+    const open = async () => {
+      if (closed) return
+      if (!this.ticket || Date.now() - this.ticketAt > TICKET_FRESH_MS) {
+        try {
+          await this.hello()
+        } catch {
+          retry(REHELLO_MS)
+          return
+        }
+        if (closed) return
+      }
+      const ticket = this.ticket
+      if (!ticket) return retry(REHELLO_MS)
       const url = this.url('live')
       url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
-      url.searchParams.set('ticket', this.ticket)
+      url.searchParams.set('ticket', ticket)
       url.searchParams.set('v', '2')
       socket = new WebSocket(url)
       socket.onopen = () => {
@@ -143,12 +170,10 @@ export class GameApi {
         for (const message of liveMessages(String(event.data))) onMessage(message)
       }
       socket.onclose = () => {
-        if (closed) return
-        timer = setTimeout(open, delay)
-        delay = Math.min(delay * 2, 30_000)
+        if (!closed) retry()
       }
     }
-    open()
+    void open()
     return () => {
       closed = true
       clearTimeout(timer)

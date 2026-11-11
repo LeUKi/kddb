@@ -47,7 +47,7 @@ const HASTE = '#d9c043'
 export function ItemIcon({ kind, size = 32, className = '', moving = false }: { kind: IconKind; size?: number; className?: string; moving?: boolean }) {
   if (kind === 'totem') return <span className={`item-icon pickaxe-pair ${className}`} style={{ width: size, height: size }} aria-hidden="true"><img className="pair-back" src={`${base}/${textures.pickaxe}`} alt="" draggable={false} /><img className="pair-front" src={`${base}/${textures.pickaxe}`} alt="" draggable={false} /></span>
   if (kind === 'apple' && moving) return <picture className={`item-icon ${className}`} style={{ width: size, height: size }} aria-hidden="true"><source media="(prefers-reduced-motion: reduce)" srcSet={`${base}/${textures.apple}`} /><img src={`${base}/inventory/enchanted_golden_apple.gif`} width={size} height={size} alt="" draggable={false} /></picture>
-  if (kind === 'potion') return <span className={`item-icon potion-icon ${className}`} style={{ width: size, height: size, '--tint': HASTE, '--overlay': `url(${base}/textures/item/potion_overlay.png)` } as CSSProperties} aria-hidden="true">
+  if (kind === 'potion') return <span className={`item-icon potion-icon ${className}`} style={{ width: size, height: size, '--tint': HASTE, '--overlay': `url("${new URL(`${base}/textures/item/potion_overlay.png`, document.baseURI).href}")` } as CSSProperties} aria-hidden="true">
     <img className="potion-liquid" src={`${base}/textures/item/potion_overlay.png`} alt="" draggable={false} />
     <span className="potion-tint" />
     <img className="potion-bottle" src={`${base}/${textures.potion}`} alt="" draggable={false} />
