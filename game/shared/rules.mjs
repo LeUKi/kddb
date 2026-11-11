@@ -43,12 +43,17 @@
  *   players?: number,
  *   digInterval?: number,
  *   endMix?: 2,
- *   items?: 1,
+ *   items?: 1|2,
  *   creeper?: number,
  * }} Rules
  */
 /** 挖开的格子；burn: 1 是被岩浆吞掉的（uid 0、名字空）。 @typedef {{ uid: number, name: string, at: number, burn?: 1 }} OpenCell */
-/** 插在卡上的火把：at 是那个角右下的格子。 @typedef {{ at: number, uid: number, name: string }} Torch */
+/**
+ * 插在卡上的火把。第 1 版（items: 1）：at 是那个角右下的格子，颜色按没挖开的算、会变、四格挖开就灭。
+ * 第 2 版（items: 2，§9）：at 是插着的那一格（挖开的），照亮以它为中心的 3×3，level 插下时定下（挖开的
+ * 危险也算，之后不变），一直亮着。
+ * @typedef {{ at: number, uid: number, name: string, level?: number }} Torch
+ */
 /**
  * 新局的卡另有：fixed（固定格子）、vaults（宝库还能开几次）、torches（插过的火把，灭了的也留着）、
  * wardenAt（深暗之域：噪音到这个数唤醒监守者，不公开）、closed（监守者醒了，卡关闭）。
@@ -82,7 +87,7 @@
  *   shields?: number, spyglasses?: number,
  *   items?: Bag, coal?: number, stick?: number, poison?: number, chest?: number,
  *   hasteUntil?: number, slow?: number, tables?: number, maps?: number,
- *   vaultsOpened?: string[], activeAt?: number,
+ *   vaultsOpened?: string[], activeAt?: number, drained?: { from: number, times: number },
  *   peeks: Peek[], points: number, digs: number,
  *   status: 'playing'|'claimed', lastDigAt: number, lastResult: Result|null,
  *   trail?: Step[],
@@ -152,8 +157,10 @@ export const SCRAP_CAP = 2;
 /** 中毒：挖到刷怪笼以后这么多次挖掘，每次扣手上的百分之几（盾牌挡不住）。 */
 export const POISON_TIMES = 3;
 export const POISON_PERCENT = 5;
-/** 蜘蛛网让下一次挖多等这么久。 */
+/** 蜘蛛网让下一次挖多等这么久（第 2 版的局 10 秒，2026-11-11 用户：5 秒不明显）。 */
 export const COBWEB_MS = 5000;
+export const COBWEB_MS_2 = 10_000;
+const cobwebMs = (/** @type {Rules} */ rules) => ((rules.items ?? 0) >= 2 ? COBWEB_MS_2 : COBWEB_MS);
 /** 急迫药水：这么久里挖掘间隔变成 1 秒。 */
 export const HASTE_MS = 10_000;
 /** 下界每挖这么多格，岩浆流一格。 */
@@ -168,6 +175,12 @@ export const CREEPER_DEFAULT = 60;
 export const CREEPER_FUSE_MS = 10_000;
 export const CREEPER_SLACK_MS = 2000;
 export const CREEPER_PERCENT = 20;
+/**
+ * 不领的人（第 2 版的局，§9）：待领取大于 0、这么久没挖也没用道具（网页关了、在后台），游戏站替苦力怕
+ * 每 IDLE_EVERY_MS 炸一次，直到 0。开着网页的人每次苦力怕炸完重新计时，到不了这么久。
+ */
+export const IDLE_MS = 5 * 60_000;
+export const IDLE_EVERY_MS = 60_000;
 /** 附魔台开出的一种附魔镐给几次。 */
 export const TABLE_USES = 2;
 export const SHAPES = /** @type {Shape[]} */ (["h", "v", "x"]);
@@ -269,8 +282,9 @@ export function rulesOf(/** @type {Record<string, unknown>} */ params, /** @type
     digInterval,
     // 末地宝藏的牌按新的随机范围配（开局时定下，存在局里；以前开的局没有这一项，照旧）
     endMix: 2,
-    // 道具栏、区块（同上，以前开的局没有这一项）
-    items: 1,
+    // 道具栏、区块（同上，以前开的局没有这一项）；2026-11-11 下午起是第 2 版（docs/V3_ITEMS.md §9）：
+    // 煤炭木棍各一个就合成、火把照 3×3、蜘蛛网 10 秒、苦力怕至少 0.01、不领的人每分钟被炸
+    items: 2,
     creeper: creeperOf(params.creeper, digInterval),
   });
 }
@@ -907,13 +921,25 @@ function digCell(/** @type {Game} */ game, /** @type {Player} */ player, /** @ty
       const name = KIND_NAMES[kind];
       const other = kind === "coal" ? "stick" : "coal";
       const have = player[kind] ?? 0;
+      publicText = `挖到了${name}`;
+      if ((rules.items ?? 0) >= 2) {
+        // 第 2 版：各一个就合成，多的攒着（不封顶），所以两样不会同时有
+        player[kind] = have + 1;
+        if ((player.coal ?? 0) >= 1 && (player.stick ?? 0) >= 1 && bag) {
+          player.coal = (player.coal ?? 0) - 1;
+          player.stick = (player.stick ?? 0) - 1;
+          bag.torch += 1;
+          text = `获得${name}，和${KIND_NAMES[other]}做成了一个火把`;
+          publicText += "，做成了一个火把";
+        } else text = `获得${name}（${have + 1} 个），再有${KIND_NAMES[other]}就能做成火把`;
+        break;
+      }
       if (have >= SCRAP_CAP) {
         text = `${name}已经够了（${SCRAP_CAP}/${SCRAP_CAP}），这一块不算；再凑齐${KIND_NAMES[other]}就能做成火把`;
       } else {
         player[kind] = have + 1;
         text = `获得${name}（${have + 1}/${SCRAP_CAP}）`;
       }
-      publicText = `挖到了${name}`;
       if ((player.coal ?? 0) >= SCRAP_CAP && (player.stick ?? 0) >= SCRAP_CAP && bag) {
         player.coal = 0;
         player.stick = 0;
@@ -949,8 +975,8 @@ function digCell(/** @type {Game} */ game, /** @type {Player} */ player, /** @ty
       publicText = "挖到了远古残骸";
       break;
     case "cobweb":
-      player.slow = COBWEB_MS;
-      text = `蜘蛛网！下一次挖要多等 ${COBWEB_MS / 1000} 秒`;
+      player.slow = cobwebMs(rules);
+      text = `蜘蛛网！下一次挖要多等 ${cobwebMs(rules) / 1000} 秒`;
       publicText = "被蜘蛛网缠住了";
       break;
     case "spawner":
@@ -1156,8 +1182,27 @@ function cornerCells(/** @type {Card} */ card, /** @type {number} */ index) {
   return [index - card.size - 1, index - card.size, index - 1, index];
 }
 
-/** 火把亮着没有：四格里还有没挖开的（固定的格子不算），卡也没关。 */
+/** 第 2 版的火把照亮的格子：以 index 为中心的 3×3（出界的不算）。 */
+export function torchCells(/** @type {Card} */ card, /** @type {number} */ index) {
+  const { size } = card;
+  const row = Math.floor(index / size);
+  const col = index % size;
+  /** @type {number[]} */
+  const cells = [];
+  for (let r = row - 1; r <= row + 1; r++)
+    for (let c = col - 1; c <= col + 1; c++) if (r >= 0 && r < size && c >= 0 && c < size) cells.push(r * size + c);
+  return cells;
+}
+
+/** 第 2 版火把的颜色：3×3 里一共几个危险（挖开的也算）：0 绿、1–2 黄（1）、3–4 橙（2）、5 个以上红（3）。 */
+export function torchLevel2(/** @type {Card} */ card, /** @type {number} */ at) {
+  const danger = torchCells(card, at).filter((index) => DANGER.has(card.deck[index])).length;
+  return danger === 0 ? 0 : danger <= 2 ? 1 : danger <= 4 ? 2 : 3;
+}
+
+/** 火把亮着没有。第 2 版一直亮着（卡关了就不显示）；第 1 版四格里还有没挖开的（固定的格子不算），卡也没关。 */
 function torchLit(/** @type {Card} */ card, /** @type {number} */ at) {
+  if (card.torches?.find((torch) => torch.at === at)?.level !== undefined) return !card.closed;
   return !card.closed && cornerCells(card, at).some((index) => card.opened[index] === null && card.fixed?.[index] === undefined);
 }
 
@@ -1168,11 +1213,12 @@ export function torchLevel(/** @type {Card} */ card, /** @type {number} */ at) {
 }
 
 const TORCH_WORDS = ["绿色：这四格里没有危险", "黄色：这四格里有 1–2 个危险", "红色：这四格里有 3–4 个危险"];
+const TORCH_WORDS_2 = ["绿色：周围 9 格里没有危险", "黄色：周围 9 格里有 1～2 个危险", "橙色：周围 9 格里有 3～4 个危险", "红色：周围 9 格里有 5 个以上危险"];
 
-/** 亮着的火把，给大家看的样子（颜色每次都按现在的牌算）。 */
+/** 亮着的火把，给大家看的样子（第 1 版颜色每次都按现在的牌算，第 2 版是插下时定的）。 */
 export function publicTorches(/** @type {Card} */ card) {
   return (card.torches ?? []).filter((torch) => torchLit(card, torch.at))
-    .map((torch) => ({ at: torch.at, level: torchLevel(card, torch.at), name: torch.name }));
+    .map((torch) => ({ at: torch.at, level: torch.level ?? torchLevel(card, torch.at), name: torch.name }));
 }
 
 /**
@@ -1235,6 +1281,19 @@ function itemEffect(
       if (bag.torch <= 0) return { ok: false, message: "你手里没有火把" };
       const wrong = onCard();
       if (wrong || !card) return { ok: false, message: wrong ?? "没有这张卡" };
+      if ((rules.items ?? 0) >= 2) {
+        // 第 2 版：插在挖开的格子上，照 3×3，颜色插下时定下（挖开的危险也算）
+        if (card.closed) return { ok: false, message: "监守者醒了，这张卡已经关闭" };
+        const open = card.opened[index];
+        if (card.fixed?.[index] !== undefined || !open || open.burn) return { ok: false, message: "火把只能插在挖开的格子上" };
+        if ((card.torches ?? []).some((torch) => torch.at === index)) return { ok: false, message: "这一格已经插了火把" };
+        if (torchCells(card, index).every((at) => card.opened[at] !== null || card.fixed?.[at] !== undefined))
+          return { ok: false, message: "周围的格子都挖开了，插火把没有用" };
+        const level = torchLevel2(card, index);
+        bag.torch -= 1;
+        (card.torches ??= []).push({ at: index, uid: player.uid, name: player.name, level });
+        return { ok: true, card, text: `火把插好了，大家都看得见。它是${TORCH_WORDS_2[level]}（挖开的也算）` };
+      }
       if (Math.floor(index / card.size) < 1 || index % card.size < 1) return { ok: false, message: "火把要插在卡内部四格相交的地方" };
       if (card.closed) return { ok: false, message: "监守者醒了，这张卡已经关闭" };
       if ((card.torches ?? []).some((torch) => torch.at === index)) return { ok: false, message: "这个角已经插了火把" };
@@ -1381,12 +1440,63 @@ export function creeperBlast(/** @type {Game} */ game, /** @type {Player} */ pla
   if (player.points <= 0) return { ok: false, message: "手上没有分，苦力怕不会来" };
   if (now - (player.activeAt ?? now) < seconds * 1000 + CREEPER_FUSE_MS - CREEPER_SLACK_MS)
     return { ok: false, message: "苦力怕还没到时候" };
-  const lost = percentOf(player.points, CREEPER_PERCENT);
+  const lost = creeperLoss(game.rules, player.points);
   player.points -= lost;
   game.used -= lost;
   player.activeAt = now;
   if (lost > 0) player.trail?.push({ k: "creeper", a: -lost, p: totalOf(player) });
   return { ok: true, lost, text: `苦力怕爆炸了！手上的奖励 -${formatPoints(lost)}（${CREEPER_PERCENT}%，向下取整）` };
+}
+
+/** 苦力怕炸一次扣多少：20% 向下取整；第 2 版的局至少 0.01（以前 0.04 以下扣 0，永远扣不完）。 */
+function creeperLoss(/** @type {Rules} */ rules, /** @type {number} */ points) {
+  const lost = percentOf(points, CREEPER_PERCENT);
+  return (rules.items ?? 0) >= 2 && points > 0 ? Math.max(1, lost) : lost;
+}
+
+/** 不领的人没动多久起被炸：5 分钟，苦力怕参数更长时等网页上的苦力怕先来过（参数加 10 秒）。 */
+export const idleDelayOf = (/** @type {Rules} */ rules) => Math.max(IDLE_MS, creeperSeconds(rules) * 1000 + CREEPER_FUSE_MS);
+
+/** 不领的人从什么时候起被炸。 */
+const idleFrom = (/** @type {Game} */ game, /** @type {Player} */ player) => (player.activeAt ?? 0) + idleDelayOf(game.rules);
+
+/** 这个人会不会被当成不领的人炸（第 2 版的局、开着苦力怕、手上有分、还能挖）。 */
+function drainable(/** @type {Game} */ game, /** @type {Player} */ player, /** @type {number} */ now) {
+  return (game.rules.items ?? 0) >= 2 && creeperSeconds(game.rules) > 0 && player.status === "playing"
+    && player.points > 0 && !digBlocked(game, player, now, { cooling: false });
+}
+
+/**
+ * 不领的人（§9）：5 分钟没挖、没用道具起，每 60 秒苦力怕炸一次（20%，至少 0.01），把到 now 为止该炸的
+ * 几次一起算掉（谁来算都一样：本人回来时、游戏站的闹钟）；扣掉的回到预算，逐格记录里记一步。返回这次
+ * 扣掉的分（0 是没到时候或不适用）。drained 记着从哪次动作（activeAt）起已经炸过几次，动一下就重来。
+ */
+export function drainIdle(/** @type {Game} */ game, /** @type {Player} */ player, /** @type {number} */ now) {
+  if (!drainable(game, player, now)) return 0;
+  const from = idleFrom(game, player);
+  if (now < from) return 0;
+  const done = player.drained?.from === player.activeAt ? player.drained.times : 0;
+  const due = Math.floor((now - from) / IDLE_EVERY_MS) + 1;
+  let lost = 0;
+  for (let time = done; time < due && player.points > 0; time++) {
+    const each = creeperLoss(game.rules, player.points);
+    player.points -= each;
+    lost += each;
+  }
+  player.drained = { from: player.activeAt ?? 0, times: due };
+  if (lost > 0) {
+    game.used -= lost;
+    player.trail?.push({ k: "creeper", a: -lost, p: totalOf(player) });
+  }
+  return lost;
+}
+
+/** 下一次该炸这个人的时刻（游戏站定闹钟用）；不适用时 null。 */
+export function idleNextAt(/** @type {Game} */ game, /** @type {Player} */ player, /** @type {number} */ now) {
+  if (!drainable(game, player, now)) return null;
+  const from = idleFrom(game, player);
+  const done = player.drained?.from === player.activeAt ? player.drained.times : 0;
+  return from + done * IDLE_EVERY_MS;
 }
 
 /** 末影水晶扣还没领的奖励的百分之几：TNT 的两倍，最多 100。 */

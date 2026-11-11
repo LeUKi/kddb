@@ -5,8 +5,8 @@
 // storage 那几个方法，测试里用一个 Map 顶替。
 
 import {
-  amountOf, claim, createGame, creeperBlast, dig, digBlocked, dugOf, newPlayer, privatePlayer,
-  publicCard, publicGame, publicTorches, rulesOf, summaryOf, topWith, totalOf, useItem,
+  amountOf, claim, createGame, creeperBlast, dig, digBlocked, drainIdle, dugOf, IDLE_EVERY_MS, idleDelayOf, idleNextAt,
+  newPlayer, privatePlayer, publicCard, publicGame, publicTorches, rulesOf, summaryOf, topWith, totalOf, useItem,
 } from "../shared/rules.mjs";
 import { BOT_BASE, BOT_COUNT, pickCell } from "./bots.mjs";
 
@@ -69,10 +69,26 @@ export class MineRoom {
   recent = [];
   /** 下一个挖的机器人（Stage 压测） */
   botNext = 0;
+  /**
+   * 不领的人（docs/V3_ITEMS.md §9）：手上有分的人记一个 hold:<uid>（只在开始、不再有分时写），闹钟
+   * 按它找人；holders 是内存里的那一份（null 是还没读），holdNext 是每人下一次该炸的时刻（算过的才有，
+   * 闹钟醒来时没到点的不用读这个人）。alarmAt：定好的闹钟（undefined 是还没问过）。
+   * @type {Set<number>|null}
+   */
+  holders = null;
+  /** @type {Map<number, number>} */
+  holdNext = new Map();
+  /** @type {number|null|undefined} */
+  alarmAt = undefined;
+  /** 要推给大家、还没交出去的（不领的人被炸以后奖池变了）；游戏站每次处理完请求取走。 @type {Record<string, unknown>[]} */
+  outbox = [];
 
   /**
    * @param {Storage} storage
-   * @param {{ sign: (fields: { openedAt: number, id: number, points: number }) => Promise<string>, seed: () => string }} tools
+   * @param {{
+   *   sign: (fields: { openedAt: number, id: number, points: number }) => Promise<string>, seed: () => string,
+   *   alarm?: { get: () => Promise<number|null>, set: (at: number) => Promise<void> },
+   * }} tools
    */
   constructor(storage, tools) {
     this.storage = storage;
@@ -138,8 +154,141 @@ export class MineRoom {
   async state(/** @type {Info} */ info, /** @type {number} */ uid, /** @type {string} */ name, /** @type {number} */ now, { touch = true } = {}) {
     const game = await this.gameFor(info);
     const player = await this.playerOf(game, uid, name);
+    const drained = await this.settle(info, game, player, now);
     if (touch && game.rules.items) player.activeAt = now;
-    return { game: publicGame(game), me: this.me(info, game, player, now), blocked: this.blocked(info, game, player, now) };
+    return {
+      game: publicGame(game), me: this.me(info, game, player, now), blocked: this.blocked(info, game, player, now),
+      ...(drained > 0 ? { drained } : {}),
+    };
+  }
+
+  /**
+   * 不领的人回来了（或者来看一眼）：先把离开时该炸的几次算掉、存下，再做别的；红包结束、暂停时不算。
+   * 炸掉的回到奖池，推一条 drain 给大家改奖池还剩多少。返回炸掉的分。
+   */
+  async settle(/** @type {Info} */ info, /** @type {Game} */ game, /** @type {Player} */ player, /** @type {number} */ now) {
+    if (info.status !== "active" || info.paused) return 0;
+    const lost = drainIdle(game, player, now);
+    if (lost > 0) {
+      const { cards: _cards, ...meta } = game;
+      await this.save(game, player, { game: meta, [`player:${player.uid}`]: player }, now);
+      this.outbox.push({ type: "drain", uids: [player.uid], left: game.pool - game.used, over: game.over });
+    }
+    return lost;
+  }
+
+  /** 存一个人（和同一次要存的别的）：手上有分的第 2 版局记进 hold:，不再有分时删掉，并确保有闹钟。 */
+  async save(/** @type {Game} */ game, /** @type {Player} */ player, /** @type {Record<string, unknown>} */ entries, /** @type {number} */ now) {
+    if ((game.rules.items ?? 0) < 2) {
+      await this.storage.put(entries);
+      return;
+    }
+    const holders = await this.holderSet();
+    const key = `hold:${player.uid}`;
+    const holding = player.status === "playing" && player.points > 0;
+    if (holding && !holders.has(player.uid)) {
+      entries[key] = 1;
+      holders.add(player.uid);
+    }
+    await this.storage.put(entries);
+    if (!holding && holders.has(player.uid)) {
+      holders.delete(player.uid);
+      this.holdNext.delete(player.uid);
+      await this.storage.delete([key]);
+    }
+    if (!holding) return;
+    const next = idleNextAt(game, player, now);
+    if (next === null) this.holdNext.delete(player.uid);
+    else this.holdNext.set(player.uid, next);
+    await this.wake(game, now);
+  }
+
+  /** hold: 的那些人（第一次要时读一遍）。 */
+  async holderSet() {
+    if (this.holders) return this.holders;
+    const keys = await this.storage.list({ prefix: "hold:" });
+    this.holders = new Set([...keys.keys()].map((key) => Number(key.slice(5))));
+    return this.holders;
+  }
+
+  /** 有人手上有分时确保有闹钟：没有定好的，就定在最早可能该炸的时候（现在加 5 分钟）。 */
+  async wake(/** @type {Game} */ game, /** @type {number} */ now) {
+    const alarm = this.tools.alarm;
+    if (!alarm) return;
+    if (this.alarmAt === undefined) this.alarmAt = await alarm.get();
+    if (this.alarmAt !== null && this.alarmAt !== undefined && this.alarmAt >= now - IDLE_EVERY_MS) return;
+    this.alarmAt = now + idleDelayOf(game.rules);
+    await alarm.set(this.alarmAt);
+  }
+
+  /**
+   * 闹钟（每个红包一个，只在有人手上有分时定，最多一分钟醒一次）：把到点的不领的人该炸的几次算掉、
+   * 存下，推一条 drain；再按最早的下一次定闹钟。红包结束了就不再定；暂停时 5 分钟后再看。
+   * @returns {Promise<{ drained: number[], left: number, over: boolean }>}
+   */
+  async alarm(/** @type {Info} */ info, /** @type {number} */ now) {
+    this.alarmAt = null;
+    await this.load();
+    const game = this.game;
+    if (!game || info.status !== "active") return { drained: [], left: 0, over: true };
+    const set = async (/** @type {number} */ at) => {
+      this.alarmAt = Math.max(at, now + IDLE_EVERY_MS);
+      await this.tools.alarm?.set(this.alarmAt);
+    };
+    if (info.paused) {
+      await set(now + 5 * IDLE_EVERY_MS);
+      return { drained: [], left: game.pool - game.used, over: game.over };
+    }
+    const holders = await this.holderSet();
+    /** @type {number[]} */
+    const drained = [];
+    /** @type {Record<string, unknown>} */
+    const entries = {};
+    /** @type {string[]} */
+    const gone = [];
+    let next = Infinity;
+    for (const uid of [...holders]) {
+      const known = this.holdNext.get(uid);
+      if (known !== undefined && known > now) {
+        next = Math.min(next, known);
+        continue;
+      }
+      const player = this.players.get(uid) ?? /** @type {Player|undefined} */ (await this.storage.get(`player:${uid}`));
+      if (!player) {
+        gone.push(`hold:${uid}`);
+        holders.delete(uid);
+        continue;
+      }
+      this.players.set(uid, player);
+      if (drainIdle(game, player, now) > 0) {
+        drained.push(uid);
+        entries[`player:${uid}`] = player;
+      }
+      const at = player.status === "playing" && player.points > 0 ? idleNextAt(game, player, now) : null;
+      if (at === null) {
+        gone.push(`hold:${uid}`);
+        holders.delete(uid);
+        this.holdNext.delete(uid);
+      } else {
+        this.holdNext.set(uid, at);
+        next = Math.min(next, at);
+      }
+    }
+    if (drained.length > 0) {
+      const { cards: _cards, ...meta } = game;
+      entries.game = meta;
+      await this.storage.put(entries);
+    }
+    if (gone.length > 0) await this.storage.delete(gone);
+    if (next !== Infinity) await set(next);
+    return { drained, left: game.pool - game.used, over: game.over };
+  }
+
+  /** 攒着要推的，取走。 */
+  takeOutbox() {
+    const out = this.outbox;
+    this.outbox = [];
+    return out;
   }
 
   /**
@@ -182,6 +331,7 @@ export class MineRoom {
     };
     if (info.status !== "active") return refused("红包已经结束了");
     if (info.paused) return refused("红包暂停了，稍后再试");
+    await this.settle(info, game, player, now);
     const out = dig(game, player, { cardId: at.cardId, index: at.index, now });
     if (!out.ok) return refused(out.message);
     const { cards, ...meta } = game;
@@ -193,7 +343,7 @@ export class MineRoom {
       [`log:${String(game.seq).padStart(9, "0")}`]: { uid, cardId: at.cardId, index: at.index, at: now },
     };
     if (out.newCard) entries[`card:${out.newCard.id}`] = out.newCard;
-    await this.storage.put(entries);
+    await this.save(game, player, entries, now);
     const { broadcast, cell } = this.publish(game, player, out, { left: game.pool - game.used, over: game.over, stats: { ...game.stats } });
     // 挖的人直接拿到这次的变化（update），不等推送
     return {
@@ -264,6 +414,7 @@ export class MineRoom {
     };
     if (info.status !== "active") return refused("红包已经结束了");
     if (info.paused) return refused("红包暂停了，稍后再试");
+    await this.settle(info, game, player, now);
     const out = useItem(game, player, { ...at, now });
     if (!out.ok) return refused(String(out.message));
     const { cards, ...meta } = game;
@@ -298,7 +449,7 @@ export class MineRoom {
         pushes.push([{ type: "card", card: shown, left: game.pool - game.used, over: game.over }, null]);
       }
     }
-    await this.storage.put(entries);
+    await this.save(game, player, entries, now);
     // left：末影箱毁掉的、中毒扣的回到奖池，没有推送，网页从这里改奖池还剩多少
     return { answer: { ...answer, left: game.pool - game.used, me: this.me(info, game, player, now), blocked: this.blocked(info, game, player, now) }, pushes };
   }
@@ -314,10 +465,11 @@ export class MineRoom {
       ({ ok: false, message, lost: 0, me: this.me(info, game, player, now), blocked: this.blocked(info, game, player, now) });
     if (info.status !== "active") return refused("红包已经结束了");
     if (info.paused) return refused("红包暂停了，稍后再试");
+    await this.settle(info, game, player, now);
     const out = creeperBlast(game, player, now);
     if (!out.ok) return refused(out.message);
     const { cards: _cards, ...meta } = game;
-    await this.storage.put({ game: meta, [`player:${uid}`]: player });
+    await this.save(game, player, { game: meta, [`player:${uid}`]: player }, now);
     return { ok: true, lost: out.lost, text: out.text, left: game.pool - game.used, me: this.me(info, game, player, now), blocked: this.blocked(info, game, player, now) };
   }
 
@@ -372,6 +524,7 @@ export class MineRoom {
   async summary(/** @type {Info} */ info, /** @type {number} */ uid, /** @type {string} */ name) {
     const game = await this.gameFor(info);
     const player = await this.playerOf(game, uid, name);
+    await this.settle(info, game, player, Date.now());
     await this.topOf(game);
     return summaryOf(game, player);
   }
@@ -405,6 +558,7 @@ export class MineRoom {
     const player = await this.playerOf(game, uid, name);
     if (info.status !== "active" && player.status !== "claimed")
       return { answer: { ok: false, message: "红包已经结束了，没领的奖励作废", me: this.me(info, game, player, now) }, broadcast: null };
+    await this.settle(info, game, player, now);
     // 手里没有分（手上加末影箱）：不签凭证（交上去只会在红包里记一笔“领取 0.00”）
     if (player.status !== "claimed" && totalOf(player) <= 0)
       return { answer: { ok: false, message: "手里还没有奖励，不用领取", me: this.me(info, game, player, now) }, broadcast: null };
@@ -418,7 +572,7 @@ export class MineRoom {
     const { voucher } = kept;
     if (first) {
       const { cards: _cards, ...meta } = game;
-      await this.storage.put({ game: meta, [`player:${uid}`]: player });
+      await this.save(game, player, { game: meta, [`player:${uid}`]: player }, now);
     }
     return {
       answer: { ok: true, voucher, points, me: this.me(info, game, player, now) },

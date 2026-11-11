@@ -90,7 +90,42 @@ export class MineObject extends DurableObject {
       // LOCAL_SEED 只在本地联调里有（wrangler.jsonc 的 env.local），线上每局随机
       seed: () => env.LOCAL_SEED || [...crypto.getRandomValues(new Uint8Array(32))].map((byte) => byte.toString(16).padStart(2, "0")).join(""),
       sign: async (fields) => signVoucher({ ...fields, kid: env.CLAIM_KID }, JSON.parse(env.CLAIM_KEY)),
+      // 不领的人的闹钟（docs/V3_ITEMS.md §9）：每个红包一个
+      alarm: { get: () => ctx.storage.getAlarm(), set: (at) => ctx.storage.setAlarm(at) },
     });
+  }
+
+  /** 这个对象是哪个红包的（闹钟醒来时要读红包信息）：第一次知道时存下。 */
+  hongbaoKept = "";
+
+  async keepHongbao(/** @type {string} */ hongbao) {
+    if (!hongbao || this.hongbaoKept === hongbao) return;
+    if ((await this.ctx.storage.get("hongbao")) !== hongbao) await this.ctx.storage.put("hongbao", hongbao);
+    this.hongbaoKept = hongbao;
+  }
+
+  /** 闹钟：把到点的不领的人该炸的算掉，奖池变了推给大家（room.alarm 自己定下一次）。 */
+  async alarm() {
+    const hongbao = /** @type {string|undefined} */ (await this.ctx.storage.get("hongbao"));
+    if (!hongbao) return;
+    try {
+      const out = await this.room.alarm(await this.info(hongbao), Date.now());
+      if (out.drained.length > 0) this.pushes.push({ type: "drain", uids: out.drained, left: out.left, over: out.over });
+    } catch (error) {
+      // 红包站读不到：5 分钟后再来
+      console.error("mine_alarm", { error: String(error) });
+      await this.ctx.storage.setAlarm(Date.now() + 5 * 60_000);
+    }
+  }
+
+  /** @param {Request} request */
+  async fetch(request) {
+    const hongbao = new URL(request.url).searchParams.get("hb") ?? "";
+    const response = await this.handle(request);
+    // 不领的人回来时被炸了：奖池变了，推给大家
+    for (const message of this.room.takeOutbox()) this.pushes.push(message);
+    if (response.status < 400 && hongbao && !this.hongbaoKept) await this.keepHongbao(hongbao).catch(() => {});
+    return response;
   }
 
   /**
@@ -135,7 +170,7 @@ export class MineObject extends DurableObject {
   }
 
   /** @param {Request} request */
-  async fetch(request) {
+  async handle(request) {
     const url = new URL(request.url);
     const hongbao = url.searchParams.get("hb") ?? "";
     const route = `${request.method} ${url.pathname.slice("/v3/api".length)}`;

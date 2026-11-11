@@ -4,6 +4,7 @@ import {
   amountOf, budgetLeft, claim, createGame, creeperBlast, crystalPercent, dig, digBlocked, formatPoints,
   averageUnits, coolingOf, MIN_INTERVAL_MS, newCard, newEndCard, newPlayer, placeFor, POOL_TARGET, privatePlayer, publicCard, publicGame,
   publicTorches, randomOf, rewardFor, rulesOf, SHIELD_CAP, shieldsOf, summaryOf, tableChoicesOf, topWith, useItem, usePick, WRAP_UP_MS,
+  drainIdle, idleNextAt, IDLE_MS, IDLE_EVERY_MS,
 } from "../shared/rules.mjs";
 
 const T0 = Date.parse("2026-11-06T12:00:00+08:00");
@@ -368,7 +369,7 @@ describe("挖", () => {
 describe("道具栏（新局）", () => {
   it("新局开道具栏，以前开的局没有；新来的人盾牌、望远镜都是 0", () => {
     const g = game();
-    assert.equal(g.rules.items, 1);
+    assert.equal(g.rules.items, 2);
     const p = newPlayer(g, 10001, "小明");
     assert.deepEqual([p.shields, p.spyglasses, p.shield], [0, 0, false]);
     assert.deepEqual([privatePlayer(p).shields, privatePlayer(p).spyglasses], [0, 0]);
@@ -712,8 +713,25 @@ describe("新局的格子和区块（docs/V3_ITEMS.md §1、§2）", () => {
 });
 
 describe("新局的道具（docs/V3_ITEMS.md §3）", () => {
-  it("煤炭、木棍各攒 2 格，满了再挖到不算；两样都满自动做成一个火把，两样清零", () => {
+  it("第 2 版：煤炭、木棍各一个就合成火把，多的攒着不封顶，两样不会同时有", () => {
     const g = game();
+    stack(g, 1, { 0: "coal", 1: "coal", 2: "coal", 3: "stick", 4: "stick", 5: "stick", 6: "stick", 7: "stick" });
+    const p = newPlayer(g, 10001, "小明");
+    const texts = [0, 1, 2, 3, 4, 5, 6, 7].map((index) => {
+      const out = dig(g, p, { cardId: 1, index, now: later() });
+      assert.ok(out.ok && out.result.amount === 0);
+      return [out.result.text, out.feed.text, p.coal, p.stick, p.items.torch];
+    });
+    assert.deepEqual(texts[2], ["获得煤炭（3 个），再有木棍就能做成火把", "挖到了煤炭", 3, 0, 0]);
+    assert.deepEqual(texts[3], ["获得木棍，和煤炭做成了一个火把", "挖到了木棍，做成了一个火把", 2, 0, 1]);
+    assert.deepEqual(texts[5].slice(2), [0, 0, 3]);
+    assert.deepEqual(texts[7], ["获得木棍（2 个），再有煤炭就能做成火把", "挖到了木棍", 0, 2, 3]);
+    assert.equal(privatePlayer(p, g, clock).stick, 2);
+  });
+
+  it("第 1 版：煤炭、木棍各攒 2 格，满了再挖到不算；两样都满自动做成一个火把，两样清零", () => {
+    const g = game();
+    g.rules.items = 1;
     stack(g, 1, { 0: "coal", 1: "coal", 2: "coal", 3: "stick", 4: "stick" });
     const p = newPlayer(g, 10001, "小明");
     const texts = [0, 1, 2, 3].map((index) => {
@@ -762,8 +780,21 @@ describe("新局的道具（docs/V3_ITEMS.md §3）", () => {
     assert.deepEqual(p.trail.filter((step) => step.k === "poison").map((step) => step.a), [-1, -1, -2, -3]);
   });
 
-  it("蜘蛛网：下一次挖要多等 5 秒，网页拿到的等待里说得出蜘蛛网占多少；挖过一次就没了", () => {
+  it("第 2 版：蜘蛛网让下一次挖多等 10 秒", () => {
+    const g = game();
+    stack(g, 1, { 1: "cobweb" });
+    const p = newPlayer(g, 10001, "小明");
+    const t = clock + 60_000;
+    assert.ok(dig(g, p, { cardId: 1, index: 0, now: t }).ok);
+    assert.match(dig(g, p, { cardId: 1, index: 1, now: t + 1000 }).result.text, /多等 10 秒/);
+    assert.equal(privatePlayer(p, g, t + 1000).coolingMs, 11_000);
+    assert.equal(dig(g, p, { cardId: 1, index: 2, now: t + 11_999 }).ok, false);
+    assert.ok(dig(g, p, { cardId: 1, index: 2, now: t + 12_000 }).ok);
+  });
+
+  it("第 1 版：蜘蛛网：下一次挖要多等 5 秒，网页拿到的等待里说得出蜘蛛网占多少；挖过一次就没了", () => {
     const g = game({ params: { interval: "3" } });
+    g.rules.items = 1;
     stack(g, 1, { 1: "cobweb" });
     const p = newPlayer(g, 10001, "小明");
     const t = clock + 60_000;
@@ -980,8 +1011,37 @@ describe("新局的道具（docs/V3_ITEMS.md §3）", () => {
     assert.equal(excluded.size, 3);
   });
 
-  it("火把：插在卡内部四格相交的地方，一个角一个；颜色按没挖开的危险数，挖开就变，四格都挖开就灭", () => {
+  it("第 2 版火把：插在挖开的格子上，照 3×3；颜色数 9 格里所有危险（挖开的也算）、插下就定，一直亮着", () => {
     const g = game();
+    // 5×5：0 1 2 3 4 / 5 6 7 8 9 / ...
+    const card = stack(g, 1, { 0: "tnt", 1: "tnt", 2: "spawner", 5: "crystal", 7: "tnt", 10: "tnt", 24: "tnt" });
+    const p = newPlayer(g, 10001, "小明");
+    p.items.torch = 5;
+    p.shields = 3;
+    p.shield = true;
+    assert.match(useItem(g, p, { item: "torch", cardId: 1, index: 6, now: later() }).message, /只能插在挖开的格子上/);
+    dig(g, p, { cardId: 1, index: 6, now: later() });
+    const red = useItem(g, p, { item: "torch", cardId: 1, index: 6, now: later() }); // 0、1、2、5、7、10（11、12 没有）：6 个
+    assert.ok(red.ok);
+    assert.match(red.text, /红色：周围 9 格里有 5 个以上危险/);
+    assert.match(useItem(g, p, { item: "torch", cardId: 1, index: 6, now: later() }).message, /已经插了火把/);
+    dig(g, p, { cardId: 1, index: 0, now: later() }); // 挖开一个 TNT（盾牌挡住）
+    dig(g, p, { cardId: 1, index: 18, now: later() });
+    assert.ok(useItem(g, p, { item: "torch", cardId: 1, index: 0, now: later() }).ok); // 角上：0、1、5、6 → 3 个
+    assert.ok(useItem(g, p, { item: "torch", cardId: 1, index: 18, now: later() }).ok); // 12、13、14、17、18、19、22、23、24 → 1 个
+    assert.deepEqual(publicTorches(card).map((torch) => [torch.at, torch.level]), [[6, 3], [0, 2], [18, 1]]);
+    for (const index of [1, 2, 5, 7, 10, 11, 12]) dig(g, p, { cardId: 1, index, now: later() });
+    assert.deepEqual(publicTorches(card).map((torch) => [torch.at, torch.level]), [[6, 3], [0, 2], [18, 1]]); // 挖开了也不变、不灭
+    assert.match(useItem(g, p, { item: "torch", cardId: 1, index: 1, now: later() }).message, /周围的格子都挖开了/);
+    assert.equal(p.items.torch, 2);
+    const lava = biomeCard(g, "nether");
+    const at = Number(Object.keys(lava.fixed)[0]);
+    assert.match(useItem(g, p, { item: "torch", cardId: lava.id, index: at, now: later() }).message, /只能插在挖开的格子上/);
+  });
+
+  it("第 1 版火把：插在卡内部四格相交的地方，一个角一个；颜色按没挖开的危险数，挖开就变，四格都挖开就灭", () => {
+    const g = game();
+    g.rules.items = 1;
     const card = stack(g, 1, { 0: "tnt", 1: "tnt", 5: "spawner", 6: "crystal", 12: "tnt" });
     const p = newPlayer(g, 10001, "小明");
     p.items.torch = 4;
@@ -1112,8 +1172,9 @@ describe("新局的道具（docs/V3_ITEMS.md §3）", () => {
     p.shield = true;
     p.chest = 7;
     p.items.torch = 1;
-    assert.ok(useItem(g, p, { item: "torch", cardId: card.id, index: 8, now: later() }).ok);
-    for (const index of [20, 21]) dig(g, p, { cardId: card.id, index, now: later() });
+    dig(g, p, { cardId: card.id, index: 20, now: later() });
+    assert.ok(useItem(g, p, { item: "torch", cardId: card.id, index: 20, now: later() }).ok);
+    dig(g, p, { cardId: card.id, index: 21, now: later() });
     assert.deepEqual([publicCard(card).noise, publicCard(card).closed], [2, false]);
     const loud = dig(g, p, { cardId: card.id, index: 22, now: later() });
     assert.ok(loud.ok);
@@ -1227,6 +1288,83 @@ describe("新局的道具（docs/V3_ITEMS.md §3）", () => {
     ]);
     assert.deepEqual(me.items, { torch: 0, map: 0, potion: 0, ender: 0, table: 0, key: 0, pick: { h: 0, v: 0, x: 0 } });
     assert.deepEqual([me.hasteMs, me.slowMs, me.tableChoices, me.creeperMs, me.vaultsOpened], [0, 0, null, null, []]);
+  });
+});
+
+describe("不领的人（第 2 版，docs/V3_ITEMS.md §9）", () => {
+  it("苦力怕每次至少扣 0.01（第 1 版 4 分以下扣 0）", () => {
+    const g = game();
+    const p = newPlayer(g, 10001, "小明");
+    const t = clock + 1000;
+    p.points = 4;
+    g.used = 4;
+    p.activeAt = t;
+    const boom = creeperBlast(g, p, t + 68_000);
+    assert.deepEqual([boom.ok, boom.lost, p.points, g.used], [true, 1, 3, 3]);
+    g.rules.items = 1;
+    p.activeAt = t + 68_000;
+    assert.equal(creeperBlast(g, p, t + 136_000).lost, 0);
+  });
+
+  it("5 分钟没动起每 60 秒炸一次（20%，至少 0.01），到点的几次一起算，怎么分着算结果都一样；动一下重来", () => {
+    const make = () => {
+      const g = game();
+      const p = newPlayer(g, 10001, "小明");
+      p.points = 1000;
+      g.used = 1000;
+      p.activeAt = clock;
+      return { g, p };
+    };
+    const t = clock;
+    const { g, p } = make();
+    assert.equal(idleNextAt(g, p, t), t + IDLE_MS);
+    assert.equal(drainIdle(g, p, t + IDLE_MS - 1), 0);
+    assert.equal(drainIdle(g, p, t + IDLE_MS), 200);
+    assert.equal(drainIdle(g, p, t + IDLE_MS + IDLE_EVERY_MS - 1), 0);
+    assert.equal(idleNextAt(g, p, t + IDLE_MS), t + IDLE_MS + IDLE_EVERY_MS);
+    assert.equal(drainIdle(g, p, t + IDLE_MS + 2 * IDLE_EVERY_MS), 160 + 128);
+    assert.deepEqual([p.points, g.used], [512, 512]);
+    assert.deepEqual(p.trail.slice(-2), [{ k: "creeper", a: -200, p: 800 }, { k: "creeper", a: -288, p: 512 }]);
+    // 一次算到同一时刻：一样
+    const other = make();
+    assert.equal(drainIdle(other.g, other.p, t + IDLE_MS + 2 * IDLE_EVERY_MS), 488);
+    // 一直没人来：扣到 0 为止（最后几次各 0.01）
+    drainIdle(g, p, t + IDLE_MS + 60 * IDLE_EVERY_MS);
+    assert.deepEqual([p.points, g.used, idleNextAt(g, p, t + 3600_000)], [0, 0, null]);
+    // 动一下（activeAt 变了）重新算 5 分钟
+    const back = make();
+    drainIdle(back.g, back.p, t + IDLE_MS);
+    back.p.activeAt = t + IDLE_MS + 1000;
+    assert.equal(drainIdle(back.g, back.p, t + IDLE_MS + 2000), 0);
+    assert.equal(idleNextAt(back.g, back.p, t + IDLE_MS + 2000), t + 2 * IDLE_MS + 1000);
+  });
+
+  it("不炸的：苦力怕关着、第 1 版、领了、手上没分、机会用完、快截止；苦力怕参数比 5 分钟长时等它先来", () => {
+    const t = clock;
+    const holder = (/** @type {Record<string, unknown>} */ params = {}) => {
+      const g = game({ params });
+      const p = newPlayer(g, 10001, "小明");
+      p.points = 100;
+      g.used = 100;
+      p.activeAt = t;
+      return { g, p };
+    };
+    const late = t + 3600_000;
+    const off = holder({ creeper: 0 });
+    assert.equal(drainIdle(off.g, off.p, late), 0);
+    const old = holder();
+    old.g.rules.items = 1;
+    assert.equal(drainIdle(old.g, old.p, late), 0);
+    const claimed = holder();
+    claim(claimed.g, claimed.p, t);
+    assert.equal(drainIdle(claimed.g, claimed.p, late), 0);
+    const empty = holder();
+    empty.p.chances = 0;
+    assert.equal(drainIdle(empty.g, empty.p, late), 0);
+    const wrap = holder();
+    assert.equal(drainIdle(wrap.g, wrap.p, T0 + DAY - WRAP_UP_MS), 0);
+    const slow = holder({ creeper: 600 });
+    assert.equal(idleNextAt(slow.g, slow.p, t), t + 610_000);
   });
 });
 
