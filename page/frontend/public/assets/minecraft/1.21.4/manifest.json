@@ -863,6 +863,14 @@
       "sha256": "fa92806c83c00f8469fc38a742e78224b77199237d573b695bacae6d9b736809",
       "width": 24,
       "height": 24
+    },
+    {
+      "path": "textures/block/rail_corner.png",
+      "source": "assets/minecraft/textures/block/rail_corner.png",
+      "bytes": 232,
+      "sha256": "cf15400bedf3176ba4d9f7d62f5308fbcd182790dfdd666d8d4de18d02ce00ef",
+      "width": 16,
+      "height": 16
     }
   ],
   "source": "Mojang Minecraft Java Edition client JAR; unchanged extracted bytes",

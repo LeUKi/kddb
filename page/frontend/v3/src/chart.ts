@@ -1,8 +1,9 @@
 import type { Kind, Step } from './types'
 
-// 收益曲线（收益卡里）：每挖一格后待领取多少，连成一条线。线上只标三处：最高点、最大的一笔、
-// 被炸得最狠的一下；钻石、金苹果、踩雷、盾牌挡住这些事画在图下面一条细刻度上（2026-11-11 用户：
-// 线上挂满图标不好看）；在图上拖动（电脑上指着）看每一步是什么。纯函数，测试直接算。
+// 收益曲线（收益卡里）：每挖一格后待领取多少，连成一条线，标最高点；线上挂几件加减最多的事的图标
+// （最多 6 个，挨得太近的跳过）；图下面一条“条形码”，每一步一根，颜色照物品本身，加分往上、扣分往下，
+// 再下面一行小图标是图例（2026-11-11 晚用户选的 A，docs/V3_ITEMS.md §10）；在图上拖动（电脑上指着）
+// 看每一步是什么。纯函数，测试直接算。
 
 export interface ChartBox { width: number; height: number; padX: number; padTop: number; padBottom: number }
 export const CHART: ChartBox = { width: 320, height: 132, padX: 8, padTop: 16, padBottom: 10 }
@@ -17,7 +18,7 @@ export interface Marker {
 }
 
 /** 图上拖到的那一步：位置、第几次挖（不是挖的没有）、是什么、加减多少、之后待领取多少。 */
-export interface Point { x: number; y: number; step: number; dig?: number; kind: Step['k']; amount: number; points: number }
+export interface Point { x: number; y: number; step: number; dig?: number; kind: Step['k']; amount: number; points: number; blocked?: true }
 
 export interface Chart {
   /** 折线 */
@@ -72,7 +73,7 @@ export function chartOf(trail: Step[], box: ChartBox = CHART): Chart {
     const dig = NOT_DIGS.has(step.k) ? undefined : (digs += 1)
     const x = round(xOf(index + 1))
     const y = round(yOf(step.p))
-    stepPoints.push({ x, y, step: index + 1, ...(dig ? { dig } : {}), kind: step.k, amount: step.a, points: step.p })
+    stepPoints.push({ x, y, step: index + 1, ...(dig ? { dig } : {}), kind: step.k, amount: step.a, points: step.p, ...(step.b ? { blocked: true as const } : {}) })
     const mark = markOf(step.k, step)
     if (mark) markers.push({ x, y, mark, step: index + 1, dig: dig ?? digs, kind: step.k, amount: step.a })
   })
@@ -92,29 +93,7 @@ export function chartOf(trail: Step[], box: ChartBox = CHART): Chart {
   }
 }
 
-/** 图标画哪个：钻石、金苹果；踩雷画 TNT 或末影水晶；挡住画盾牌；中毒、苦力怕、监守者没有图标。 */
-export function iconOf(marker: Pick<Marker, 'mark' | 'kind'>): 'diamond' | 'apple' | 'tnt' | 'crystal' | 'shield' | null {
-  if (marker.mark === 'big') return 'diamond'
-  if (marker.mark === 'apple') return 'apple'
-  if (marker.mark === 'blocked') return 'shield'
-  if (marker.mark === 'loss') return null
-  return marker.kind === 'crystal' ? 'crystal' : 'tnt'
-}
-
-/** 刻度的颜色：大奖金色、被炸红色、盾牌挡住蓝色。 */
-export const tickOf = (mark: Mark) => (mark === 'big' || mark === 'apple' ? 'gain' : mark === 'blocked' ? 'block' : 'loss')
-
 const STEP_NAMES: Partial<Record<Step['k'], string>> = { poison: '中毒', creeper: '苦力怕', warden: '监守者', ender: '存进末影箱', vault: '宝库' }
-
-/** 一件事说的那一句（线上标的、刻度上的）。money 由调用的地方给（分 → 两位小数）。 */
-export function markerWords(marker: Pick<Marker, 'mark' | 'kind' | 'amount' | 'step' | 'dig'>, money: (points: number) => string) {
-  const at = `第 ${marker.dig ?? marker.step} 次挖`
-  const bomb = marker.kind === 'crystal' ? '末影水晶' : 'TNT'
-  if (marker.mark === 'loss') return `${STEP_NAMES[marker.kind as Step['k']] ?? ''}扣掉 ${money(-marker.amount)}`
-  if (marker.mark === 'blocked') return `${at}：盾牌挡住了${marker.kind === 'crystal' ? '' : ' '}${bomb}`
-  if (marker.mark === 'boom') return `${at}：${bomb}，被炸掉 ${money(-marker.amount)}`
-  return `${at}：${marker.mark === 'big' ? '钻石' : '附魔金苹果'} +${money(marker.amount)}`
-}
 
 /** 拖到 x（图的坐标）时最近的那一步。 */
 export function pointAt(chart: Pick<Chart, 'points'>, x: number) {
@@ -129,4 +108,69 @@ export function pointWords(point: Point, money: (points: number) => string, name
   const what = point.dig ? `第 ${point.dig} 次挖 · ${names[point.kind] ?? ''}` : STEP_NAMES[point.kind] ?? ''
   const change = point.amount > 0 ? ` +${money(point.amount)}` : point.amount < 0 ? ` ${money(point.amount)}` : ''
   return `${what}${change} · 待领取 ${money(point.points)}`
+}
+
+/** 每一样的颜色（条形码、图例、线上的小点）：照物品本身；盾牌挡住蓝；不加不减的灰。 */
+export const COLORS: Record<string, string> = {
+  emerald: '#41d36b', diamond: '#4fe0e0', apple: '#ffcf40', debris: '#c47b55', minecart: '#c99b5c', vault: '#6fd8ff', pearl: '#2fa78f', eye: '#9ccf4a',
+  blocked: '#8fb4ff', tnt: '#e8473d', crystal: '#d77bff', poison: '#b6d34a', creeper: '#5fbf4f', warden: '#2aa3ad', ender: '#3c8f7f', other: '#5b6068',
+}
+const keyOf = (point: Pick<Point, 'kind' | 'blocked' | 'amount'>) => (point.blocked ? 'blocked' : point.amount === 0 ? 'other' : point.kind)
+export const colorOf = (point: Pick<Point, 'kind' | 'blocked' | 'amount'>) => COLORS[keyOf(point)] ?? COLORS.other
+
+/**
+ * 线上挂图标的几步：按加减多少挑（挡住的按最高点的十分之一算），绿宝石和中毒那种小的不挂，图上挨得比 gap 近的跳过，
+ * 最多 most 个。按先后排好。
+ */
+export function picksOf(chart: Pick<Chart, 'points' | 'max'>, most = 6, gap = 26): Point[] {
+  const weight = (point: Point) => Math.abs(point.amount) || (point.blocked ? chart.max / 10 : 0)
+  const order = chart.points.filter(point => point.step > 0 && weight(point) > 0 && point.kind !== 'emerald' && point.kind !== 'poison')
+    .sort((a, b) => weight(b) - weight(a) || a.step - b.step)
+  const chosen: Point[] = []
+  for (const point of order) {
+    if (chosen.length >= most) break
+    if (chosen.some(other => Math.abs(other.x - point.x) < gap)) continue
+    chosen.push(point)
+  }
+  return chosen.sort((a, b) => a.step - b.step)
+}
+
+/** 条形码的每一根：位置、往上（正）往下（负）多长（满格 1）、颜色。不加不减的是 0（画一个小点）。 */
+export function barsOf(chart: Pick<Chart, 'points'>) {
+  const steps = chart.points.slice(1)
+  const most = Math.max(1, ...steps.map(point => Math.abs(point.amount)))
+  return steps.map(point => ({
+    x: point.x, step: point.step, color: colorOf(point),
+    size: point.blocked ? 0.6 : point.amount === 0 ? 0 : Math.sign(point.amount) * (0.25 + 0.75 * Math.sqrt(Math.abs(point.amount) / most)),
+  }))
+}
+
+const LEGEND = ['debris', 'diamond', 'apple', 'minecart', 'vault', 'emerald', 'pearl', 'eye', 'blocked', 'tnt', 'crystal', 'poison', 'creeper', 'warden', 'ender', 'other']
+/** 图例：这一局出现过的几样（有加减的、挡住的），每样几次；不加不减的合成“其他”。 */
+export function legendOf(chart: Pick<Chart, 'points'>) {
+  const counts = new Map<string, number>()
+  for (const point of chart.points.slice(1)) counts.set(keyOf(point), (counts.get(keyOf(point)) ?? 0) + 1)
+  return [...counts].sort(([a], [b]) => LEGEND.indexOf(a) - LEGEND.indexOf(b)).map(([key, count]) => ({ key, count, color: COLORS[key] ?? COLORS.other }))
+}
+
+/**
+ * 图下面六格（docs/V3_ITEMS.md §10）：挖了几格、平均每格挖到多少（加的分 ÷ 格数）、最长连着几格没踩雷
+ * （TNT、末影水晶，挡住的也算踩了）、被扣掉多少（炸的、中毒、苦力怕和监守者；存进末影箱不算）、盾牌挡住几次。
+ */
+export function statsOf(trail: Step[]) {
+  let digs = 0, gained = 0, streak = 0, longest = 0, blocked = 0, bomb = 0, poison = 0, other = 0
+  for (const step of trail) {
+    if (step.b) blocked += 1
+    if (step.a < 0) {
+      if (step.k === 'tnt' || step.k === 'crystal') bomb -= step.a
+      else if (step.k === 'poison') poison -= step.a
+      else if (step.k === 'creeper' || step.k === 'warden') other -= step.a
+    }
+    if (NOT_DIGS.has(step.k)) continue
+    digs += 1
+    if (step.a > 0) gained += step.a
+    if (step.k === 'tnt' || step.k === 'crystal') streak = 0
+    else longest = Math.max(longest, (streak += 1))
+  }
+  return { digs, average: digs ? Math.round(gained / digs) : 0, longest, blocked, lost: bomb + poison + other, bomb, poison, other }
 }

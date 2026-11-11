@@ -1,4 +1,5 @@
 import { CARD_BORDER, CARD_PX, cellPx, GAP, PAD } from './camera'
+import { isBulb, RAIL_TEXTURE, railOf, sculkOf } from './layout'
 import type { Kind, PublicCard } from './types'
 
 // 缩略图（远处、全图时，docs/V3_MAP.md §6）：一张卡画进一块小画布，和格子画得一样——
@@ -37,6 +38,10 @@ const ICONS: Partial<Record<Kind | 'pickaxe', string>> = {
   vault: 'inventory/vault.png',
 }
 const STONE = 'textures/block/stone.png'
+const PLANKS = 'textures/block/oak_planks.png'
+const RAIL = 'textures/block/rail.png'
+const RAIL_CORNER = 'textures/block/rail_corner.png'
+const SCULK = 'textures/block/sculk.png'
 const END_STONE = 'textures/block/end_stone.png'
 /** 各区块没挖开的格子（docs/V3_ITEMS.md §2） */
 const GROUNDS: Partial<Record<NonNullable<PublicCard['kind']>, string>> = {
@@ -135,6 +140,9 @@ function drawCells(context: CanvasRenderingContext2D, card: PublicCard, left: nu
   }
   context.imageSmoothingEnabled = false
   const ground = need((card.kind && GROUNDS[card.kind]) ?? STONE)
+  // 和网页里的卡一样（layout.ts）：铁轨按形状、深暗之域的幽匿块、试炼密室正中的铜灯
+  const sculks = sculkOf(card)
+  const sculk = sculks.size ? need(SCULK) : null
   card.cells.forEach((cell, index) => {
     const rect = cellRect(card.size, index, scale)
     const x = left + rect.x
@@ -143,8 +151,21 @@ function drawCells(context: CanvasRenderingContext2D, card: PublicCard, left: nu
     // 不能挖的格子：岩浆、装饰、宝库
     const fixed = card.fixed?.[index] ?? (cell?.burn ? 'lava' : undefined)
     if (fixed) {
-      context.fillStyle = fixed === 'lava' ? '#d4561c' : fixed === 'vault' ? '#3a4a4f' : card.kind === 'mine' ? '#6b5233' : '#5d5f58'
+      context.fillStyle = fixed === 'lava' ? '#d4561c' : fixed === 'vault' ? '#3a4a4f' : card.kind === 'mine' ? '#6b5233' : isBulb(card, index) ? '#c9824a' : '#5d5f58'
       context.fillRect(x, y, side, side)
+      const rail = cell ? null : railOf(card, index)
+      if (rail) {
+        const planks = need(PLANKS)
+        if (planks) context.drawImage(planks, x, y, side, side)
+        const track = need(RAIL_TEXTURE[rail].corner ? RAIL_CORNER : RAIL)
+        if (track) {
+          context.save()
+          context.translate(x + side / 2, y + side / 2)
+          context.rotate((RAIL_TEXTURE[rail].turn * Math.PI) / 180)
+          context.drawImage(track, -side / 2, -side / 2, side, side)
+          context.restore()
+        }
+      }
       if (fixed === 'vault' && side * 0.62 >= 3) {
         const img = need(ICONS.vault!)
         if (img) context.drawImage(img, x + side * 0.19, y + side * 0.19, side * 0.62, side * 0.62)
@@ -152,7 +173,9 @@ function drawCells(context: CanvasRenderingContext2D, card: PublicCard, left: nu
       return
     }
     if (!cell) {
-      if (ground) context.drawImage(ground, x, y, side, side)
+      const frame = sculks.get(index)
+      if (frame !== undefined && sculk) context.drawImage(sculk, 0, frame * 16, 16, 16, x, y, side, side)
+      else if (ground) context.drawImage(ground, x, y, side, side)
       else {
         context.fillStyle = card.kind === 'end' ? '#cfc79a' : '#6d6d6d'
         context.fillRect(x, y, side, side)

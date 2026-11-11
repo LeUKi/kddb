@@ -7,7 +7,7 @@ import { CardView } from './CardView'
 import { CardLabels } from './CardLabels'
 import { useGesture } from '@use-gesture/react'
 import type { Camera, Direction, Level, Viewport, WheelZoom } from './camera'
-import { BLOCK_PX, withToolbar, cameraAt, cardNear, cardToward, cellCenter, centerOf, edgeFacing, edgePointer, entryPoint, fullyOnScreen, nearestCard, nearestLevel, onScreen, overviewCamera, scaleOf, SLOT_PX, wheelZoom } from './camera'
+import { BLOCK_PX, withToolbar, cameraAt, cardNear, cardToward, cellCenter, centerOf, edgeFacing, edgePointer, entryPoint, fullyOnScreen, nearestCard, nearestLevel, onScreen, overviewCamera, overviewScale, scaleOf, SLOT_PX, wheelZoom } from './camera'
 import type { Flight, Point } from './PearlFlight'
 import { cardAt, MapCanvas } from './MapCanvas'
 import { richnessOf } from './regions'
@@ -27,6 +27,8 @@ import { ChestNote } from './Hud'
 import type { DigResult, Peek, PublicCard, Torch } from './types'
 
 const DRAG_SLOP = 6
+/** 放大到这么大才画格子（再小只画在整张地图的画布上） */
+const DETAIL_SCALE = 0.4
 const NO_RICH = new Map<number, number>()
 const NO_PEEKS: Peek[] = []
 const NO_OPENED: number[] = []
@@ -114,6 +116,13 @@ export function MapView() {
   const [focusId, setFocusId] = useState<number | null>(null)
   /** 正要飞过去的那张：起飞前先把它的格子画好，免得飞到了才从缩略图换成格子 */
   const [warm, setWarm] = useState<number | null>(null)
+  /**
+   * 正要飞去的位置（放大到能看清格子的那几级时）：起飞时就把落点画面里的卡都画好格子，飞的途中、落地那一下
+   * 不再一批一起从画布换成网页（2026-11-11 量过，从全图放大时落地那一帧 30 多张一起变清楚）。落地以后
+   * “画哪些卡”（cullAt，晚一拍）跟上了再撤
+   */
+  const [warmAt, setWarmAt] = useState<Camera | null>(null)
+  const root = useRef<HTMLDivElement>(null)
   /** 每次飞都换一个号；拖动、捏合、新的一次飞会让还没落地的那次作废 */
   const flight = useRef(0)
   const landed = useRef(false)
@@ -139,6 +148,7 @@ export function MapView() {
       return
     }
     if (cardId !== null) setWarm(cardId)
+    setWarmAt(target.scale >= DETAIL_SCALE ? target : null)
     // 等一帧再飞：目标那张的格子在这一帧里先画好，飞的途中不再生成东西
     requestAnimationFrame(() => {
       if (flight.current !== id) return
@@ -199,6 +209,26 @@ export function MapView() {
   // 拖到邻卡上不用临时生成格子
   const cullAt = useDeferredValue(settled)
   const cullFocus = useDeferredValue(focused)
+  useEffect(() => {
+    if (warmAt && cullAt === warmAt) setWarmAt(null)
+  }, [cullAt, warmAt])
+  // 缩到全图：卡小到画布画得够清楚时（全图那一级的 1.5 倍以下）才把近处网页里的卡藏起来、露出画布上的那张。
+  // 以前一按缩小、第一帧就换，近处二三十张清楚的卡一起变成画布上糊的那张（2026-11-11 量过）。
+  // 直接改属性不重画 React（缩放的每一帧都会走到这里）
+  const smallAt = overviewScale(view, cards) * 1.5
+  useEffect(() => {
+    const element = root.current
+    if (!element) return
+    const update = (value: number) => {
+      const small = value <= smallAt
+      if (small !== (element.dataset.small === '1')) {
+        if (small) element.dataset.small = '1'
+        else delete element.dataset.small
+      }
+    }
+    update(scale.get())
+    return scale.on('change', update)
+  }, [scale, smallAt])
   useEffect(() => {
     // 落定以前镜头还在原点，算出来的不是他看的那张，别记
     if (focused && hongbao && landed.current)
@@ -305,6 +335,7 @@ export function MapView() {
 
   const stopCamera = () => {
     flight.current += 1
+    setWarmAt(null)
     x.stop()
     y.stop()
     scale.stop()
@@ -472,7 +503,7 @@ export function MapView() {
   const banner = settled_ ? null
     : me?.status === 'claimed' ? '已经领取，但还没提交成功：点上面的「重新提交」'
       : blocked
-  const detailScale = cullAt.scale >= 0.4
+  const detailScale = cullAt.scale >= DETAIL_SCALE
   /** 近处（画面里，或当前卡四周一圈）：放大到能看清的级别时画格子 */
   const nearOf = (card: PublicCard) => onScreen(card, cullAt, view, 200)
     || (!!cullFocus && Math.max(Math.abs(card.x - cullFocus.x), Math.abs(card.y - cullFocus.y)) <= 1)
@@ -480,8 +511,9 @@ export function MapView() {
    * 放在网页里的卡：画格子的、正要飞过去的、当前卡、刚长出来的。别的都只画在整张地图的
    * 画布上（远处发光的卡，光也画在画布上）。
    */
+  const warmCards = useMemo(() => new Set(warmAt ? cards.filter(card => onScreen(card, warmAt, view)).map(card => card.id) : []), [cards, view, warmAt])
   const dom = new Set(cards.filter(card => (detailScale && nearOf(card)) || card.id === warm || card.id === focused?.id
-    || card.id === entrance?.cardId).map(card => card.id))
+    || card.id === entrance?.cardId || warmCards.has(card.id)).map(card => card.id))
   const hoverCard = hover === null ? null : cards.find(card => card.id === hover) ?? null
   // 望远镜看到的格子按卡分开；只有自己的望远镜会变
   const peeksOf = useMemo(() => {
@@ -551,7 +583,7 @@ export function MapView() {
   const shape = held ? shapeOf(held) : null
   const cursorClass = held ? (shape ? 'cur-ench' : `cur-${held}`) : cooling.seconds ? 'cur-cool' : 'cur-pick'
 
-  return <div className={`map-view level-${level}${cooling.seconds ? ' is-cooling' : ''}${hoverCard ? ' is-pointing' : ''}${held ? ` is-aiming aim-${held}` : ''} ${cursorClass}`}>
+  return <div ref={root} className={`map-view level-${level}${cooling.seconds ? ' is-cooling' : ''}${hoverCard ? ' is-pointing' : ''}${held ? ` is-aiming aim-${held}` : ''} ${cursorClass}`}>
     <div className="map-stage">
     <div className="map-canvas" ref={box} onClickCapture={onClickCapture} onContextMenu={onContextMenu}
       onPointerDownCapture={event => { lastPointer.current = event.pointerType }}>
@@ -571,7 +603,7 @@ export function MapView() {
           diggable={level === 2 && current && !blocked && me?.status === 'playing' && (!card.finished || (held === 'key' && vaultsLeft(card)))}
           // 当前卡落地那一下就画格子：落定的位置是马上换的，画哪些卡跟着的 cullAt 晚一拍，
           // 以前这一拍里它先变回缩略图再变回来，慢的手机上闪两三帧（2026-11-11 量过）
-          detail={(detailScale && near) || ready || (current && settled.scale >= 0.4)}
+          detail={(detailScale && near) || ready || warmCards.has(card.id) || (current && settled.scale >= DETAIL_SCALE)}
           names={level === 2 && current}
           current={current}
           myUid={uid}

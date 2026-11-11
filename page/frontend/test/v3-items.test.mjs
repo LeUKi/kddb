@@ -13,6 +13,7 @@ let live
 let chart
 let regions
 let mcfont
+let layout
 before(async () => {
   server = await createServer({ root: fileURLToPath(new URL('../', import.meta.url)), configFile: false, server: { middlewareMode: true, watch: null }, appType: 'custom', logLevel: 'silent' })
   items = await server.ssrLoadModule('/v3/src/items.ts')
@@ -20,6 +21,7 @@ before(async () => {
   chart = await server.ssrLoadModule('/v3/src/chart.ts')
   regions = await server.ssrLoadModule('/v3/src/regions.ts')
   mcfont = await server.ssrLoadModule('/v3/src/mcfont.ts')
+  layout = await server.ssrLoadModule('/v3/src/layout.ts')
 })
 after(() => server.close())
 
@@ -134,7 +136,8 @@ test('收益图：第几格只数挖的，中毒、末影箱、宝库这些不�
   ]
   const marker = chart.chartOf(trail).markers.find(item => item.kind === 'diamond')
   assert.equal(marker.dig, 2)
-  assert.match(chart.markerWords(marker, value => String(value)), /^第 2 次挖：钻石/)
+  const point = chart.chartOf(trail).points.find(item => item.kind === 'diamond')
+  assert.match(chart.pointWords(point, value => String(value), { diamond: '钻石' }), /^第 2 次挖 · 钻石/)
 })
 
 test('手里还有附魔台就不算挖不动（换得到附魔镐）', () => {
@@ -281,4 +284,22 @@ test('火把一直在工具条上：没有时是 0，点开说怎么做出来（
   assert.match(items.aboutSlot('torch', { ...me, items: { ...me.items, torch: 2 } }, true, 1, null, 2).words, /^插在一个挖开的格子上/)
   // 没有道具栏的局没有火把
   assert.deepEqual(items.slotsOf({ ...me, items: undefined, coal: 0 }, false), { active: [], passive: [] })
+})
+
+test('区块的样子（layout.ts）：铁轨按游戏站给的形状、以前的局是横着的一排；正中的装饰是铜灯；幽匿块按卡号定、不压固定格子', () => {
+  const old = { kind: 'mine', size: 6, fixed: { 13: 'deco', 14: 'deco' } }
+  assert.equal(layout.railOf(old, 13), 'ew')
+  assert.equal(layout.railOf(old, 12), null)
+  assert.equal(layout.railOf({ ...old, rails: { 13: 'se', 14: 'nw' } }, 13), 'se')
+  assert.equal(layout.railOf({ kind: 'trial', size: 7, fixed: { 13: 'deco' } }, 13), null)
+  assert.deepEqual(layout.RAIL_TEXTURE.sw, { corner: true, turn: 90 })
+  assert.equal(layout.isBulb({ kind: 'trial', size: 7, fixed: { 24: 'deco', 0: 'deco' } }, 24), true)
+  assert.equal(layout.isBulb({ kind: 'trial', size: 7, fixed: { 24: 'deco', 0: 'deco' } }, 0), false)
+  const deep = { id: 42, kind: 'deep', size: 7, fixed: { 3: 'deco' } }
+  const sculk = layout.sculkOf(deep)
+  assert.ok(sculk.size >= 2 && sculk.size <= 14, String(sculk.size))
+  assert.equal(sculk.has(3), false)
+  assert.ok([...sculk.values()].every(frame => frame >= 0 && frame <= 3))
+  assert.deepEqual([...layout.sculkOf({ ...deep })], [...sculk])
+  assert.equal(layout.sculkOf({ id: 1, kind: 'mine', size: 6 }).size, 0)
 })

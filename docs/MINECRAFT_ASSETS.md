@@ -87,4 +87,6 @@ Minecraft 的美术和声音资源由 Mojang / Microsoft 持有权利；本项�
 
 ## 2026-11-11 效果图标
 
-身上的效果（`docs/V3_ITEMS.md` §10）照原版右上角的效果图标画。同一个 1.21.4 客户端 JAR（核对过 SHA-1，提取完已删）补提取 4 个 PNG，原样放进 `textures/`，记在 `manifest.json`（现在 115 条）：`mob_effect/poison.png`（中毒）、`mob_effect/mining_fatigue.png`（蜘蛛网让挖得慢）、`mob_effect/haste.png`（急迫药水）、`gui/sprites/hud/effect_background.png`（图标的底框）。设计稿里的弯铁轨 `block/rail_corner.png`、进度框和进度提示的底图只在设计稿里用，没有放进来。
+身上的效果（`docs/V3_ITEMS.md` §10）照原版右上角的效果图标画。同一个 1.21.4 客户端 JAR（核对过 SHA-1，提取完已删）补提取 4 个 PNG，原样放进 `textures/`，记在 `manifest.json`（现在 115 条）：`mob_effect/poison.png`（中毒）、`mob_effect/mining_fatigue.png`（蜘蛛网让挖得慢）、`mob_effect/haste.png`（急迫药水）、`gui/sprites/hud/effect_background.png`（图标的底框）。进度框和进度提示的底图只在设计稿里用，没有放进来。
+
+2026-11-12：新局的铁轨会拐弯（`docs/V3_ITEMS.md` §10），同一个 JAR 补提取 `block/rail_corner.png`（弯道，连着南和东，按原版 blockstate 顺时针转出另外三种），记在 `manifest.json`（现在 116 条）。

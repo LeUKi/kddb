@@ -32,6 +32,8 @@ export interface PublicCard {
   fixed?: Record<string, 'deco' | 'vault' | 'lava'>
   /** 宝库还能开几次 */
   vaults?: Record<string, number>
+  /** 废弃矿井的铁轨每一格的形状（新局，game/shared/layouts.mjs）；以前开的局没有，是横着的一排 */
+  rails?: Record<string, RailShape>
   /** 亮着的火把 */
   torches?: Torch[]
   /** 深暗之域的噪音；closed：监守者醒了，这张卡关了 */
@@ -136,3 +138,6 @@ export function money(points: number) {
   const abs = Math.abs(points)
   return `${points < 0 ? '-' : ''}${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, '0')}`
 }
+
+/** 铁轨一格连着哪两边（原版 rail 的叫法）：ns、ew 直道，ne、se、sw、nw 弯道。 */
+export type RailShape = 'ns' | 'ew' | 'ne' | 'se' | 'sw' | 'nw'

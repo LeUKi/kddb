@@ -6,6 +6,7 @@ import type { Held } from './items'
 import type { Direction } from './camera'
 import { BLOCK_PX, CARD_BORDER, CARD_PX, cellPx, entranceWave, GAP, PAD, SLOT_PX } from './camera'
 import { drawThumb, THUMB_PX, whenImages } from './thumb'
+import { isBulb, RAIL_TEXTURE, railOf, sculkOf } from './layout'
 import { torchWords } from './aim'
 import { toast } from './state'
 import type { DigResult, Peek, PublicCard, Torch } from './types'
@@ -130,6 +131,8 @@ export const CardView = memo(function CardView({ card, focused, diggable, detail
   const torch2 = held === 'torch' && version >= 2
   const ghost = preview && held === 'torch' && preview.ok ? torchAt(preview.at, torch2) : null
   const torchOn = new Map((card.torches ?? []).filter(torch => torch.v === 2).map(torch => [torch.at, torch]))
+  /** 深暗之域石头上爬着的幽匿块（只是样子） */
+  const sculks = sculkOf(card)
   return <div className={blockClass} style={blockStyle} onClick={pick} data-card={card.id}>
     {/* 挖卡这一级的当前卡：噪音在卡下面的噪音条里（CardLabels），这里不再写 */}
     {card.kind === 'deep' && !names ? <div className="card-noise" aria-label={`噪音 ${card.noise ?? 0}${card.closed ? '，监守者醒了，这张卡关了' : ''}`}>
@@ -161,11 +164,14 @@ export const CardView = memo(function CardView({ card, focused, diggable, detail
       if (fixed) {
         const left = card.vaults?.[index] ?? 0
         const mineOpened = opened.includes(index)
+        // 铁轨照形状摆贴图（layout.ts）；试炼密室正中的装饰是铜灯
+        const rail = railOf(card, index)
         return <div key={index} style={wave(index)} {...aimHandlers(index)}
           data-vault={fixed === 'vault' ? (left <= 0 ? '宝库：开完了' : mineOpened ? `宝库：你开过了，别人还能开 ${left} 次` : `宝库：还能开 ${left} 次，拿试炼钥匙来开`) : undefined}
-          className={`map-cell fixed fixed-${fixed}${fixed === 'vault' && (left <= 0 || mineOpened) ? ' is-spent' : ''}${previewClass(index, true)}`}
-          aria-label={fixed === 'vault' ? `${name}：宝库，还能开 ${left} 次${mineOpened ? '，你开过了' : ''}` : fixed === 'lava' ? `${name}：岩浆` : `${name}：装饰，不能挖`}>
+          className={`map-cell fixed fixed-${fixed}${isBulb(card, index) ? ' is-bulb' : ''}${fixed === 'vault' && (left <= 0 || mineOpened) ? ' is-spent' : ''}${previewClass(index, true)}`}
+          aria-label={fixed === 'vault' ? `${name}：宝库，还能开 ${left} 次${mineOpened ? '，你开过了' : ''}` : fixed === 'lava' ? `${name}：岩浆` : rail ? `${name}：铁轨，不能挖` : `${name}：装饰，不能挖`}>
           {fixed === 'vault' ? <><ItemIcon kind="vault" size={icon} /><span className="vault-left">{left}</span></> : null}
+          {rail ? <i className={`rail${RAIL_TEXTURE[rail].corner ? ' is-corner' : ''}`} style={{ transform: `rotate(${RAIL_TEXTURE[rail].turn}deg)` }} aria-hidden="true" /> : null}
         </div>
       }
       if (cell) {
@@ -185,11 +191,12 @@ export const CardView = memo(function CardView({ card, focused, diggable, detail
       }
       const busy = !!pending[cellKey]
       const closed = !!card.closed
+      const sculk = sculks.get(index)
       return <button
         key={index}
-        style={wave(index)}
+        style={sculk === undefined ? wave(index) : { ...wave(index), '--sculk-frame': `${sculk * 33.333}%` } as CSSProperties}
         type="button"
-        className={`map-cell covered${peek ? ' has-peek' : ''}${busy ? ' is-digging' : ''}${aiming ? ' is-aim' : ''}${previewClass(index, false)}`}
+        className={`map-cell covered${sculk === undefined ? '' : ' is-sculk'}${peek ? ' has-peek' : ''}${busy ? ' is-digging' : ''}${aiming ? ' is-aim' : ''}${previewClass(index, false)}`}
         disabled={!diggable || busy || closed}
         {...(aiming ? aimHandlers(index) : {
           onClick: (event: ReactMouseEvent) => {

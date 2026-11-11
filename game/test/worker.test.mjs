@@ -338,17 +338,19 @@ describe("道具和区块（docs/V3_ITEMS.md §4）", () => {
     assert.deepEqual(boom.cell?.torches, [{ at: 6, level: 1, name: "xiaoming", v: 2 }]);
     const trial = biome(game, "trial");
     // 没插过火把的卡的推送没有这一项
-    const plain = await one.dig(info, 10002, "xiaohong", { cardId: trial.id, index: 1 }, NOW + 2000, { compact: true });
+    const plain = await one.dig(info, 10002, "xiaohong", { cardId: trial.id, index: trial.deck.findIndex((_, index) => !trial.fixed?.[index]) }, NOW + 2000, { compact: true });
     assert.equal(plain.answer.ok, true);
     assert.equal(plain.cell && "torches" in plain.cell, false);
     me.items.key = 1;
-    const vault = await one.use(info, 10001, "xiaoming", { item: "key", cardId: trial.id, index: 22 }, NOW);
+    // 宝库在哪两格看摆法（新局 5 种摆法，layouts.mjs）
+    const [first, second] = Object.keys(trial.vaults ?? {}).map(Number);
+    const vault = await one.use(info, 10001, "xiaoming", { item: "key", cardId: trial.id, index: first }, NOW);
     assert.equal(vault.answer.ok, true);
-    assert.deepEqual(/** @type {any} */ (vault.answer.card).vaults, { 22: 3, 26: 4 });
+    assert.deepEqual(/** @type {any} */ (vault.answer.card).vaults, { [first]: 3, [second]: 4 });
     assert.ok(["small", "diamond", "table", "shield"].includes(/** @type {any} */ (vault.answer.reward).kind));
     assert.equal(vault.pushes[0][0].type, "card");
-    assert.deepEqual(/** @type {any} */ (storage.map.get(`card:${trial.id}`)).vaults, { 22: 3, 26: 4 });
-    assert.deepEqual(/** @type {any} */ (vault.answer.me).vaultsOpened, [`${trial.id}:22`]);
+    assert.deepEqual(/** @type {any} */ (storage.map.get(`card:${trial.id}`)).vaults, { [first]: 3, [second]: 4 });
+    assert.deepEqual(/** @type {any} */ (vault.answer.me).vaultsOpened, [`${trial.id}:${first}`]);
     assert.equal(/** @type {any} */ (storage.map.get("game")).used, game.used);
   });
 
@@ -430,7 +432,7 @@ describe("道具和区块（docs/V3_ITEMS.md §4）", () => {
     const trial = biome(game, "trial");
     const cell = trial.deck.findIndex((_, index) => !trial.fixed?.[index]);
     const dug = await one.dig(info, 10001, "xiaoming", { cardId: trial.id, index: cell }, NOW, { compact: true });
-    assert.deepEqual(/** @type {any} */ (dug.cell).vaults, { 22: 4, 26: 4 });
+    assert.deepEqual(/** @type {any} */ (dug.cell).vaults, Object.fromEntries(Object.keys(trial.vaults ?? {}).map((index) => [index, 4])));
     me.items.ender = 1;
     const stored = await one.use(info, 10001, "xiaoming", { item: "ender" }, NOW + 2000);
     assert.equal(stored.answer.ok, true);

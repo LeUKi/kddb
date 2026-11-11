@@ -193,15 +193,16 @@ button.eye-status { cursor: pointer; }
  * 另画一块，只在全图那一级显示。悬停在画布上的卡时，用一块和区块一样的高亮罩住它。
  */
 /*
- * 缩到全图（level-0 一加上，飞的途中就算）：除了当前卡和正在长出来的卡，近处那几张网页里的
- * 卡先藏起来，露出画布上画好的同一张。不藏的话，浏览器要在缩小的途中把它们连同格子、图标
- * 按原来的清晰度重新栅格化，显卡忙半秒，包着网页的红包站也跟着卡
+ * 缩到全图：卡小到画布画得够清楚时（data-small，MapView 跟着缩放改），除了当前卡和正在长出来的卡，
+ * 近处那几张网页里的卡藏起来，露出画布上画好的同一张。不藏的话，浏览器要在缩小的途中一直按原来的
+ * 清晰度重新栅格化它们，显卡忙半秒，包着网页的红包站也跟着卡；也不能一按缩小就藏（第一帧近处的卡
+ * 一起变成画布上糊的那张，看着闪）
  */
-.map-view.level-0 .map-block:not(.is-focused, .is-grown) { visibility: hidden; }
+.map-view.level-0[data-small] .map-block:not(.is-focused, .is-grown) { visibility: hidden; }
 .map-blocks-canvas, .map-glow-canvas, .map-cards-canvas { position: absolute; display: block; }
 .map-glow-canvas { pointer-events: none; }
 .map-blocks-canvas { opacity: 0; transition: opacity .18s var(--ease-out); pointer-events: none; }
-.map-view.level-0 .map-blocks-canvas { opacity: 1; }
+.map-view.level-0[data-small] .map-blocks-canvas { opacity: 1; }
 .map-view.is-pointing .map-cards-canvas { cursor: pointer; }
 .map-hover { position: absolute; border-radius: 16px; pointer-events: none; background: #ffffff0f; box-shadow: inset 0 0 0 calc(1px * var(--px, 1)) #ffffff40; }
 .map-view.level-0 .map-hover { background: #ffffff17; box-shadow: inset 0 0 0 calc(1.5px * var(--px, 1)) #ffffff59; }
@@ -266,36 +267,38 @@ button.eye-status { cursor: pointer; }
 /* 图和上面的标注、图标按同一个框算位置（百分比） */
 .chart-plot { position: relative; height: 132px; }
 .chart-zero { position: absolute; left: -2px; margin-top: -13px; color: var(--muted); font-size: 10px; line-height: 1; pointer-events: none; }
-/* 钻石、金苹果、TNT、末影水晶、盾牌直接画在线上；点一下说这一格挖到了什么 */
-.chart-icon { position: absolute; display: grid; place-items: center; width: 22px; height: 22px; padding: 0; background: none; border: 0; border-radius: 50%; cursor: pointer; }
-.chart-icon .item-icon { filter: drop-shadow(0 1px 0 #000) drop-shadow(0 0 2px #000c); }
-.chart-icon.is-picked { background: #ffffff1a; box-shadow: 0 0 0 1px #e9b56b; }
 .chart-tip { position: absolute; z-index: 3; top: -26px; padding: 2px 6px; color: var(--ink); font-size: 11px; white-space: nowrap; background: #11171df2; border: 1px solid #56636b; border-radius: 4px; transform: translateX(-50%); pointer-events: none; }
 .chart-tip.is-right { transform: translateX(-100%); }
 .chart-tip.is-left { transform: none; }
-.chart-peak { position: absolute; margin: -28px 0 0; padding: 1px 5px; color: #f3cc8f; font-size: 11px; white-space: nowrap; background: #11171dcc; border-radius: 4px; transform: translateX(-50%); pointer-events: none; }
-/* 最高点靠边时标签往里放，不出框 */
-.chart-peak.is-right { transform: translateX(-100%); }
-/* 线上只标两件事（最大的一笔、被炸得最狠的一下），其余在下面一条刻度上；拖动看每一步（2026-11-11） */
-.chart-mark { position: absolute; z-index: 1; display: flex; align-items: center; gap: 2px; translate: -50% -50%; pointer-events: none; }
-.chart-mark .item-icon { filter: drop-shadow(0 1px 0 #000) drop-shadow(0 0 2px #000c); }
-.chart-mark b { padding: 0 4px; color: #fff; font-size: 11px; font-weight: 600; background: #c4434d; border-radius: 4px; }
-.chart-dot { display: block; width: 8px; height: 8px; border-radius: 50%; background: #e0505c; border: 2px solid #11171d; }
+/* 最高点：虚线拉到左边，数写在左上 */
+.chart-peak { position: absolute; left: 0; padding: 1px 5px; color: #f3cc8f; font-size: 11px; white-space: nowrap; background: #11171dcc; border-radius: 4px; transform: translateY(calc(-100% - 2px)); pointer-events: none; }
+/* 线上挂的几件事：线上一个小圈（颜色照物品），加的图标挂在上面、扣的挂在下面，最大的那两下写数 */
+.chart-mark { position: absolute; z-index: 1; width: 0; height: 0; pointer-events: none; }
+.chart-pin { position: absolute; left: -4px; top: -4px; width: 8px; height: 8px; background: #11171d; border: 2px solid; border-radius: 50%; }
+.chart-badge { position: absolute; left: 0; display: flex; flex-direction: column; align-items: center; gap: 1px; translate: -50% 0; }
+.chart-badge.is-up { bottom: 6px; }
+.chart-badge.is-down { top: 6px; }
+.chart-badge .item-icon, .chart-badge .effect-mini { filter: drop-shadow(0 1px 0 #000) drop-shadow(0 0 2px #000c); }
+.chart-badge b { padding: 0 4px; color: #1b1408; font-size: 10.5px; font-weight: 700; white-space: nowrap; background: #f3cc8f; border-radius: 4px; }
+.chart-badge b.is-bad { color: #fff; background: #c4434d; }
+.chart-badge small { padding: 0 3px; color: #fff; font-size: 10px; white-space: nowrap; background: #11171dcc; border-radius: 3px; }
+.effect-mini { width: 16px; height: 16px; image-rendering: pixelated; }
+.chart-high { stroke: #f3cc8f59; stroke-width: 1; stroke-dasharray: 2 3; vector-effect: non-scaling-stroke; }
 .chart-scrub { position: absolute; inset: -8px 0; z-index: 2; cursor: crosshair; touch-action: none; }
 .chart-guide { position: absolute; top: 0; bottom: 0; z-index: 2; width: 0; border-left: 1px dashed #c8c2b6; pointer-events: none; }
 .chart-guide-dot { position: absolute; z-index: 2; width: 9px; height: 9px; translate: -50% -50%; border-radius: 50%; background: #e9b56b; border: 2px solid #11171d; pointer-events: none; }
-.chart-ticks { position: relative; height: 10px; margin: 4px 0 0; }
-.chart-ticks i { position: absolute; bottom: 0; width: 2px; height: 10px; margin-left: -1px; border-radius: 1px; }
-.chart-ticks i.is-gain { height: 7px; background: #e9b56b; }
-.chart-ticks i.is-loss { background: #e0505c; }
-.chart-ticks i.is-block { height: 7px; background: #7fb6ff; }
-.chart-peak.is-left { transform: none; }
+/* 条形码：每一步一根；图例：小图标带次数，下面一道颜色 */
+.summary-chart svg.chart-code { display: block; width: 100%; height: 26px; margin: 6px 0 0; overflow: visible; }
+.chart-code-base { stroke: #ffffff1f; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.chart-legend { display: flex; flex-wrap: wrap; gap: 4px 9px; margin: 5px 0 0; color: #c7d0d7; font-size: 11px; font-variant-numeric: tabular-nums; }
+.chart-legend span { display: inline-flex; align-items: center; gap: 2px; padding-bottom: 1px; border-bottom: 3px solid; }
+.chart-legend small { color: var(--muted); font-size: 10.5px; }
+.chart-legend .effect-mini { width: 14px; height: 14px; }
 .summary-chart figcaption { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; color: var(--muted); font-size: 11px; }
-.summary-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 0; }
-.summary-stats div { display: grid; gap: 2px; padding: 7px 6px; text-align: center; background: #151b20; border: 1px solid #2f383f; border-radius: 8px; }
-.summary-stats dt { color: var(--muted); font-size: 11px; }
-.summary-stats dd { margin: 0; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.summary-stats dd small { color: var(--muted); font-size: 11px; font-weight: 400; }
+.summary-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin: 0; }
+.summary-stats div { display: grid; gap: 1px; padding: 5px 4px; text-align: center; background: #151b20; border: 1px solid #2f383f; border-radius: 7px; }
+.summary-stats dt { color: var(--muted); font-size: 10.5px; line-height: 1.3; }
+.summary-stats dd { margin: 0; font-size: 13.5px; font-weight: 600; line-height: 1.3; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .summary-top h3 { margin: 0 0 6px; color: #d1c1a6; font-size: 13px; font-weight: 600; }
 .summary-top ol { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
 .summary-top li { display: flex; align-items: center; gap: 8px; padding: 5px 8px; font-size: 13px; border-radius: 6px; }
@@ -602,10 +605,15 @@ button.effect-body { cursor: pointer; }
 .map-card.biome-nether .map-cell.covered { background-image: linear-gradient(135deg, #ff906014, #1a050526), var(--netherrack); }
 .map-card.biome-deep { background: #0d1418; border-color: #1f6a73; }
 .map-card.biome-deep .map-cell.covered { background-image: linear-gradient(135deg, #2fe0e012, #04080a40), var(--deepslate-tiles); }
+/* 深暗之域：一两串格子换成幽匿块（只是样子；幽匿块是 4 帧的竖条，每格挑一帧） */
+.map-card.biome-deep .map-cell.covered.is-sculk { background-image: linear-gradient(135deg, #2fe0e012, #04080a40), var(--sculk); background-size: 100% 100%, 100% 400%; background-position: 0 0, 0 var(--sculk-frame, 0%); }
 .map-cell.fixed { background-size: 100% 100%; image-rendering: pixelated; border-color: #0006; box-shadow: inset 0 0 0 1px #0004; cursor: default; }
-.biome-trial .map-cell.fixed-deco:nth-child(odd) { background-image: var(--chiseled-tuff); }
-.biome-trial .map-cell.fixed-deco:nth-child(even) { background-image: var(--copper-bulb); box-shadow: 0 0 14px #ffbe6a66; }
-.biome-mine .map-cell.fixed-deco { background-image: var(--rail), var(--planks); }
+/* 试炼密室：装饰是雕纹凝灰岩，正中的是亮着的铜灯；矿井：木板上铺铁轨，每格按形状转（layout.ts） */
+.biome-trial .map-cell.fixed-deco { background-image: var(--chiseled-tuff); }
+.biome-trial .map-cell.fixed-deco.is-bulb { background-image: var(--copper-bulb); box-shadow: 0 0 14px #ffbe6a66; }
+.biome-mine .map-cell.fixed-deco { background-image: var(--planks); }
+.map-cell .rail { position: absolute; inset: 0; background: var(--rail) center / 100% 100%; image-rendering: pixelated; pointer-events: none; }
+.map-cell .rail.is-corner { background-image: var(--rail-corner); }
 .map-cell.fixed-vault { background: #2b2d2a var(--tuff-bricks) center / 100% 100%; }
 .map-cell.fixed-vault .item-icon { filter: drop-shadow(0 0 6px #6fd8ff88); }
 .map-cell.fixed-vault.is-spent .item-icon { filter: grayscale(.8) brightness(.7); }

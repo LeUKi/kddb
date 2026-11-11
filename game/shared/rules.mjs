@@ -2,6 +2,8 @@
 // 长新卡、用道具、领取。纯函数，游戏站的 Durable Object 和测试共用；随机数来自每个红包自己的
 // 种子，同一个种子、同样的先后，结果一样，能重放核对。分和金额一样，单位是分。
 
+import { lavaOf, railsOf, trialLayout } from "./layouts.mjs";
+
 /**
  * 以前就有的十种（以前开的局只有这些）。
  * @typedef {'emerald'|'diamond'|'apple'|'totem'|'tnt'|'pearl'|'shield'|'spyglass'|'eye'|'crystal'} BaseKind
@@ -45,6 +47,7 @@
  *   endMix?: 2,
  *   items?: 1|2,
  *   creeper?: number,
+ *   layout?: 2,
  * }} Rules
  */
 /** 挖开的格子；burn: 1 是被岩浆吞掉的（uid 0、名字空）。 @typedef {{ uid: number, name: string, at: number, burn?: 1 }} OpenCell */
@@ -62,7 +65,7 @@
  *   composition: Composition, deck: Kind[], opened: (OpenCell|null)[],
  *   finished: boolean,
  *   fixed?: Record<string, FixedKind>, vaults?: Record<string, number>, torches?: Torch[],
- *   wardenAt?: number, closed?: boolean,
+ *   wardenAt?: number, closed?: boolean, rails?: Record<string, import('./layouts.mjs').RailShape>,
  * }} Card
  */
 /** @typedef {{ cardId: number, index: number, kind: Kind }} Peek */
@@ -286,6 +289,9 @@ export function rulesOf(/** @type {Record<string, unknown>} */ params, /** @type
     // 煤炭木棍各一个就合成、火把照 3×3、蜘蛛网 10 秒、苦力怕至少 0.01、不领的人每分钟被炸
     items: 2,
     creeper: creeperOf(params.creeper, digInterval),
+    // 区块里固定格子的新摆法（2026-11-11 晚起，docs/V3_ITEMS.md §10）：铁轨随机铺、试炼密室 5 种摆法、
+    // 下界岩浆一半挨在一起（layouts.mjs）；以前开的局没有这一项，照旧
+    layout: 2,
   });
 }
 
@@ -436,32 +442,48 @@ function newItemsCard(/** @type {Game} */ game, /** @type {number} */ id, /** @t
     biome = /** @type {(typeof BIOME_ODDS)[number]} */ (BIOME_ODDS.find(([, upTo]) => roll < upTo))[0];
   }
   const tnt = (/** @type {5|6|7} */ size) => TNT_COUNTS[rules.difficulty][size];
+  /** 新摆法（rules.layout: 2，layouts.mjs） */
+  const layout2 = (rules.layout ?? 0) >= 2;
   /** @type {Record<string, FixedKind>} */
   const fixed = {};
+  /** @type {Record<string, import('./layouts.mjs').RailShape>|null} */
+  let rails = null;
+  let vaultCells = [22, 26];
   /** @type {5|6|7} */
   let size;
   /** @type {Partial<Record<BaseKind|ItemKind, number>>} */
   let counts;
   switch (biome) {
     case "trial":
-      // 7×7：四角和正中是装饰，第 4 行第 2、6 格是宝库
+      // 7×7：以前四角和正中是装饰，第 4 行第 2、6 格是宝库；新摆法 5 种里挑一种再随机翻
       size = 7;
-      for (const index of [0, 6, 24, 42, 48]) fixed[index] = "deco";
-      for (const index of [22, 26]) fixed[index] = "vault";
+      if (layout2) {
+        const picked = trialLayout(int);
+        vaultCells = picked.vaults;
+        for (const index of picked.deco) fixed[index] = "deco";
+      } else for (const index of [0, 6, 24, 42, 48]) fixed[index] = "deco";
+      for (const index of vaultCells) fixed[index] = "vault";
       counts = { diamond: 5, apple: 1, totem: 2, tnt: tnt(6), pearl: 1, shield: 2, key: 2, coal: 2, stick: 2, spyglass: 1 };
       break;
     case "mine":
-      // 6×6：第 3 行中间 4 格是铁轨
+      // 6×6：以前第 3 行中间 4 格是铁轨；新摆法随机铺一条（会拐弯、可能断开一格、一半的卡再有一小段）
       size = 6;
-      for (const index of [13, 14, 15, 16]) fixed[index] = "deco";
+      if (layout2) {
+        rails = railsOf(int, 6);
+        for (const index of Object.keys(rails)) fixed[index] = "deco";
+      } else for (const index of [13, 14, 15, 16]) fixed[index] = "deco";
       counts = { cobweb: 3, spawner: 1, minecart: 2, coal: 4, stick: 4, tnt: tnt(5), diamond: 2, pearl: 1, totem: 1, shield: 1 };
       break;
     case "nether": {
-      // 6×6：岩浆 2 格，位置由种子定，开局就看得见
+      // 6×6：岩浆 2 格，位置由种子定，开局就看得见；新摆法一半挨在一起
       size = 6;
-      const first = int(0, 35);
-      let second = int(0, 34);
-      if (second >= first) second += 1;
+      let first, second;
+      if (layout2) [first, second] = lavaOf(int);
+      else {
+        first = int(0, 35);
+        second = int(0, 34);
+        if (second >= first) second += 1;
+      }
       fixed[first] = "lava";
       fixed[second] = "lava";
       counts = { debris: 1, diamond: 4, tnt: tnt(6), apple: 1, pearl: 1, totem: 2, shield: 2 };
@@ -506,7 +528,8 @@ function newItemsCard(/** @type {Game} */ game, /** @type {number} */ id, /** @t
     torches: [],
   };
   if (Object.keys(fixed).length > 0) card.fixed = fixed;
-  if (biome === "trial") card.vaults = { 22: VAULT_OPENS, 26: VAULT_OPENS };
+  if (biome === "trial") card.vaults = Object.fromEntries(vaultCells.map((index) => [index, VAULT_OPENS]));
+  if (rails) card.rails = rails;
   if (biome === "deep") {
     card.wardenAt = int(Math.ceil(cells * WARDEN_RANGE[0]), Math.floor(cells * WARDEN_RANGE[1]));
     card.closed = false;
@@ -1562,6 +1585,7 @@ export function publicCard(/** @type {Card} */ card) {
     // 复制一份：攒着没发的推送不能跟着之后的改动变
     ...(card.fixed ? { fixed: { ...card.fixed } } : {}),
     ...(card.vaults ? { vaults: { ...card.vaults } } : {}),
+    ...(card.rails ? { rails: { ...card.rails } } : {}),
     ...(card.torches ? { torches: publicTorches(card) } : {}),
     ...(card.kind === "deep" ? { noise: dugOf(card), closed: Boolean(card.closed) } : {}),
   };

@@ -36,19 +36,36 @@ test('盾牌挡住、金苹果、末影水晶打点；扣到 0 的雷也算；�
   assert.equal(flat.markers.length, 0)
 })
 
-test('线上的图标和说的话：钻石、金苹果、TNT 或末影水晶、挡住画盾牌', () => {
-  const trail = [{ k: 'diamond', a: 50, p: 50 }, { k: 'apple', a: 20, p: 70 }, { k: 'tnt', a: -7, p: 63 }, { k: 'crystal', a: 0, p: 63, b: 1 }, { k: 'crystal', a: -12, p: 51 }, { k: 'tnt', a: 0, p: 51, b: 1 }]
-  const markers = chart.chartOf(trail, box).markers
-  const money = points => (points / 100).toFixed(2)
-  assert.deepEqual(markers.map(marker => chart.iconOf(marker)), ['diamond', 'apple', 'tnt', 'shield', 'crystal', 'shield'])
-  assert.deepEqual(markers.map(marker => chart.markerWords(marker, money)), [
-    '第 1 次挖：钻石 +0.50',
-    '第 2 次挖：附魔金苹果 +0.20',
-    '第 3 次挖：TNT，被炸掉 0.07',
-    '第 4 次挖：盾牌挡住了末影水晶',
-    '第 5 次挖：末影水晶，被炸掉 0.12',
-    '第 6 次挖：盾牌挡住了 TNT',
-  ])
+test('线上挂的图标按加减多少挑、挨得近的跳过；条形码加往上扣往下；图例按物品排、不加不减的合成其他', () => {
+  const trail = [
+    { k: 'emerald', a: 10, p: 10 }, { k: 'diamond', a: 50, p: 60 }, { k: 'coal', a: 0, p: 60 }, { k: 'tnt', a: -20, p: 40 },
+    { k: 'poison', a: -2, p: 38 }, { k: 'tnt', a: 0, p: 38, b: 1 }, { k: 'debris', a: 100, p: 138 }, { k: 'crystal', a: -69, p: 69 },
+  ]
+  const wide = { width: 320, height: 132, padX: 0, padTop: 10, padBottom: 0 }
+  const out = chart.chartOf(trail, wide)
+  // 绿宝石、中毒、煤炭不挂；挡住的按一笔中等的算
+  assert.deepEqual(chart.picksOf(out).map(point => point.kind), ['diamond', 'tnt', 'tnt', 'debris', 'crystal'])
+  // 挨得近（图上 100 以内）就只留加减最多的
+  assert.deepEqual(chart.picksOf(out, 6, 100).map(point => point.kind), ['diamond', 'debris'])
+  assert.deepEqual(chart.picksOf(out, 2).map(point => point.kind), ['debris', 'crystal'])
+  const bars = chart.barsOf(out)
+  assert.equal(bars.length, 8)
+  assert.deepEqual(bars.map(bar => Math.sign(bar.size)), [1, 1, 0, -1, -1, 1, 1, -1])
+  assert.equal(bars[6].size, 1)
+  assert.equal(bars[2].color, chart.COLORS.other)
+  assert.equal(bars[5].color, chart.COLORS.blocked)
+  assert.deepEqual(chart.legendOf(out).map(entry => [entry.key, entry.count]),
+    [['debris', 1], ['diamond', 1], ['emerald', 1], ['blocked', 1], ['tnt', 1], ['crystal', 1], ['poison', 1], ['other', 1]])
+})
+
+test('图下面六格：平均每格按挖到的算；踩到雷（挡住的也算）断开连着没踩雷；扣掉的分开记，存进末影箱不算', () => {
+  const trail = [
+    { k: 'emerald', a: 10, p: 10 }, { k: 'diamond', a: 50, p: 60 }, { k: 'tnt', a: 0, p: 60, b: 1 }, { k: 'emerald', a: 10, p: 70 },
+    { k: 'emerald', a: 10, p: 80 }, { k: 'coal', a: 0, p: 80 }, { k: 'tnt', a: -20, p: 60 }, { k: 'poison', a: -3, p: 57 },
+    { k: 'ender', a: -28, p: 29 }, { k: 'creeper', a: -5, p: 24 },
+  ]
+  assert.deepEqual(chart.statsOf(trail), { digs: 7, average: 11, longest: 3, blocked: 1, lost: 28, bomb: 20, poison: 3, other: 5 })
+  assert.deepEqual(chart.statsOf([]), { digs: 0, average: 0, longest: 0, blocked: 0, lost: 0, bomb: 0, poison: 0, other: 0 })
 })
 
 test('挖到什么放什么：挡住是格挡声，重复盾牌和望远镜转小奖是经验球，珍珠和眼跟着动画放', () => {
@@ -65,7 +82,7 @@ test('挖到什么放什么：挡住是格挡声，重复盾牌和望远镜转�
   assert.equal(of('eye'), null)
 })
 
-test('线上只标最大的一笔和被炸得最狠的一下；刻度上有全部的事（中毒、苦力怕也算）；拖到哪一步说哪一步', () => {
+test('最大的一笔和扣得最多的一下（中毒、苦力怕也算）；拖到哪一步说哪一步', () => {
   const trail = [
     { k: 'emerald', a: 10, p: 10 }, { k: 'diamond', a: 50, p: 60 }, { k: 'tnt', a: -15, p: 45 }, { k: 'apple', a: 45, p: 90 },
     { k: 'creeper', a: -18, p: 72 }, { k: 'tnt', a: 0, p: 72, b: 1 }, { k: 'emerald', a: 10, p: 82 },
@@ -73,10 +90,7 @@ test('线上只标最大的一笔和被炸得最狠的一下；刻度上有全�
   const out = chart.chartOf(trail, box)
   assert.deepEqual([out.best.kind, out.best.amount], ['diamond', 50])
   assert.deepEqual([out.worst.kind, out.worst.amount], ['creeper', -18])
-  assert.equal(chart.iconOf(out.worst), null)
-  assert.deepEqual(out.markers.map(marker => chart.tickOf(marker.mark)), ['gain', 'loss', 'gain', 'loss', 'block'])
   const money = points => (points / 100).toFixed(2)
-  assert.equal(chart.markerWords(out.worst, money), '苦力怕扣掉 0.18')
   assert.equal(out.points.length, 8)
   const names = { emerald: '绿宝石', diamond: '钻石' }
   assert.equal(chart.pointWords(chart.pointAt(out, 0), money, names), '开始：待领取 0.00')

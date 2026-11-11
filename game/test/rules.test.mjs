@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { RAIL_OPTIONS, railsOf } from "../shared/layouts.mjs";
 import {
   amountOf, budgetLeft, claim, createGame, creeperBlast, crystalPercent, dig, digBlocked, formatPoints,
   averageUnits, coolingOf, MIN_INTERVAL_MS, newCard, newEndCard, newPlayer, placeFor, POOL_TARGET, privatePlayer, publicCard, publicGame,
@@ -10,10 +11,13 @@ import {
 const T0 = Date.parse("2026-11-06T12:00:00+08:00");
 const DAY = 24 * 3600 * 1000;
 
-/** @param {Partial<{ pool: number, params: Record<string, unknown>, seed: string }>} [options] */
-function game({ pool = 10000, params = {}, seed = "seed-a" } = {}) {
+/** @param {Partial<{ pool: number, params: Record<string, unknown>, seed: string, layout: boolean }>} [options] */
+function game({ pool = 10000, params = {}, seed = "seed-a", layout = false } = {}) {
   // 绿宝石按 10 分写死（新判定器是按奖池和人数算的，见“参数”那一组）
-  return createGame({ seed, rules: rulesOf({ boardSpec: "5", smallReward: 10, ...params }), pool, openedAt: T0, deadlineAt: T0 + DAY });
+  const rules = rulesOf({ boardSpec: "5", smallReward: 10, ...params });
+  // 区块的新摆法（rules.layout: 2）单独测（“区块的新摆法”那一组）；别的测试按以前的摆法写的固定格子位置
+  if (!layout) delete rules.layout;
+  return createGame({ seed, rules, pool, openedAt: T0, deadlineAt: T0 + DAY });
 }
 
 /** 把第 id 张卡的牌换成给定的（没写的格子是绿宝石），方便测一格一格的结果。 */
@@ -583,6 +587,7 @@ describe("给大家看的", () => {
 describe("新局的格子和区块（docs/V3_ITEMS.md §1、§2）", () => {
   it("苦力怕参数：没填按 60 秒，0 不开，最多 600，开着时至少是挖掘间隔的两倍", () => {
     assert.equal(rulesOf({}).creeper, 60);
+    assert.equal(rulesOf({}).layout, 2);
     assert.equal(rulesOf({ creeper: "x" }).creeper, 60);
     assert.equal(rulesOf({ creeper: 0 }).creeper, 0);
     assert.equal(rulesOf({ creeper: 45 }).creeper, 45);
@@ -1392,6 +1397,99 @@ describe("以前开的局（没有 rules.items）", () => {
     assert.equal("torches" in publicCard(g.cards[1]), false);
     assert.match(useItem(g, p, { item: "pick-x", cardId: 1, index: 12, now: T0 }).message, /没有道具栏/);
     assert.equal(creeperBlast(g, p, T0).ok, false);
+  });
+});
+
+describe("区块的新摆法（rules.layout: 2，docs/V3_ITEMS.md §10）", () => {
+  /** 一格连着哪几边 */
+  const SIDES = { ns: ["n", "s"], ew: ["e", "w"], ne: ["n", "e"], se: ["s", "e"], sw: ["s", "w"], nw: ["n", "w"] };
+  const STEP = { n: [-1, 0], e: [0, 1], s: [1, 0], w: [0, -1] };
+  const BACK = { n: "s", s: "n", e: "w", w: "e" };
+
+  it("铁轨连得起来：挨着的两格互相连着，卡边上的只朝外穿出去，不在卡边拐弯；会拐弯、会断开一格、有的卡有第二段", () => {
+    let turns = 0, gaps = 0, seconds = 0;
+    const counts = new Set();
+    for (let n = 0; n < 800; n++) {
+      const rails = railsOf(randomOf(`rails-${n}`, "card:7"), 6, RAIL_OPTIONS);
+      const at = new Map(Object.entries(rails).map(([index, shape]) => [Number(index), shape]));
+      counts.add(at.size);
+      for (const [index, shape] of at) {
+        const r = Math.floor(index / 6), c = index % 6;
+        for (const side of SIDES[shape]) {
+          const [dr, dc] = STEP[side];
+          const nr = r + dr, nc = c + dc;
+          const inside = nr >= 0 && nr < 6 && nc >= 0 && nc < 6;
+          const next = inside ? at.get(nr * 6 + nc) : undefined;
+          // 连着的那边：卡外、断开的空格（只在直道两头），或者一格也连回来的铁轨
+          if (next) assert.ok(SIDES[next].includes(BACK[side]), `${n}: ${index} ${shape} → ${next}`);
+          else if (inside) gaps += 1;
+        }
+        // 四周挨着的铁轨都是连着的（不贴着自己走）
+        for (const [side, [dr, dc]] of Object.entries(STEP)) {
+          const nr = r + dr, nc = c + dc;
+          if (nr >= 0 && nr < 6 && nc >= 0 && nc < 6 && at.has(nr * 6 + nc)) assert.ok(SIDES[shape].includes(side), `${n}: ${index} touches ${nr * 6 + nc}`);
+        }
+        const border = r === 0 || c === 0 || r === 5 || c === 5;
+        if (border) assert.ok(shape === "ns" || shape === "ew", `${n}: ${index} ${shape} on the border`);
+        if (r === 0 || r === 5) assert.equal(shape, "ns");
+        if (c === 0 || c === 5) assert.equal(shape, "ew");
+      }
+      if ([...at.values()].some((shape) => shape !== "ns" && shape !== "ew")) turns += 1;
+      // 两段：连通的块数
+      const left = new Set(at.keys());
+      let parts = 0;
+      while (left.size) {
+        parts += 1;
+        const stack = [left.values().next().value];
+        while (stack.length) {
+          const index = stack.pop();
+          if (!left.delete(index)) continue;
+          for (const side of SIDES[at.get(index)]) {
+            const [dr, dc] = STEP[side];
+            const nr = Math.floor(index / 6) + dr, nc = (index % 6) + dc;
+            if (nr >= 0 && nr < 6 && nc >= 0 && nc < 6 && left.has(nr * 6 + nc)) stack.push(nr * 6 + nc);
+          }
+        }
+      }
+      if (parts > 1) seconds += 1;
+    }
+    assert.ok(turns > 700, `turns ${turns}`);
+    assert.ok(gaps > 0 && seconds > 0, `${gaps} ${seconds}`);
+    assert.ok(Math.min(...counts) >= 4 && Math.max(...counts) <= 12, [...counts].join());
+  });
+
+  it("新局的矿井、试炼密室、下界按新摆法；同一个种子同一张卡每次一样；公开的卡带着铁轨的形状", () => {
+    const g = game({ params: { eyeEvery: 0 }, layout: true });
+    let pools = 0, nethers = 0;
+    const layouts = new Set();
+    for (let id = 2; id < 1002; id++) {
+      const card = newCard(g, id, id, 0);
+      assert.deepEqual(newCard(g, id, id, 0), card);
+      const fixed = Object.entries(card.fixed ?? {});
+      for (const [index, what] of fixed) assert.equal(card.deck[Number(index)], what);
+      const dug = card.deck.filter((_, index) => !card.fixed?.[index]);
+      assert.equal(dug.length, card.size * card.size - fixed.length);
+      for (const [what, number] of Object.entries(card.composition)) assert.equal(count(dug, what), number, `${card.kind} ${what}`);
+      if (card.kind === "mine") {
+        assert.deepEqual(Object.keys(card.rails ?? {}).sort(), fixed.map(([index]) => index).sort());
+        assert.ok(fixed.every(([, what]) => what === "deco"));
+        assert.deepEqual(publicCard(card).rails, card.rails);
+        assert.ok(card.composition.emerald >= 1, String(card.composition.emerald));
+      } else assert.equal(card.rails, undefined);
+      if (card.kind === "trial") {
+        const vaults = fixed.filter(([, what]) => what === "vault").map(([index]) => index);
+        assert.equal(vaults.length, 2);
+        assert.deepEqual(Object.keys(card.vaults ?? {}).sort(), vaults.sort());
+        layouts.add(fixed.map(([index, what]) => `${index}${what[0]}`).sort().join());
+      }
+      if (card.kind === "nether") {
+        nethers += 1;
+        const [a, b] = fixed.map(([index]) => Number(index));
+        if (Math.abs(a - b) === 6 || (Math.abs(a - b) === 1 && Math.floor(a / 6) === Math.floor(b / 6))) pools += 1;
+      }
+    }
+    assert.ok(layouts.size >= 10, String(layouts.size));
+    assert.ok(pools > nethers * 0.4 && pools < nethers * 0.7, `${pools}/${nethers}`);
   });
 });
 
