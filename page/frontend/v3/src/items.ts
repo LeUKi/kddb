@@ -36,7 +36,7 @@ export const SLOT_ICONS: Record<Slot, IconKind> = {
 }
 
 /**
- * 对准格子用的道具第一次拿起来时弹窗教一次（docs/V3_ITEMS.md §5，用户选的 B）；之后点一下就拿起来。
+ * 对准格子用的道具第一次使用时弹窗教一次（docs/V3_ITEMS.md §5，用户选的 B）；之后点一下就是使用。
  * 三种附魔镐算一种。记在这台设备上（存不了就每次都教，不影响玩）。
  */
 const TAUGHT_KEY = 'kddb:v3:taught'

@@ -57,13 +57,13 @@ export function ItemDialogs() {
             markTaught(held)
             close()
             setHeld(held)
-          }}>拿起来</button>
+          }}>使用</button>
         </> : slot === 'map' || slot === 'potion' ? <>
           <button type="button" ref={first} onClick={close}>取消</button>
           <button type="button" className="is-primary" disabled={!!blocked} onClick={() => {
             close()
             void applyItem(slot)
-          }}>{slot === 'map' ? '打开' : '喝下'}</button>
+          }}>使用</button>
         </> : <button type="button" ref={first} className="is-primary" onClick={close}>知道了</button>}
       </div>
     </>
@@ -88,7 +88,7 @@ export function ItemDialogs() {
       </ul>
       <div className="dialog-actions">
         <button type="button" ref={first} onClick={close}>取消</button>
-        <button type="button" className="is-primary" onClick={() => { close(); void applyItem('ender') }}>存一半、毁一半</button>
+        <button type="button" className="is-primary" onClick={() => { close(); void applyItem('ender') }}>使用</button>
       </div>
     </>
   } else if (dialog.type === 'table') {
@@ -140,7 +140,7 @@ function aboutSlot(slot: Slot, me: Me, items: boolean, interval: number, blocked
     case 'torch': return { count: `还有 ${count} 个`, words: '插在两格之间的缝上，照亮旁边 4 格：绿色是没有危险，黄色 1～2 个，红色 3～4 个（TNT、末影水晶、刷怪笼）。大家都看得见。' }
     case 'key': return { count: `还有 ${count} 把`, words: '点试炼密室里的宝库开它，开出一样东西；每个宝库每人只能开一次。' }
     case 'map': return { count: `还有 ${count} 张`, words: '随机标出地图上一格奖励（绿宝石常见，钻石少见），只有你看得见，镜头会飞过去。' }
-    case 'potion': return { count: `还有 ${count} 瓶`, words: '喝下以后 10 秒里，每次挖只要隔 1 秒。' }
+    case 'potion': return { count: `还有 ${count} 瓶`, words: '用了以后 10 秒里，每次挖只要隔 1 秒。' }
     case 'shield': return { count: `${count}/${items ? SHIELD_CAP : 1} 面`, words: `踩到 TNT 或末影水晶时自动挡下一次，用掉一面。${items ? `最多带 ${SHIELD_CAP} 面，再挖到换成一份小奖。` : '再挖到就换成一份小奖。'}` }
     case 'coal': case 'stick': return { count: `${count}/${CRAFT_NEED}`, words: `煤炭、木棍都攒满 ${CRAFT_NEED} 个，自动做成一个火把；满了再挖到不算。` }
     case 'poison': return { count: `还有 ${count} 次`, words: '接下来每挖一次，扣手上 5%，盾牌挡不住。' }
@@ -148,13 +148,13 @@ function aboutSlot(slot: Slot, me: Me, items: boolean, interval: number, blocked
   }
 }
 
-/** 拿在手上以后怎么用：触屏点两下，鼠标指着点一下。 */
+/** 点了“使用”以后怎么用：触屏点两下（预览、确认），鼠标指着点一下。道具的按钮都叫“使用”（2026-11-11 用户：“拿起来”难懂）。 */
 function howToAim(held: Held) {
   const touch = !window.matchMedia?.('(hover: hover) and (pointer: fine)').matches
   const where = held === 'torch' ? '缝' : held === 'key' ? '宝库' : '格子'
   return touch
-    ? `拿起来以后，在地图上点${where}先看看放在哪，同一处再点一次就用；再点工具条上的它放回去。`
-    : `拿起来以后，指到哪里预览到哪里，点一下就用；右键、Esc 或再点它放回去。`
+    ? `点“使用”以后，在地图上点${where}预览位置，同一处再点一次确认；再点工具条上的它就取消。`
+    : `点“使用”以后，指到哪里预览到哪里，点一下确认；右键、Esc 或再点它取消。`
 }
 
 /** 火把：3×3 的小格子，亮着四格，火把插在中间那个角上。 */

@@ -19,7 +19,7 @@ import type { Me } from './types'
  * 后面是手里的道具，再隔一道线是被动的（盾牌、煤炭、木棍、中毒）。放不下时可以滑（两头渐隐，有箭头）。
  *
  * 点法（用户选的 B，2026-11-11）：道具的说明和确认都在弹窗里，按钮挨着说明，不在工具条旁边长气泡。
- * 对格子用的点一下拿在手上（第一次拿时先弹窗教一次），地图上预览、再点一次才用；再点它、Esc、右键放回去。
+ * 对格子用的点一下就是使用（第一次先弹窗教一次，按钮叫“使用”），地图上预览、再点一次确认；再点它、Esc、右键取消。
  * 药水、藏宝图弹窗确认；末影箱、附魔台弹窗；被动的和镐子弹窗说明。
  */
 export const Toolbar = memo(function Toolbar({ level, onNeedDig }: { level: Level; onNeedDig: () => void }) {
@@ -55,7 +55,7 @@ export const Toolbar = memo(function Toolbar({ level, onNeedDig }: { level: Leve
   useEffect(() => {
     if (held && (!order.includes(held) || !playing)) putDown()
   })
-  // 拿起来时不在挖卡这一级：飞到当前卡（弹窗里点“拿起来”也一样）
+  // 拿起来时不在挖卡这一级：飞到当前卡（弹窗里点“使用”也一样）
   const needDig = useRef(onNeedDig)
   needDig.current = onNeedDig
   const levelNow = useRef(level)
