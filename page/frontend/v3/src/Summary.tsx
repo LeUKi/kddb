@@ -17,8 +17,10 @@ export function SummaryCard({ reason, onClose }: { reason: 'button' | 'end'; onC
   const uid = useAtomValue(uidAtom)
   const [summary, setSummary] = useState<Summary | null>(null)
   const [problem, setProblem] = useState('')
-  // 点了哪个图标（显示那一格挖到了什么）；电脑上指着也有提示
+  // 点了哪个图标（显示那一格挖到了什么），点别处就关；电脑上指着就显示，移开就收
   const [picked, setPicked] = useState<number | null>(null)
+  const [hovered, setHovered] = useState<number | null>(null)
+  const shown = hovered ?? picked
   const unit = settled?.unit ?? hongbao?.unit ?? 'LDC'
 
   const load = () => {
@@ -43,7 +45,10 @@ export function SummaryCard({ reason, onClose }: { reason: 'button' | 'end'; onC
         : null
 
   return <div className="summary-backdrop" onClick={onClose}>
-    <motion.section className="summary" role="dialog" aria-modal="true" aria-label="我的收益" onClick={event => event.stopPropagation()}
+    <motion.section className="summary" role="dialog" aria-modal="true" aria-label="我的收益" onClick={event => {
+      event.stopPropagation()
+      setPicked(null)
+    }}
       initial={{ opacity: 0, y: 18, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: 'spring', stiffness: 320, damping: 28 }}>
       <header className="summary-head">
         <span className="summary-brand"><ItemIcon kind="pickaxe" size={16} />{hongbao?.title ? (hongbao.title.includes('矿洞夺宝') ? hongbao.title : `矿洞夺宝 · ${hongbao.title}`) : '矿洞夺宝'}</span>
@@ -75,15 +80,20 @@ export function SummaryCard({ reason, onClose }: { reason: 'button' | 'end'; onC
                 {/* 钻石、金苹果、踩雷、盾牌挡住直接画图标，点一下（电脑上指着）说这一格挖到了什么 */}
                 {chart.markers.map(marker => {
                   const words = markerWords(marker, money)
-                  return <motion.button key={marker.step} type="button" className={`chart-icon${picked === marker.step ? ' is-picked' : ''}`} title={words} aria-label={words} aria-pressed={picked === marker.step}
+                  return <motion.button key={marker.step} type="button" className={`chart-icon${shown === marker.step ? ' is-picked' : ''}`} aria-label={words} aria-pressed={picked === marker.step}
                     style={{ left: `${(marker.x / CHART.width) * 100}%`, top: `${(marker.y / CHART.height) * 100}%`, x: '-50%', y: '-50%' }}
                     initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.25 + (marker.step / Math.max(1, me.digs)) * 0.7, duration: 0.25 }}
-                    onClick={() => setPicked(now => now === marker.step ? null : marker.step)}>
+                    onPointerEnter={event => { if (event.pointerType === 'mouse') setHovered(marker.step) }}
+                    onPointerLeave={event => { if (event.pointerType === 'mouse') setHovered(now => now === marker.step ? null : now) }}
+                    onClick={event => {
+                      event.stopPropagation()
+                      setPicked(now => now === marker.step ? null : marker.step)
+                    }}>
                     <ItemIcon kind={iconOf(marker)} size={16} />
                   </motion.button>
                 })}
                 {(() => {
-                  const marker = chart.markers.find(item => item.step === picked)
+                  const marker = chart.markers.find(item => item.step === shown)
                   return marker ? <span className={`chart-tip${side(marker.x)}`} style={{ left: `${(marker.x / CHART.width) * 100}%`, top: `${(marker.y / CHART.height) * 100}%` }} role="status">{markerWords(marker, money)}</span> : null
                 })()}
               </div>

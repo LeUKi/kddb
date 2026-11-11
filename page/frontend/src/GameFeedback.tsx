@@ -137,7 +137,7 @@ function RewardShowcase({ effect, reduced }: { effect: PresentationEffect; reduc
       </motion.div>
     </motion.div>
     {geometry && <motion.div className="reward-showcase-item" aria-hidden="true" style={{ left: geometry.centerX, top: geometry.centerY }} initial={reduced ? { opacity: 0, scale: 1, x: 0, y: 0 } : { opacity: 0, scale: .28, x: geometry.sourceX - geometry.centerX, y: geometry.sourceY - geometry.centerY }} animate={transfer ? transferAnimation : { opacity: 1, x: 0, y: 0, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: reduced ? .05 : transfer ? .66 : .46, ease: easing, ...(transfer && fly ? { times: [0, .42, 1] } : {}) }}>
-      <div className="reward-showcase-icon"><ItemIcon kind={effect.kind} size={120}/></div>
+      <div className="reward-showcase-icon"><ItemIcon kind={effect.kind} size={120} moving /></div>
       {effect.isOwn && effect.blocked && <motion.span className="reward-showcase-intercept" initial={{ opacity: 0, x: reduced ? 0 : -35, scale: reduced ? 1 : .8 }} animate={{ opacity: 1, x: 0, scale: 1 }} transition={{ duration: reduced ? .05 : .38, delay: reduced ? 0 : .28, ease: easing }}><ItemIcon kind="shield" size={92}/></motion.span>}
     </motion.div>}
   </motion.section>

@@ -81,10 +81,13 @@ body { overflow: hidden; overscroll-behavior: none; }
 button.eye-status { cursor: pointer; }
 .eye-status.is-treasure { color: #2a1a00; font-weight: 650; background: linear-gradient(#ffe08a, #e8a93a); border-color: #fff3c4; }
 
-/* JP：末地宝藏开着、又不在画面里时，画面边上一直亮着；金色，出现时一道光扫过、呼吸几下，之后静止（理由同上） */
-.jp-marker { position: absolute; z-index: 4; display: flex; align-items: center; gap: 5px; padding: 6px 13px; overflow: hidden; color: #2a1a00; font-weight: 900; font-size: 14px; letter-spacing: .5px; background: linear-gradient(#ffe08a, #e8a93a); border: 0; border-radius: 999px; box-shadow: 0 0 22px #ffd36baa, inset 0 0 0 2px #fff3c4; transform: translate(-50%, -50%); cursor: pointer; animation: jp-breathe 1.6s ease-in-out 6 alternate; }
+/* JP：末地宝藏开着、又不在画面里时，画面边上一直亮着；金色，出现时一道光扫过几下，之后静止（理由同上）。
+   以前还会“呼吸”（改 box-shadow，每一帧都要重画），去掉了 */
+.jp-marker { position: absolute; z-index: 4; display: flex; align-items: center; gap: 5px; padding: 6px 13px; overflow: hidden; color: #2a1a00; font-weight: 900; font-size: 14px; letter-spacing: .5px; background: linear-gradient(#ffe08a, #e8a93a); border: 0; border-radius: 999px; box-shadow: 0 0 22px #ffd36baa, inset 0 0 0 2px #fff3c4; transform: translate(-50%, -50%); cursor: pointer; }
+/* 不指的时候藏起来（不拆掉），扫光也停在原处，下次出来接着扫完，不从头来 */
+.jp-marker.is-hidden { visibility: hidden; pointer-events: none; }
+.jp-marker.is-hidden::after { animation-play-state: paused; }
 .jp-marker::after { content: ''; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 30%, #ffffffcc 50%, transparent 70%); transform: translateX(-120%); animation: jp-sheen 2.2s ease-in-out 3; pointer-events: none; }
-@keyframes jp-breathe { from { box-shadow: 0 0 12px #ffd36b88, inset 0 0 0 2px #fff3c4; } to { box-shadow: 0 0 30px #ffd36bdd, inset 0 0 0 2px #fff3c4; } }
 @keyframes jp-sheen { 0%, 40% { transform: translateX(-120%); } 80%, 100% { transform: translateX(120%); } }
 
 /* 末影之眼的飞行：金色的尾巴、波纹和粒子 */
@@ -230,7 +233,12 @@ button.eye-status { cursor: pointer; }
 .card-left li.is-out { opacity: .35; }
 .game-info { display: flex; align-items: center; gap: 12px; min-width: 0; overflow: hidden; color: var(--muted); font-size: 13px; white-space: nowrap; }
 .game-info b { color: var(--ink); font-variant-numeric: tabular-nums; }
-.info-line { display: inline-flex; gap: 12px; min-width: 0; }
+.info-line { display: contents; }
+/* 宽屏（游戏 480–650 宽也算）：奖池、人数、截止排一行，挤不下时人数先让位（收得最快），截止其次，各自省略，
+   不叠在一起（以前人数画到截止下面，奖池数字一变就像在闪）。手机上 .info-line 自己占一行（下面的媒体查询） */
+.info-line > span:first-child { flex: none; }
+.info-people { flex: 0 100 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.info-deadline { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .summary-toggle { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; padding: 3px 9px; color: var(--ink); background: #242d34; border: 1px solid #56636b; border-radius: 6px; }
 .card-left li.is-crystal { color: #d9b8f0; }
 
@@ -347,7 +355,7 @@ button.eye-status { cursor: pointer; }
   .zoom-float span { display: none; }
   /* 底栏固定几行：奖池和人数一行，截止和收益一行，开了末地宝藏再一行；长了省略，不换行（高度一变，地图就重新对准） */
   .game-info { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "line line" "deadline summary" "eye eye"; align-items: center; white-space: nowrap; }
-  .info-line { grid-area: line; gap: 10px; overflow: hidden; }
+  .info-line { display: inline-flex; grid-area: line; gap: 10px; min-width: 0; overflow: hidden; }
   .info-people { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .info-deadline { grid-area: deadline; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .game-info .summary-toggle { grid-area: summary; margin-left: 0; }
@@ -369,7 +377,7 @@ button.eye-status { cursor: pointer; }
 
 @media (prefers-reduced-motion: reduce) {
   .jp-marker, .jp-marker::after, .map-block::before, .map-card::after,
-  .map-block, .map-card, .map-block.is-grown, .map-block.is-grown .map-card, .map-block.is-grown .map-cell, .map-block.is-grown .thumb-canvas, .map-cell.just-mine, .map-cell.just-other, .digging-pick, .cell-float, .new-marker, .toast, .sheen, .tool-slot, .tool-cell .tool-slot::after, .glint, .poison-spider, .poison-bubbles i, .poison-glow, .lava-icon, .fixed-lava, .torch, .creeper, .creeper.is-swell, .creeper-flash, .tool-count, .map-cell.in-box, .card-noise img,
+  .map-block, .map-card, .map-block.is-grown, .map-block.is-grown .map-card, .map-block.is-grown .map-cell, .map-block.is-grown .thumb-canvas, .map-cell.just-mine, .map-cell.just-other, .digging-pick, .cell-float, .new-marker, .toast, .sheen, .tool-slot, .tool-cell .tool-slot::after, .glint, .glint::before, .poison-spider, .poison-bubbles i, .poison-glow, .lava-icon, .fixed-lava, .torch, .creeper, .creeper.is-swell, .creeper-flash, .tool-count, .map-cell.in-box, .card-noise img,
   .map-cell.revealed > .item-icon, .cell-who, .map-cell.just-other::after { animation: none !important; transition: none !important; }
   /* 不呼吸，直接亮着 */
   .map-view .map-block.has-eye::before, .map-view .map-block.is-end:not(.is-done)::before { opacity: 1; }
@@ -419,11 +427,13 @@ button.eye-status { cursor: pointer; }
 .tool-slot.is-haste { border-color: #d9c043; box-shadow: 0 0 0 2px #d9c04366, 0 0 12px #d9c04366; }
 .haste-badge { position: absolute; left: 2px; top: 2px; z-index: 2; }
 /* 附魔镐：一直流着的附魔紫光（按镐子的形状遮住），左上角画形状 */
-.tool-slot .glint, .shape-pick .glint { position: absolute; left: 50%; top: 50%; width: 30px; height: 30px; margin: -15px 0 0 -15px; -webkit-mask: var(--pick-mask) center / 100% 100% no-repeat; mask: var(--pick-mask) center / 100% 100% no-repeat; background: linear-gradient(115deg, transparent 30%, #aa5affee 46%, #ffb4ffcc 52%, transparent 68%) 0 0 / 300% 100%; mix-blend-mode: screen; animation: glint 2.4s linear 3; pointer-events: none; }
-.tool-slot.is-selected .glint { animation-name: glint-again; }
+.tool-slot .glint, .shape-pick .glint { position: absolute; left: 50%; top: 50%; width: 30px; height: 30px; margin: -15px 0 0 -15px; -webkit-mask: var(--pick-mask) center / 100% 100% no-repeat; mask: var(--pick-mask) center / 100% 100% no-repeat; overflow: hidden; mix-blend-mode: screen; pointer-events: none; }
+/* 附魔光：一条光带在镐子的形状里扫过。挪的是光带（transform，不用重画），以前改 background-position 每一帧都要重画 */
+.tool-slot .glint::before, .shape-pick .glint::before { content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 300%; background: linear-gradient(115deg, transparent 30%, #aa5affee 46%, #ffb4ffcc 52%, transparent 68%); transform: translateX(-73.34%); animation: glint 2.4s linear 3; }
+.tool-slot.is-selected .glint::before { animation-name: glint-again; }
 .shape-pick .glint { width: 32px; height: 32px; margin: -16px 0 0 -16px; }
-@keyframes glint { from { background-position: 110% 0; } to { background-position: -40% 0; } }
-@keyframes glint-again { from { background-position: 110% 0; } to { background-position: -40% 0; } }
+@keyframes glint { from { transform: translateX(-73.34%); } to { transform: translateX(26.67%); } }
+@keyframes glint-again { from { transform: translateX(-73.34%); } to { transform: translateX(26.67%); } }
 .shape-glyph { position: absolute; left: 3px; top: 3px; z-index: 2; display: grid; grid-template-columns: repeat(3, 3px); gap: 1px; }
 .shape-glyph i { display: block; width: 3px; height: 3px; background: #ffffff26; }
 .shape-glyph i.on { background: #c9a6ff; }
@@ -538,7 +548,9 @@ button.eye-status { cursor: pointer; }
 /* —— 顶栏：末影箱里存着的，数字右上角一个绿色的 +x —— */
 .earned { position: relative; }
 .chest-plus { position: relative; top: -10px; display: inline-flex; align-items: center; gap: 2px; margin-left: 4px; padding: 0 5px; color: #6fe28a; font-size: 12px; font-weight: 600; background: #5fdc7c1f; border: 0; border-radius: 6px; animation: count-bump .4s var(--ease-out); }
-.chest-note { position: absolute; left: 0; top: calc(100% + 8px); z-index: 8; width: max-content; max-width: 260px; padding: 8px 10px; font-size: 12px; }
+.top-hint { position: absolute; left: 50%; top: 8px; z-index: 7; display: flex; align-items: center; gap: 8px; width: max-content; max-width: min(380px, calc(100% - 24px)); padding: 7px 8px 7px 10px; font-size: 12.5px; translate: -50% 0; }
+.top-hint p { flex: 1 1 auto; min-width: 0; }
+.top-hint > button { flex: none; padding: 5px 12px; color: var(--ink); background: #2a2234; border: 1px solid #5b4a75; border-radius: 8px; }
 
 /* —— 弹窗：末影箱、附魔台、宝库开出的东西 —— */
 .item-dialog-backdrop { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 16px; background: #000a; }

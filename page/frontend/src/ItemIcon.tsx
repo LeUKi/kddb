@@ -40,9 +40,13 @@ const textures: Record<IconKind, string> = {
 const HASTE = '#d9c043'
 
 /** Unmodified vanilla textures/renders. Provenance: docs/MINECRAFT_ASSETS.md. */
-export function ItemIcon({ kind, size = 32, className = '' }: { kind: IconKind; size?: number; className?: string }) {
+/**
+ * moving：附魔金苹果用原版的动图（1650 帧、一直循环）。动图每一帧都要重画，红包站把游戏放在毛玻璃里，
+ * 网页闲着也每秒画 20 帧（2026-11-11 量过），所以默认画静态的；只有 v2 老网页的开奖大图和记录传 moving。
+ */
+export function ItemIcon({ kind, size = 32, className = '', moving = false }: { kind: IconKind; size?: number; className?: string; moving?: boolean }) {
   if (kind === 'totem') return <span className={`item-icon pickaxe-pair ${className}`} style={{ width: size, height: size }} aria-hidden="true"><img className="pair-back" src={`${base}/${textures.pickaxe}`} alt="" draggable={false} /><img className="pair-front" src={`${base}/${textures.pickaxe}`} alt="" draggable={false} /></span>
-  if (kind === 'apple') return <picture className={`item-icon ${className}`} style={{ width: size, height: size }} aria-hidden="true"><source media="(prefers-reduced-motion: reduce)" srcSet={`${base}/${textures.apple}`} /><img src={`${base}/inventory/enchanted_golden_apple.gif`} width={size} height={size} alt="" draggable={false} /></picture>
+  if (kind === 'apple' && moving) return <picture className={`item-icon ${className}`} style={{ width: size, height: size }} aria-hidden="true"><source media="(prefers-reduced-motion: reduce)" srcSet={`${base}/${textures.apple}`} /><img src={`${base}/inventory/enchanted_golden_apple.gif`} width={size} height={size} alt="" draggable={false} /></picture>
   if (kind === 'potion') return <span className={`item-icon potion-icon ${className}`} style={{ width: size, height: size, '--tint': HASTE, '--overlay': `url(${base}/textures/item/potion_overlay.png)` } as CSSProperties} aria-hidden="true">
     <img className="potion-liquid" src={`${base}/textures/item/potion_overlay.png`} alt="" draggable={false} />
     <span className="potion-tint" />

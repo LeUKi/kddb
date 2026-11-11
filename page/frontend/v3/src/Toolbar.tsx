@@ -1,7 +1,7 @@
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import type { MutableRefObject, RefObject } from 'react'
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ItemIcon } from '../../src/ItemIcon'
 import type { IconKind } from '../../src/game'
 import { applyAtAim } from './aim'
@@ -12,7 +12,7 @@ import { useCooling } from './Hud'
 import type { Held, Slot } from './items'
 import { CRAFT_NEED, countOf, isHeld, SHIELD_CAP, shapeOf, SLOT_NAMES, SLOT_USE, slotsOf, vaultsLeft } from './items'
 import { play } from './sound'
-import { aimAtom, blockedAtom, dialogAtom, gameAtom, hasteUntilAtom, heldAtom, meAtom, putDown, settledAtom, slotMenuAtom, toast, applyItem } from './state'
+import { aimAtom, blockedAtom, dialogAtom, digIntervalAtom, hasGameAtom, hasteUntilAtom, heldAtom, itemsGameAtom, meAtom, putDown, settledAtom, slotMenuAtom, toast, applyItem } from './state'
 import type { Me, PublicCard } from './types'
 
 const ICONS: Record<Slot, IconKind> = {
@@ -28,9 +28,12 @@ const ICONS: Record<Slot, IconKind> = {
  * 点法：对格子用的道具点一下拿在手上，地图上预览、再点一次才用；藏宝图、药水在提示框里确认；
  * 末影箱、附魔台打开弹窗；被动的点开只看说明。再点同一格、Esc、电脑上点右键都是放下。
  */
-export function Toolbar({ level, card, onNeedDig }: { level: Level; card: PublicCard | null; onNeedDig: () => void }) {
+export const Toolbar = memo(function Toolbar({ level, card, onNeedDig }: { level: Level; card: PublicCard | null; onNeedDig: () => void }) {
   const me = useAtomValue(meAtom)
-  const game = useAtomValue(gameAtom)
+  // 只订阅规则里用到的：别人每挖一格 gameAtom 都换，工具条不该跟着重画、重新量一遍（2026-11-11 量过）
+  const hasGame = useAtomValue(hasGameAtom)
+  const items = useAtomValue(itemsGameAtom)
+  const interval = useAtomValue(digIntervalAtom)
   const blocked = useAtomValue(blockedAtom)
   const settled = useAtomValue(settledAtom)
   const [held, setHeld] = useAtom(heldAtom)
@@ -46,11 +49,12 @@ export function Toolbar({ level, card, onNeedDig }: { level: Level; card: Public
   const [ends, setEnds] = useState({ start: false, end: false })
   const crafted = useCraft(me, slotRefs, box, reduced)
 
-  const items = !!game?.rules.items
   const { active, passive } = me ? slotsOf(me, items) : { active: [], passive: [] }
   // 正在合成：煤炭、木棍满着多留一会儿，飞去火把那一格
   const shownPassive: Slot[] = crafted ? [...passive.filter(slot => slot !== 'coal' && slot !== 'stick'), 'coal', 'stick'] : passive
   const order: Slot[] = ['pickaxe', ...active, ...shownPassive]
+  /** 格子的排法：变了才量、才做 layout 动画（以前每次重画 motion 都把每一格量一遍） */
+  const orderKey = order.join()
   const playing = !!me && me.status === 'playing' && !settled
 
   useEffect(makeCursors, [])
@@ -142,7 +146,8 @@ export function Toolbar({ level, card, onNeedDig }: { level: Level; card: Public
     const next = { start: position > 4, end: position < room - 4 }
     setEnds(before => (before.start === next.start && before.end === next.end ? before : next))
   }
-  useLayoutEffect(measure)
+  // 只在格子变了时量；大小变了有 ResizeObserver
+  useLayoutEffect(measure, [orderKey])
   useEffect(() => {
     const element = scroller.current
     if (!element) return
@@ -182,8 +187,7 @@ export function Toolbar({ level, card, onNeedDig }: { level: Level; card: Public
     element?.scrollIntoView?.({ block: 'nearest', inline: 'nearest', behavior: reduced ? 'auto' : 'smooth' })
   }, [held, menu, reduced])
 
-  if (!me || !game) return <div className="toolbar" ref={box} />
-  const interval = game.rules.digInterval ?? 1
+  if (!me || !hasGame) return <div className="toolbar" ref={box} />
   const haste = Math.max(0, hasteUntil - Date.now())
 
   const slotView = (slot: Slot) => {
@@ -203,7 +207,7 @@ export function Toolbar({ level, card, onNeedDig }: { level: Level; card: Public
         if (element) slotRefs.current.set(slot, element)
         else slotRefs.current.delete(slot)
       }}
-      layout={!reduced} initial={slot === 'pickaxe' || reduced ? false : { opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }}
+      layout={!reduced} layoutDependency={orderKey} initial={slot === 'pickaxe' || reduced ? false : { opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }}
       exit={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.3 }} transition={{ type: 'spring', stiffness: 520, damping: 30 }}>
       <button type="button"
         className={`tool-slot is-${slot}${selected ? ' is-selected' : ''}${open ? ' is-open' : ''}${fill === 1 ? ' is-full' : ''}${slot === 'pickaxe' && haste > 0 ? ' is-haste' : ''}`}
@@ -265,7 +269,7 @@ export function Toolbar({ level, card, onNeedDig }: { level: Level; card: Public
         <div className="toolbar-slots">
           <AnimatePresence initial={false} mode="popLayout" onExitComplete={measure}>
             {active.map(slotView)}
-            {shownPassive.length > 0 ? <motion.span key="divider" layout={!reduced} className="toolbar-divider" aria-hidden="true"
+            {shownPassive.length > 0 ? <motion.span key="divider" layout={!reduced} layoutDependency={orderKey} className="toolbar-divider" aria-hidden="true"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} /> : null}
             {shownPassive.map(slotView)}
           </AnimatePresence>
@@ -291,7 +295,7 @@ export function Toolbar({ level, card, onNeedDig }: { level: Level; card: Public
       </motion.div> : null}
     </AnimatePresence>
   </div>
-}
+})
 
 /** 横屏时工具条是竖的（样式里只让它上下滚）。按样式判断，不按内容：格子长出来时会高出一两个像素。 */
 function isVertical(element: HTMLElement) {

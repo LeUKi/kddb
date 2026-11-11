@@ -1,9 +1,9 @@
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 'motion/react'
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import { ItemIcon } from '../../src/ItemIcon'
 import { mutedAtom, play, setMuted } from './sound'
-import { blockedAtom, chestNoteAtom, claim, claimingAtom, focusRequestAtom, gameAtom, hongbaoAtom, meAtom, readyAtAtom, settledAtom, summaryOpenAtom, totalOf } from './state'
+import { blockedAtom, chestNoteAtom, claim, claimingAtom, digIntervalAtom, focusRequestAtom, gameAtom, hongbaoAtom, meAtom, readyAtAtom, settledAtom, summaryOpenAtom, totalOf } from './state'
 import { outOfPicks } from './items'
 import type { Kind, PublicCard } from './types'
 import { BIOME_NAMES, KIND_NAMES, KINDS, money } from './types'
@@ -19,11 +19,24 @@ export function Tween({ value, format = String }: { value: number; format?: (val
   const formatRef = useRef(format)
   formatRef.current = format
   const text = useTransform(shown, latest => formatRef.current(Math.round(latest)))
+  /** 上次改数的时刻 */
+  const changedAt = useRef(0)
   useEffect(() => {
     if (reduced) {
       shown.set(value)
       return
     }
+    const since = performance.now() - changedAt.current
+    // 一直在变（别人一直在挖）：不滚，最多半秒换一次数。每滚一帧整条底栏连同红包站的毛玻璃都要重画，
+    // 一秒十几次推送时就一直在画（2026-11-11 量过）
+    if (since < 1000) {
+      const timer = window.setTimeout(() => {
+        changedAt.current = performance.now()
+        shown.set(value)
+      }, Math.max(0, 500 - since))
+      return () => window.clearTimeout(timer)
+    }
+    changedAt.current = performance.now()
     const controls = animate(shown, value, { duration: 0.45, ease: [0.22, 1, 0.36, 1] })
     // 页面在后台时动画帧不跑：到时间就直接是最终的数
     const settle = window.setTimeout(() => shown.set(value), 600)
@@ -41,7 +54,8 @@ export function Tween({ value, format = String }: { value: number; format?: (val
  */
 export function useCooling() {
   const readyAt = useAtomValue(readyAtAtom)
-  const interval = useAtomValue(gameAtom)?.rules.digInterval ?? 1
+  // 只订阅挖掘间隔（订阅 gameAtom 的话，用它的工具条每次推送都要重画）
+  const interval = useAtomValue(digIntervalAtom)
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
     setNow(Date.now())
@@ -74,27 +88,17 @@ export function TopBar({ onRules }: { onRules: () => void }) {
   useEffect(() => {
     if (!asks) setConfirming(false)
   }, [asks])
-  // 末影箱刚存进去：绿字下面自己弹几秒说明；点绿字也能再看
-  const chestNote = useAtomValue(chestNoteAtom)
-  const [note, setNote] = useState(false)
-  useEffect(() => {
-    if (!chestNote) return
-    setNote(true)
-    const timer = window.setTimeout(() => setNote(false), 4500)
-    return () => window.clearTimeout(timer)
-  }, [chestNote])
+  // 末影箱的说明在地图顶上（ChestNote）；点绿字打开、再点收起
+  const [chestNote, setChestNote] = useAtom(chestNoteAtom)
   if (!me) return null
   const chest = me.chest ?? 0
   return <header className={`top-bar${confirming ? ' is-confirming' : ''}`}>
     <div className="earned">
       <span>{settled ? '已领到' : '矿洞里的奖励'}</span>
       <strong><Tween value={settled ? Math.round(Number(settled.amount) * 100) : me.points} format={money} /> <small>{settled?.unit ?? unit}</small>
-        {chest > 0 && !settled ? <button type="button" className="chest-plus" onClick={() => setNote(value => !value)} aria-expanded={note}
+        {chest > 0 && !settled ? <button type="button" className="chest-plus" onClick={() => setChestNote(value => value ? 0 : Date.now())} aria-expanded={chestNote > 0}
           aria-label={`末影箱里存着 ${money(chest)}，炸不到，领取时一起加上`}><ItemIcon kind="ender" size={12} />+{money(chest)}</button> : null}
       </strong>
-      {note && chest > 0 && !settled ? <motion.p className="item-tip chest-note" role="status" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}>
-        <b className="is-green">+{money(chest)}</b>在末影箱里：炸不到，金苹果也不翻它，领取时一起加上。
-      </motion.p> : null}
     </div>
     <div className="claim">
       {settled ? <span className="claim-done">领取完成</span>
@@ -167,11 +171,6 @@ export function BottomBar({ card }: { card: PublicCard | null }) {
   const hongbao = useAtomValue(hongbaoAtom)
   const setFocus = useSetAtom(focusRequestAtom)
   const setSummary = useSetAtom(summaryOpenAtom)
-  const [now, setNow] = useState(() => hb.now())
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(hb.now()), 1000)
-    return () => window.clearInterval(timer)
-  }, [])
   if (!game) return null
   const unit = hongbao?.unit ?? 'LDC'
   const fixedCount = card?.fixed ? Object.keys(card.fixed).length : 0
@@ -205,7 +204,7 @@ export function BottomBar({ card }: { card: PublicCard | null }) {
         <span>奖池还剩 <b><Tween value={game.left} format={money} /></b> {unit}</span>
         <span className="info-people">{game.stats.players} 人在挖 · {game.stats.claimed} 人已领</span>
       </span>
-      <span className="info-deadline">{deadlineWords(game.deadlineAt, game.wrapUpAt, now, game.over)}</span>
+      <Deadline deadlineAt={game.deadlineAt} wrapUpAt={game.wrapUpAt} over={game.over} />
       {eye.kind === 'treasure' ? <button type="button" className="eye-status is-treasure" onClick={() => setFocus({ cardId: eye.card.id, at: Date.now() })}><ItemIcon kind="eye" size={14} />末地宝藏开了，点这里过去</button>
         : eye.kind === 'eye' ? <button type="button" className="eye-status" onClick={() => setFocus({ cardId: eye.card.id, at: Date.now() })}><ItemIcon kind="eye" size={14} />末影之眼藏在第 {eye.card.id} 张卡里</button>
           : eye.kind === 'coming' ? <span className="eye-status"><ItemIcon kind="eye" size={14} />{eye.cards === 1 ? '下一张新卡里藏着末影之眼' : `往后第 ${eye.cards} 张新卡里藏着末影之眼`}</span> : null}
@@ -216,6 +215,19 @@ export function BottomBar({ card }: { card: PublicCard | null }) {
     </div>
   </footer>
 }
+
+/** 截止：自己每秒走一下（以前整条底栏每秒重画一遍）；离得远时文字一分钟才变，只在变了时重画。 */
+function Deadline({ deadlineAt, wrapUpAt, over }: { deadlineAt: number | null; wrapUpAt: number | null; over: boolean }) {
+  const [now, setNow] = useState(() => hb.now())
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(hb.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+  return <DeadlineText words={deadlineWords(deadlineAt, wrapUpAt, now, over)} />
+}
+const DeadlineText = memo(function DeadlineText({ words }: { words: string }) {
+  return <span className="info-deadline">{words}</span>
+})
 
 function deadlineWords(deadlineAt: number | null, wrapUpAt: number | null, now: number, over: boolean) {
   if (over) return '奖池分完了，游戏结束'
@@ -282,4 +294,21 @@ export function Rules({ onClose, onPractice }: { onClose: () => void; onPractice
       </div>
     </section>
   </div>
+}
+
+/**
+ * 末影箱的说明（docs/V3_ITEMS.md §5）：存进去以后在地图顶上（苦力怕来了的那个位置）出来，
+ * 盖在地图上面，点“知道了”收起；点顶栏的绿色 +x 能再看。
+ */
+export function ChestNote() {
+  const [shown, setShown] = useAtom(chestNoteAtom)
+  const me = useAtomValue(meAtom)
+  const settled = useAtomValue(settledAtom)
+  const chest = me?.chest ?? 0
+  if (!shown || chest <= 0 || settled) return null
+  return <motion.div key={shown} className="item-tip top-hint chest-note" role="status" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}>
+    <ItemIcon kind="ender" size={22} />
+    <p><b className="is-green">+{money(chest)} 在末影箱里</b>炸不到，金苹果也不翻它，领取时一起加上。</p>
+    <button type="button" onClick={() => setShown(0)}>知道了</button>
+  </motion.div>
 }

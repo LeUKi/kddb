@@ -36,7 +36,7 @@ export function ActivityLog({ feed, actorKey }: { feed: PublicGame['feed']; acto
               exit={{ opacity: 0, transition: { duration: reduced ? 0 : .12 } }}
               transition={{ duration: reduced ? 0 : .3, ease: [.22, 1, .36, 1] }}
             >
-              <div className="activity-log-icon"><ItemIcon kind={entry.kind} size={28} /></div>
+              <div className="activity-log-icon"><ItemIcon kind={entry.kind} size={28} moving /></div>
               <div className="activity-log-content">
                 <p><strong className={actorKey && entry.actorKey === actorKey ? 'is-mine' : ''}>{entry.actor}</strong> <span>{text}</span></p>
                 <div className="activity-log-meta">

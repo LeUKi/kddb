@@ -18,6 +18,7 @@ import { aimInfo, anchorFor, torchHoverAtom, applyAt } from './aim'
 import { shapeOf, vaultsLeft } from './items'
 import { FollowTip } from './Tips'
 import { Creeper } from './Creeper'
+import { ChestNote } from './Hud'
 import type { DigResult, Peek, PublicCard, Torch } from './types'
 
 const DRAG_SLOP = 6
@@ -224,10 +225,13 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
   if (newCard && entranceKept.current?.at !== newCard.at) {
     const card = cards.find(item => item.id === newCard.cardId)
     const source = cards.find(item => item.id === newCard.from.cardId)
-    const flies = !!card && !!source && !reduced && onScreen(source, settled, view, 120)
+    // 全图一级每张卡都“在画面里”：别人一直在挖时每张新卡都飞一颗珍珠、进出一次网页，
+    // 全图上又小得看不清（2026-11-11 量过：每秒上百次重画）。全图上新卡直接画到画布上
+    const overview = level === 0
+    const flies = !overview && !!card && !!source && !reduced && onScreen(source, settled, view, 120)
     // 画面附近的才在网页里翻出来；远处的直接画到整张地图的画布上（上千张卡、一秒长一张时，
     // 每张都进出一次网页，拖动时会顿一下）。NEW 提醒照旧
-    const near = !!card && onScreen(card, camera(), view, 400)
+    const near = !overview && !!card && onScreen(card, camera(), view, 400)
     const edge = card && source ? edgeFacing(card, source) : null
     // 末地宝藏是末影之眼开出来的：眼浮起来转一圈，金色的尾巴，飞得更远
     const variant: Flight = card && isTreasure(card) ? 'eye' : 'pearl'
@@ -420,10 +424,24 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
     return () => window.removeEventListener('keydown', onKey)
   })
 
+  // 点一张不能挖的卡：飞过去。每张卡都拿着它，所以它不能跟着 cards 变（以前一变，别人每挖一格页面里的卡全部重画一遍）
+  const cardsNow = useRef(cards)
+  cardsNow.current = cards
+  const goNow = useRef(goToCard)
+  goNow.current = goToCard
   const pick = useCallback((cardId: number) => {
-    const card = cards.find(item => item.id === cardId)
-    if (card) goToCard(card, 2)
-  }, [cards, goToCard])
+    const card = cardsNow.current.find(item => item.id === cardId)
+    if (card) goNow.current(card, 2)
+  }, [])
+  // 拿起道具时不在挖卡这一级：飞到当前卡（没有就最近的一张）
+  const focusedNow = useRef(focused)
+  focusedNow.current = focused
+  const viewNow = useRef(view)
+  viewNow.current = view
+  const needDig = useCallback(() => {
+    const card = focusedNow.current ?? nearestCard(cardsNow.current, camera(), viewNow.current)
+    if (card) goNow.current(card, 2)
+  }, [camera])
 
   // —— 画在整张地图画布上的卡（MapCanvas）：点击、悬停按坐标算是哪张 ——
   const bySlot = useMemo(() => new Map(cards.map(card => [`${card.x},${card.y}`, card])), [cards])
@@ -478,6 +496,11 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
   // JP：末地宝藏还有没挖的格子、又没整张在画面里时，画面边上一直亮着金色的 JP 指着它
   const jpCard = useMemo(() => [...cards].reverse().find(card => isTreasure(card) && !card.finished) ?? null, [cards])
   const jpPointer = jpCard && jpCard.id !== jpHold && !fullyOnScreen(jpCard, settled, view) ? edgePointer(jpCard, settled, view) : null
+  // JP 一直挂在页面上，不指的时候只是藏起来：以前每次藏起再出来都重新建一个，光又从头扫一遍，
+  // 别人一直在挖、新的宝藏卡一张张长出来时它就一直在动（2026-11-11 量过）
+  const jpLast = useRef<{ x: number; y: number; angle: number } | null>(null)
+  if (jpPointer) jpLast.current = jpPointer
+  const jpAt = jpPointer ?? jpLast.current
 
   // 拿着道具时点右键是放下（电脑上）；收着说明时也收起
   const onContextMenu = (event: React.MouseEvent) => {
@@ -565,10 +588,10 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
       <span className="new-arrow" style={{ transform: `rotate(${pointer.angle}deg)` }}>➜</span>
       <span>NEW</span>
     </button> : null}
-    {jpPointer && jpCard ? <button type="button" className="jp-marker" style={{ left: jpPointer.x, top: jpPointer.y }}
-      onClick={() => goToCard(jpCard, 2)} aria-label="末地宝藏开着，点一下过去">
+    {jpAt && jpCard ? <button type="button" className={`jp-marker${jpPointer ? '' : ' is-hidden'}`} style={{ left: jpAt.x, top: jpAt.y }}
+      onClick={() => goToCard(jpCard, 2)} aria-label="末地宝藏开着，点一下过去" aria-hidden={!jpPointer} tabIndex={jpPointer ? 0 : -1}>
       <span>JP</span>
-      <span className="new-arrow" style={{ transform: `rotate(${jpPointer.angle}deg)` }}>➜</span>
+      <span className="new-arrow" style={{ transform: `rotate(${jpAt.angle}deg)` }}>➜</span>
     </button> : null}
     {/* 缩放：地图右下角竖着一列，半透明 */}
     <div className="zoom zoom-float" role="group" aria-label="缩放">
@@ -579,12 +602,10 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
     {banner ? <p className="map-banner" role="status">{banner}</p>
       : level !== 2 ? <p className="map-hint">点一张卡放大过去，放大以后才能挖</p> : null}
     <FollowTip box={box} />
+    <ChestNote />
     <Creeper />
     </div>
-    <Toolbar level={level} card={focused} onNeedDig={() => {
-      const card = focused ?? nearestCard(cards, camera(), view)
-      if (card) goToCard(card, 2)
-    }} />
+    <Toolbar level={level} card={focused} onNeedDig={needDig} />
     </div>
   </div>
 }

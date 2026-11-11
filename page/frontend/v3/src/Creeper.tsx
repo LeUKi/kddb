@@ -22,11 +22,17 @@ export function Creeper() {
   const hissed = useRef<number | null>(null)
   const active = at !== null && !settled && me?.status === 'playing' && (me?.points ?? 0) > 0
 
+  // 没到时候就睡到那一刻（以前一直每 250 毫秒走一下）；来了以后每 250 毫秒走一下，倒数和胀大要用
   useEffect(() => {
-    if (!active) return
-    setNow(Date.now())
-    const timer = window.setInterval(() => setNow(Date.now()), 250)
-    return () => window.clearInterval(timer)
+    if (!active || at === null) return
+    let timer = 0
+    const tick = () => {
+      const time = Date.now()
+      setNow(time)
+      timer = window.setTimeout(tick, time < at ? Math.min(at - time, 60_000) : 250)
+    }
+    tick()
+    return () => window.clearTimeout(timer)
   }, [active, at])
 
   // 只在看得见的时候来：网页在后台（切走的标签页、锁屏回来）时不倒数，回来以后从头给 10 秒（审查发现：

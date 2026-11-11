@@ -18,6 +18,10 @@ export type Phase = 'starting' | 'login' | 'error' | 'ready' | 'out'
 export const phaseAtom = atom<Phase>('starting')
 export const problemAtom = atom('')
 export const gameAtom = atom<PublicGame | null>(null)
+/** 只看规则里的几样（工具条用）：gameAtom 每次推送都换，订阅它的组件每挖一格都要重画 */
+export const itemsGameAtom = atom(get => !!get(gameAtom)?.rules.items)
+export const digIntervalAtom = atom(get => get(gameAtom)?.rules.digInterval ?? 1)
+export const hasGameAtom = atom(get => get(gameAtom) !== null)
 export const meAtom = atom<Me | null>(null)
 export const blockedAtom = atom<string | null>(null)
 /** 什么时候（本机时间，毫秒）能再挖：游戏站给的 coolingMs 加上收到的时刻 */
@@ -58,7 +62,7 @@ export const dialogAtom = atom<Dialog | null>(null)
 /** 本机时间：苦力怕什么时候来（null 是不来）、急迫药水到什么时候 */
 export const creeperAtAtom = atom<number | null>(null)
 export const hasteUntilAtom = atom(0)
-/** 末影箱刚存进去：顶栏的绿字下面自己弹几秒说明 */
+/** 末影箱的说明开着（打开的时刻，0 是收起）：存进去时打开，点“知道了”收起 */
 export const chestNoteAtom = atom(0)
 
 /** 放下道具、收起说明（取消、用完、Esc、右键）。 */
