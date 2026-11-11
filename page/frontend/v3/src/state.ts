@@ -70,6 +70,8 @@ export const dialogAtom = atom<Dialog | null>(null)
 /** 本机时间：苦力怕什么时候来（null 是不来）、急迫药水到什么时候 */
 export const creeperAtAtom = atom<number | null>(null)
 export const hasteUntilAtom = atom(0)
+/** 本机时间：蜘蛛网让这一次多等到什么时候（游戏站给的 slowMs 是现在的冷却里蜘蛛网占的那一段） */
+export const slowUntilAtom = atom(0)
 /** 末影箱的说明开着（打开的时刻，0 是收起）：存进去时打开，点“知道了”收起 */
 export const chestNoteAtom = atom(0)
 /** 苦力怕正在画面上（顶上那一行它最优先，步骤条和通知让开） */
@@ -186,6 +188,7 @@ function setMe(me: Me) {
   if (me.coolingMs !== undefined) store.set(readyAtAtom, now + me.coolingMs)
   if (me.creeperMs !== undefined) store.set(creeperAtAtom, me.creeperMs === null ? null : now + me.creeperMs)
   store.set(hasteUntilAtom, me.hasteMs ? now + me.hasteMs : 0)
+  store.set(slowUntilAtom, me.slowMs ? now + me.slowMs : 0)
 }
 
 /** 手上加末影箱里的：领取时领到的。 */
@@ -363,7 +366,8 @@ export async function dig(cardId: number, index: number) {
     return
   }
   const wait = store.get(readyAtAtom) - Date.now()
-  if ((store.get(gameAtom)?.rules.digInterval ?? 1) > 1 && wait > 0) {
+  // 间隔拉长的局、被蜘蛛网缠着时：说还要等多久（间隔 1 秒的局平时悄悄等那一下）
+  if (wait > 0 && ((store.get(gameAtom)?.rules.digInterval ?? 1) > 1 || store.get(slowUntilAtom) > 0)) {
     toast(`还要等 ${Math.ceil(wait / 1000)} 秒才能再挖`)
     return
   }
@@ -424,7 +428,7 @@ export async function applyItem(item: string, body: { cardId?: number; index?: n
   }
   const digs = item.startsWith('pick-')
   const wait = store.get(readyAtAtom) - Date.now()
-  if (digs && wait > 0 && (store.get(gameAtom)?.rules.digInterval ?? 1) > 1) {
+  if (digs && wait > 0 && ((store.get(gameAtom)?.rules.digInterval ?? 1) > 1 || store.get(slowUntilAtom) > 0)) {
     toast(`还要等 ${Math.ceil(wait / 1000)} 秒才能再挖`)
     return false
   }

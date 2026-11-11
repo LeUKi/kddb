@@ -3,7 +3,7 @@ import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 
 import { memo, useEffect, useRef, useState } from 'react'
 import { ItemIcon } from '../../src/ItemIcon'
 import { mutedAtom, play, setMuted } from './sound'
-import { blockedAtom, chestNoteAtom, claim, claimingAtom, creeperShownAtom, digIntervalAtom, heldAtom, focusRequestAtom, gameAtom, hongbaoAtom, meAtom, readyAtAtom, settledAtom, summaryOpenAtom, totalOf } from './state'
+import { blockedAtom, chestNoteAtom, claim, claimingAtom, creeperShownAtom, digIntervalAtom, heldAtom, focusRequestAtom, gameAtom, hongbaoAtom, itemsVersionAtom, meAtom, readyAtAtom, settledAtom, slowUntilAtom, summaryOpenAtom, totalOf } from './state'
 import { outOfPicks } from './items'
 import { money } from './types'
 import { crystalPercent, eyeStatus } from './eye'
@@ -55,19 +55,24 @@ export function useCooling() {
   const readyAt = useAtomValue(readyAtAtom)
   // 只订阅挖掘间隔（订阅 gameAtom 的话，用它的工具条每次推送都要重画）
   const interval = useAtomValue(digIntervalAtom)
+  // 被蜘蛛网缠着（这一次多等 5 或 10 秒）：间隔 1 秒的局也要看得见在等（以前点了没反应，悄悄等十秒）
+  const slowed = useAtomValue(slowUntilAtom) > 0
+  const version = useAtomValue(itemsVersionAtom)
+  const shows = interval > 1 || slowed
+  const span = interval * 1000 + (slowed ? (version >= 2 ? 10_000 : 5000) : 0)
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
     setNow(Date.now())
-    if (interval <= 1 || readyAt <= Date.now()) return
+    if (!shows || readyAt <= Date.now()) return
     const timer = window.setInterval(() => {
       const at = Date.now()
       setNow(at)
       if (at >= readyAt) window.clearInterval(timer)
     }, 200)
     return () => window.clearInterval(timer)
-  }, [interval, readyAt])
-  if (interval <= 1 || now >= readyAt) return { seconds: 0, left: 0 }
-  return { seconds: Math.ceil((readyAt - now) / 1000), left: Math.min(1, (readyAt - now) / (interval * 1000)) }
+  }, [shows, readyAt])
+  if (!shows || now >= readyAt) return { seconds: 0, left: 0 }
+  return { seconds: Math.ceil((readyAt - now) / 1000), left: Math.min(1, (readyAt - now) / span) }
 }
 
 /** 上面一条：我的奖励和领取（机会、冷却和盾牌在工具条上，Toolbar.tsx）。 */

@@ -22,6 +22,7 @@ import { aimInfo, anchorFor, torchHoverAtom, applyAt } from './aim'
 import { shapeOf, vaultsLeft } from './items'
 import { FollowTip, StepBar } from './Tips'
 import { Creeper } from './Creeper'
+import { Effects } from './Effects'
 import { ChestNote } from './Hud'
 import type { DigResult, Peek, PublicCard, Torch } from './types'
 
@@ -568,7 +569,9 @@ export function MapView() {
           card={card}
           focused={current}
           diggable={level === 2 && current && !blocked && me?.status === 'playing' && (!card.finished || (held === 'key' && vaultsLeft(card)))}
-          detail={(detailScale && near) || ready}
+          // 当前卡落地那一下就画格子：落定的位置是马上换的，画哪些卡跟着的 cullAt 晚一拍，
+          // 以前这一拍里它先变回缩略图再变回来，慢的手机上闪两三帧（2026-11-11 量过）
+          detail={(detailScale && near) || ready || (current && settled.scale >= 0.4)}
           names={level === 2 && current}
           current={current}
           myUid={uid}
@@ -615,6 +618,7 @@ export function MapView() {
     <StepBar />
     <ChestNote />
     <Creeper />
+    <Effects />
     </div>
     <Toolbar level={level} onNeedDig={needDig} />
     </div>

@@ -63,7 +63,8 @@ test('工具条：主动的按顺序，被动的在后面；镐子和附魔镐�
     chances: 0, shield: true, shields: 2, spyglasses: 1, peeks: [], points: 10, digs: 3, status: 'playing', lastResult: null,
     items: { torch: 1, map: 0, potion: 1, ender: 0, table: 0, key: 2, pick: { h: 0, v: 2, x: 0 } }, coal: 1, stick: 0, poison: 3,
   }
-  assert.deepEqual(items.slotsOf(me, true), { active: ['pick-v', 'spyglass', 'torch', 'key', 'potion'], passive: ['shield', 'coal', 'poison'] })
+  // 中毒不在工具条上（画成身上的效果，Effects.tsx）
+  assert.deepEqual(items.slotsOf(me, true), { active: ['pick-v', 'spyglass', 'torch', 'key', 'potion'], passive: ['shield', 'coal'] })
   assert.equal(items.countOf(me, 'pick-v'), 2)
   assert.equal(items.countOf(me, 'key'), 2)
   assert.equal(items.outOfPicks(me), false)
@@ -154,7 +155,7 @@ test('第 2 版：煤炭、木棍排在火把后面；火把照 3×3（出界的
     chances: 3, shield: false, shields: 0, spyglasses: 1, peeks: [], points: 10, digs: 3, status: 'playing', lastResult: null,
     items: { torch: 1, map: 0, potion: 1, ender: 0, table: 0, key: 2, pick: { h: 0, v: 0, x: 0 } }, coal: 3, stick: 0, poison: 2,
   }
-  assert.deepEqual(items.slotsOf(me, true, 2), { active: ['spyglass', 'torch', 'coal', 'key', 'potion'], passive: ['poison'] })
+  assert.deepEqual(items.slotsOf(me, true, 2), { active: ['spyglass', 'torch', 'coal', 'key', 'potion'], passive: [] })
   assert.deepEqual(items.torchArea(5, 0), [0, 1, 5, 6])
   assert.deepEqual(items.torchArea(5, 12), [6, 7, 8, 11, 12, 13, 16, 17, 18])
   const c = card(5, { fixed: { 1: 'lava' } })
@@ -265,4 +266,19 @@ test('工具条两头的箭头：只按格子排出来的长度算，放得下�
   assert.deepEqual(items.edgesOf(98, 300, 200), { start: true, end: false })
   // 滚过了头（浮起来的格子撑出来的地方）也不会两头都亮
   assert.deepEqual(items.edgesOf(60, 48, 48), { start: false, end: false })
+})
+
+test('火把一直在工具条上：没有时是 0，点开说怎么做出来（2026-11-11 用户转述的反馈）', () => {
+  const me = {
+    chances: 3, shield: false, shields: 0, spyglasses: 0, peeks: [], points: 0, digs: 1, status: 'playing', lastResult: null,
+    items: { torch: 0, map: 0, potion: 0, ender: 0, table: 0, key: 0, pick: { h: 0, v: 0, x: 0 } }, coal: 1, stick: 0,
+  }
+  assert.deepEqual(items.slotsOf(me, true, 2), { active: ['torch', 'coal'], passive: [] })
+  assert.equal(items.countOf(me, 'torch'), 0)
+  const about = items.aboutSlot('torch', me, true, 1, null, 2)
+  assert.equal(about.count, '还没有')
+  assert.match(about.words, /^还没有火把：煤炭、木棍各挖到一个，就自动做成一个。插在一个挖开的格子上/)
+  assert.match(items.aboutSlot('torch', { ...me, items: { ...me.items, torch: 2 } }, true, 1, null, 2).words, /^插在一个挖开的格子上/)
+  // 没有道具栏的局没有火把
+  assert.deepEqual(items.slotsOf({ ...me, items: undefined, coal: 0 }, false), { active: [], passive: [] })
 })

@@ -394,35 +394,43 @@ button.eye-status { cursor: pointer; }
 
 @media (prefers-reduced-motion: reduce) {
   .jp-marker, .jp-marker::after, .map-block::before, .map-card::after,
-  .map-block, .map-card, .map-block.is-grown, .map-block.is-grown .map-card, .map-block.is-grown .map-cell, .map-block.is-grown .thumb-canvas, .map-cell.just-mine, .map-cell.just-other, .digging-pick, .cell-float, .new-marker, .toast, .sheen, .tool-slot, .tool-cell .tool-slot::after, .glint, .glint::before, .poison-spider, .poison-bubbles i, .poison-glow, .lava-icon, .fixed-lava, .torch, .creeper, .creeper-flash, .tool-count, .map-cell.in-box, .card-noise img,
+  .map-block, .map-card, .map-block.is-grown, .map-block.is-grown .map-card, .map-block.is-grown .map-cell, .map-block.is-grown .thumb-canvas, .map-cell.just-mine, .map-cell.just-other, .digging-pick, .cell-float, .new-marker, .toast, .sheen, .tool-slot, .tool-cell .tool-slot::after, .glint, .glint::before, .veil-pulse, .veil-web, .lava-icon, .fixed-lava, .torch, .creeper, .creeper-flash, .tool-count, .map-cell.in-box, .card-noise img,
   .map-cell.revealed > .item-icon, .cell-who, .map-cell.just-other::after { animation: none !important; transition: none !important; }
+  .veil-pulse { display: none; }
   /* 不呼吸，直接亮着 */
   .map-view .map-block.has-eye::before, .map-view .map-block.is-end:not(.is-done)::before { opacity: 1; }
 }
 
 /* —— 工具条（Toolbar.tsx，docs/V3_ITEMS.md §5）：镐子固定在最前面；后面的放不下时能滑，两头渐隐，有箭头 —— */
 /* 右边留给缩放那一列（36 + 内边距 8 + 边框 2 + 离边 10，再隔 8） */
-.toolbar { position: absolute; left: 10px; bottom: 10px; z-index: 6; display: flex; align-items: center; gap: 0; max-width: calc(100% - 84px); }
+.toolbar { position: absolute; left: 10px; bottom: 10px; z-index: 6; display: flex; align-items: stretch; gap: 0; max-width: calc(100% - 84px); }
 .toolbar > .tool-cell, .toolbar-scroll-wrap { background: #11171dcc; }
-.toolbar > .tool-cell { padding: 5px 4px 5px 5px; border: 1px solid #ffffff1f; border-right: 0; border-radius: 12px 0 0 12px; }
+.toolbar > .tool-cell { display: flex; align-items: flex-end; padding: 5px 4px 5px 5px; border: 1px solid #ffffff1f; border-right: 0; border-radius: 12px 0 0 12px; }
 .toolbar-scroll-wrap { position: relative; display: flex; min-width: 0; min-height: 0; padding: 5px 5px 5px 0; border: 1px solid #ffffff1f; border-left: 0; border-radius: 0 12px 12px 0; box-shadow: 0 6px 18px #0007; }
-.toolbar-divider { flex: none; width: 1px; height: 32px; margin: 0 6px; background: #ffffff2e; }
+.toolbar-divider { flex: none; align-self: flex-end; width: 1px; height: 32px; margin: 0 6px 8px; background: #ffffff2e; }
 .toolbar.is-alone > .tool-cell { border-right: 1px solid #ffffff1f; border-radius: 12px; box-shadow: 0 6px 18px #0007; }
 .toolbar.is-alone > .toolbar-divider.is-pin, .toolbar.is-alone > .toolbar-scroll-wrap { display: none; }
-.toolbar-divider.is-pin { height: 54px; margin: 0; background: #11171de6; border-top: 1px solid #ffffff1f; border-bottom: 1px solid #ffffff1f; box-shadow: inset 1px 0 0 #ffffff2e; width: 7px; }
+.toolbar-divider.is-pin { align-self: stretch; height: auto; margin: 0; background: #11171de6; border-top: 1px solid #ffffff1f; border-bottom: 1px solid #ffffff1f; box-shadow: inset 1px 0 0 #ffffff2e; width: 7px; }
 /* 放不下时在自己那块里滚（外面的 .toolbar 限了最大宽、高，这里跟着收） */
 .toolbar-scroll { flex: 0 1 auto; min-width: 0; min-height: 0; overflow: auto hidden; scrollbar-width: none; overscroll-behavior: contain; touch-action: pan-x; }
 .toolbar-scroll::-webkit-scrollbar { display: none; }
 .toolbar-scroll.fade-start { -webkit-mask-image: linear-gradient(90deg, transparent, #000 36px); mask-image: linear-gradient(90deg, transparent, #000 36px); }
 .toolbar-scroll.fade-end { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); }
 .toolbar-scroll.fade-start.fade-end { -webkit-mask-image: linear-gradient(90deg, transparent, #000 36px, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(90deg, transparent, #000 36px, #000 calc(100% - 36px), transparent); }
-.toolbar-slots { display: flex; align-items: center; gap: 6px; width: max-content; }
+.toolbar-slots { display: flex; align-items: flex-end; gap: 6px; width: max-content; }
 .toolbar-arrow { position: absolute; top: 50%; z-index: 2; display: grid; place-items: center; width: 28px; height: 28px; margin-top: -14px; padding: 0; color: var(--ink); background: #232b31f0; border: 1px solid #56636b; border-radius: 50%; box-shadow: 0 2px 8px #0008; }
 .toolbar-arrow svg { width: 16px; height: 16px; }
 .toolbar-arrow.is-start { left: -6px; }
 .toolbar-arrow.is-end { right: -6px; }
 .tool-cell { flex: none; }
-.tool-slot { position: relative; display: grid; place-items: center; width: 48px; height: 48px; padding: 0; overflow: hidden; background: linear-gradient(#2a333b, #20282e); border: 2px solid #4a565e; border-radius: 8px; box-shadow: inset 0 2px 0 #ffffff12, inset 0 -3px 0 #0005; cursor: pointer; transition: border-color .15s var(--ease-out), box-shadow .15s var(--ease-out), transform .1s; }
+.tool-slot { position: relative; display: grid; place-items: center; width: 48px; height: 48px; padding: 0; overflow: hidden; background: linear-gradient(#2a333b, #20282e); border: 2px solid #4a565e; border-radius: 8px; box-shadow: inset 0 2px 0 #ffffff12, inset 0 -3px 0 #0005; cursor: pointer; transition: border-color .15s var(--ease-out), box-shadow .15s var(--ease-out), transform .1s, width .22s var(--ease-out), height .22s var(--ease-out); }
+/* 正在用的那一格大一点，贴着工具条靠边的那一侧长（竖屏往上、横屏往右），旁边的跟着让开（docs/V3_ITEMS.md §10） */
+.tool-slot.is-using { width: 58px; height: 58px; }
+.tool-slot > .item-icon { transition: transform .22s var(--ease-out); }
+.tool-slot.is-using > .item-icon { transform: scale(1.18); }
+/* 一直摆着、现在没有的（火把 0）：灰的 */
+.tool-slot.is-empty > .item-icon { filter: grayscale(1) brightness(.85); opacity: .45; }
+.tool-slot.is-empty { background: linear-gradient(#232a30, #1c2227); border-color: #3a444b; }
 @media (hover: hover) { .tool-slot:hover { border-color: #7a8890; } }
 .tool-slot:active { transform: scale(.94); }
 .tool-slot.is-selected { border-color: #f3cc8f; box-shadow: inset 0 2px 0 #ffffff12, inset 0 -3px 0 #0005, 0 0 0 2px #e9b56b40; }
@@ -439,6 +447,8 @@ button.eye-status { cursor: pointer; }
 .tool-count path.shadow { fill: #3f3f3f; }
 .tool-count.is-green path { fill: #55ff55; }
 .tool-count.is-green path.shadow { fill: #153f15; }
+.tool-count.is-gray path { fill: #aaa; }
+.tool-count.is-gray path.shadow { fill: #2a2a2a; }
 @keyframes count-bump { 40% { transform: scale(1.35); } }
 /* 镐子：冷却时一层白从上往下退（像游戏里末影珍珠的冷却），间隔长时写还要等几秒；喝了急迫药水一圈金边 */
 .cooling-veil { position: absolute; inset: 0; z-index: 1; background: #ffffff52; transform-origin: center bottom; transition: transform .2s linear; pointer-events: none; }
@@ -463,16 +473,42 @@ button.eye-status { cursor: pointer; }
 .tool-bar i { display: block; height: 100%; transition: width .3s var(--ease-out), background .3s; }
 .tool-slot.is-full .tool-bar { box-shadow: 0 0 6px #5fdc7c; }
 /* 中毒：刷怪笼里一只洞穴蜘蛛在转，冒绿色的泡，绿字写还剩几次 */
-.tool-slot.is-poison { box-shadow: inset 0 0 10px 1px #50dc5a80; }
-.poison-glow { position: absolute; inset: 0; background: radial-gradient(circle, #50dc5a47, transparent 70%); animation: poison-pulse 1.6s ease-in-out 4; pointer-events: none; }
-@keyframes poison-pulse { 50% { opacity: .25; } }
-.poison-spider { position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px; background: var(--cave-spider) -70px -21px / 112px 56px; image-rendering: pixelated; animation: spider-spin 2.6s linear 3; }
-@keyframes spider-spin { 25% { transform: scaleX(.08); } 50% { transform: scaleX(-1); } 75% { transform: scaleX(.08); } }
-.poison-bubbles i { position: absolute; bottom: 8px; z-index: 2; width: 3px; height: 3px; background: #55ff55; animation: bubble 1.6s linear 4 both; }
-.poison-bubbles i:nth-child(1) { left: 10px; }
-.poison-bubbles i:nth-child(2) { left: 22px; animation-delay: .55s; }
-.poison-bubbles i:nth-child(3) { left: 32px; animation-delay: 1.1s; }
-@keyframes bubble { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-24px); opacity: 0; } }
+/* 镐子身上的效果（Effects.tsx 是画面上的那份）：中毒绿边、左上角原版的中毒图标；被蜘蛛网缠着盖一层蛛网 */
+.tool-slot.is-poisoned { border-color: #6fbf3a; box-shadow: inset 0 2px 0 #ffffff12, inset 0 -3px 0 #0005, 0 0 0 2px #6fbf3a55, 0 0 12px #6fbf3a55; }
+.poison-badge { position: absolute; left: 1px; top: 1px; z-index: 2; width: 18px; height: 18px; image-rendering: pixelated; }
+/* 身上的效果（Effects.tsx）：右上角照原版的效果图标，旁边一句话；中毒时地图四周一圈绿，蜘蛛网缠着时四角挂蛛网 */
+.effects { position: absolute; right: 10px; top: 10px; z-index: 5; display: grid; gap: 6px; justify-items: end; margin: 0; padding: 0; list-style: none; pointer-events: none; }
+.effect-body { display: flex; align-items: center; gap: 6px; padding: 0; color: var(--ink); font: inherit; text-align: right; background: none; border: 0; pointer-events: auto; }
+button.effect-body { cursor: pointer; }
+.effect-text { display: grid; gap: 1px; padding: 4px 9px; background: #11171dd9; border: 1px solid #ffffff1f; border-radius: 8px; box-shadow: 0 4px 12px #0006; }
+.effect-text b { font-size: 13px; line-height: 1.25; }
+.effect-text small { color: #c7d0d7; font-size: 11px; line-height: 1.3; }
+.effect.is-poison .effect-text { border-color: #6fbf3a88; }
+.effect.is-poison .effect-text b { color: #b6f07a; }
+.effect.is-slow .effect-text b { color: #e6e6e6; }
+.effect.is-haste .effect-text b { color: #f0d65a; }
+.effect-frame { position: relative; display: grid; place-items: center; flex: none; width: 48px; height: 48px; background: var(--effect-bg) center / 100% 100%; image-rendering: pixelated; filter: drop-shadow(0 3px 6px #0008); }
+.effect-frame img { width: 36px; height: 36px; image-rendering: pixelated; }
+/* 窄的地图只留名字；选位置时顶上的步骤条要地方，旁边的字收起来 */
+@container map (max-width: 560px) {
+  .effect-text small { display: none; }
+  .effect-frame { width: 40px; height: 40px; }
+  .effect-frame img { width: 30px; height: 30px; }
+}
+/* 选位置时顶上的步骤条要那块地方：右上角先收起（地图四周的绿光、镐子上的标记还在） */
+.map-view.is-aiming .effects { visibility: hidden; }
+.effect-veil { position: absolute; inset: 0; z-index: 2; overflow: hidden; pointer-events: none; }
+.effect-veil::before { content: ''; position: absolute; inset: 0; box-shadow: inset 0 0 90px 22px #4fa52a; opacity: 0; transition: opacity .5s var(--ease-out); }
+.effect-veil.is-poison::before { opacity: .5; }
+.veil-pulse { position: absolute; inset: 0; box-shadow: inset 0 0 150px 46px #7fe03a; animation: veil-pulse 1.1s ease-out both; }
+@keyframes veil-pulse { from { opacity: .85; } to { opacity: 0; } }
+.veil-web { position: absolute; width: min(20vmin, 110px); height: auto; aspect-ratio: 1; image-rendering: pixelated; opacity: 0; transition: opacity .35s var(--ease-out); }
+.effect-veil.is-web .veil-web { opacity: .55; }
+.veil-web.is-tl { left: -10px; top: -10px; }
+.veil-web.is-tr { right: -10px; top: -10px; transform: scaleX(-1); }
+.veil-web.is-bl { left: -10px; bottom: -10px; transform: scaleY(-1); }
+.veil-web.is-br { right: -10px; bottom: -10px; transform: scale(-1); }
+.tool-slot.is-webbed::before { content: ''; position: absolute; inset: 2px; z-index: 2; background: var(--cobweb) center / 100% 100%; image-rendering: pixelated; opacity: .85; pointer-events: none; }
 /* 第 2 版的合成（水滴，Toolbar.tsx useCraftDrop）：垫在格子后面的壳模糊再收边，两格之间就连成液桥 */
 .toolbar-slots { position: relative; }
 .toolbar-slots > .tool-cell { position: relative; z-index: 1; }
@@ -502,16 +538,16 @@ button.eye-status { cursor: pointer; }
 
 @container map (orientation: landscape) {
   .toolbar { top: 50%; bottom: auto; flex-direction: column; max-width: none; max-height: calc(100% - 20px); translate: 0 -50%; }
-  .toolbar > .tool-cell { padding: 5px 5px 4px; border: 1px solid #ffffff1f; border-bottom: 0; border-radius: 12px 12px 0 0; }
+  .toolbar > .tool-cell { align-items: flex-start; padding: 5px 5px 4px; border: 1px solid #ffffff1f; border-bottom: 0; border-radius: 12px 12px 0 0; }
   .toolbar.is-alone > .tool-cell { border-bottom: 1px solid #ffffff1f; border-radius: 12px; }
-  .toolbar-divider.is-pin { width: 60px; height: 7px; border: 0; border-left: 1px solid #ffffff1f; border-right: 1px solid #ffffff1f; box-shadow: inset 0 1px 0 #ffffff2e; }
+  .toolbar-divider.is-pin { width: auto; height: 7px; border: 0; border-left: 1px solid #ffffff1f; border-right: 1px solid #ffffff1f; box-shadow: inset 0 1px 0 #ffffff2e; }
   .toolbar-scroll-wrap { flex-direction: column; padding: 0 5px 5px; border: 1px solid #ffffff1f; border-top: 0; border-radius: 0 0 12px 12px; }
   .toolbar-scroll { overflow: hidden auto; touch-action: pan-y; }
   .toolbar-scroll.fade-start { -webkit-mask-image: linear-gradient(180deg, transparent, #000 36px); mask-image: linear-gradient(180deg, transparent, #000 36px); }
   .toolbar-scroll.fade-end { -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(180deg, #000 calc(100% - 36px), transparent); }
   .toolbar-scroll.fade-start.fade-end { -webkit-mask-image: linear-gradient(180deg, transparent, #000 36px, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(180deg, transparent, #000 36px, #000 calc(100% - 36px), transparent); }
-  .toolbar-slots { flex-direction: column; width: auto; }
-  .toolbar-divider { width: 32px; height: 1px; margin: 6px 0; }
+  .toolbar-slots { flex-direction: column; align-items: flex-start; width: auto; }
+  .toolbar-divider { align-self: flex-start; width: 32px; height: 1px; margin: 6px 0 6px 8px; }
   .toolbar-arrow { left: 50%; margin: 0 0 0 -14px; }
   .toolbar-arrow svg { transform: rotate(90deg); }
   .toolbar-arrow.is-start { top: -6px; }

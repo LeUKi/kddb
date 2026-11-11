@@ -56,7 +56,7 @@ export function App() {
     for (const [name, path] of Object.entries({
       'tuff-bricks': 'block/tuff_bricks', 'chiseled-tuff': 'block/chiseled_tuff', 'copper-bulb': 'block/copper_bulb_lit', netherrack: 'block/netherrack',
       planks: 'block/oak_planks', rail: 'block/rail', 'deepslate-tiles': 'block/deepslate_tiles', sculk: 'block/sculk', lava: 'block/lava_still',
-      creeper: 'entity/creeper/creeper', 'cave-spider': 'entity/spider/cave_spider', warden: 'entity/warden/warden', 'potion-overlay': 'item/potion_overlay', 'pick-mask': 'item/iron_pickaxe',
+      creeper: 'entity/creeper/creeper', cobweb: 'block/cobweb', 'effect-bg': 'gui/sprites/hud/effect_background', warden: 'entity/warden/warden', 'potion-overlay': 'item/potion_overlay', 'pick-mask': 'item/iron_pickaxe',
     })) document.documentElement.style.setProperty(`--${name}`, `url("${new URL(`assets/minecraft/1.21.4/textures/${path}.png`, document.baseURI)}")`)
   }, [])
 

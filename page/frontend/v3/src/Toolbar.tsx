@@ -10,7 +10,7 @@ import { useCooling } from './Hud'
 import type { Slot } from './items'
 import { classOf, CRAFT_NEED, countOf, edgesOf, isHeld, SHIELD_CAP, shapeOf, skipsGuide, SLOT_ICONS, SLOT_NAMES, slotsOf } from './items'
 import { play } from './sound'
-import { blockedAtom, dialogAtom, digIntervalAtom, hasGameAtom, hasteUntilAtom, heldAtom, itemsGameAtom, itemsVersionAtom, meAtom, putDown, settledAtom, store, toast } from './state'
+import { blockedAtom, dialogAtom, hasGameAtom, hasteUntilAtom, heldAtom, itemsGameAtom, itemsVersionAtom, meAtom, putDown, settledAtom, slowUntilAtom, store, toast } from './state'
 import type { Me } from './types'
 
 /**
@@ -30,13 +30,13 @@ export const Toolbar = memo(function Toolbar({ level, onNeedDig }: { level: Leve
   const shown = !!me && hasGame
   const items = useAtomValue(itemsGameAtom)
   const version = useAtomValue(itemsVersionAtom)
-  const interval = useAtomValue(digIntervalAtom)
   const blocked = useAtomValue(blockedAtom)
   const settled = useAtomValue(settledAtom)
   const [held, setHeld] = useAtom(heldAtom)
   const [dialog, setDialog] = useAtom(dialogAtom)
   const cooling = useCooling()
   const hasteUntil = useAtomValue(hasteUntilAtom)
+  const slowUntil = useAtomValue(slowUntilAtom)
   const reduced = useReducedMotion() ?? false
   const box = useRef<HTMLDivElement>(null)
   const scroller = useRef<HTMLDivElement>(null)
@@ -62,7 +62,7 @@ export const Toolbar = memo(function Toolbar({ level, onNeedDig }: { level: Leve
 
   // 道具用完了、没了：放下它
   useEffect(() => {
-    if (held && (!order.includes(held) || !playing)) putDown()
+    if (held && (!order.includes(held) || (me && countOf(me, held) === 0) || !playing)) putDown()
   })
   // 拿起来时不在挖卡这一级：飞到当前卡（弹窗里点“使用”也一样）
   const needDig = useRef(onNeedDig)
@@ -82,7 +82,8 @@ export const Toolbar = memo(function Toolbar({ level, onNeedDig }: { level: Leve
       play('click')
       return
     }
-    if (kind === 'base' || kind === 'passive') {
+    // 被动的、镐子，和一直摆着但现在没有的（火把是 0）：只看说明
+    if (kind === 'base' || kind === 'passive' || (me && countOf(me, slot) === 0)) {
       setDialog({ type: 'item', slot })
       return
     }
@@ -186,6 +187,9 @@ export const Toolbar = memo(function Toolbar({ level, onNeedDig }: { level: Leve
 
   if (!shown) return <div className="toolbar" ref={box} />
   const haste = Math.max(0, hasteUntil - Date.now())
+  // 镐子身上的效果（Effects.tsx 是画面上的那份）：中毒、被蜘蛛网缠着（冷却里蜘蛛网那一段还没过完）
+  const poisoned = (me.poison ?? 0) > 0 && playing
+  const webbed = slowUntil > 0 && cooling.seconds > 0
 
   const slotView = (slot: Slot) => {
     const selected = slot === 'pickaxe' ? held === null : held === slot
@@ -198,8 +202,12 @@ export const Toolbar = memo(function Toolbar({ level, onNeedDig }: { level: Leve
     const label = slot === 'pickaxe' ? `镐子，剩余机会 ${me.chances} 次${cooling.seconds ? `，还要等 ${cooling.seconds} 秒` : ''}`
       : slot === 'shield' ? `盾牌 ${count}/${items ? SHIELD_CAP : 1} 面`
         : fill !== null ? `${SLOT_NAMES[slot]} ${count}/${CRAFT_NEED}` : `${SLOT_NAMES[slot]} ${count}`
-    const number = slot === 'pickaxe' || shape ? String(count) : slot === 'shield' ? `${count}/${items ? SHIELD_CAP : 1}`
-      : slot === 'poison' ? String(count) : fill !== null ? '' : count > 1 ? String(count) : ''
+    /** 一直摆着、现在没有（火把 0）：灰的，写 0 */
+    const empty = slot !== 'pickaxe' && count === 0
+    /** 正在用：拿在手上选位置，或者开着它要确认、要挑的弹窗（变大一点，docs/V3_ITEMS.md §10） */
+    const using = slot !== 'pickaxe' && !empty && (selected || (open && classOf(slot) !== 'passive') || dialog?.type === slot)
+    const number = slot === 'pickaxe' || shape || empty ? String(count) : slot === 'shield' ? `${count}/${items ? SHIELD_CAP : 1}`
+      : fill !== null ? '' : count > 1 ? String(count) : ''
     return <motion.div key={slot} className={`tool-cell${slot === 'pickaxe' ? ' is-pinned' : ''}`} data-slot={slot}
       ref={(element: HTMLDivElement | null) => {
         if (element) slotRefs.current.set(slot, element)
@@ -208,7 +216,7 @@ export const Toolbar = memo(function Toolbar({ level, onNeedDig }: { level: Leve
       layout={!reduced} layoutDependency={orderKey} initial={slot === 'pickaxe' || reduced ? false : { opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }}
       exit={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.3 }} transition={{ type: 'spring', stiffness: 520, damping: 30 }}>
       <button type="button"
-        className={`tool-slot is-${slot}${selected ? ' is-selected' : ''}${open ? ' is-open' : ''}${fill === 1 ? ' is-full' : ''}${slot === 'pickaxe' && haste > 0 ? ' is-haste' : ''}`}
+        className={`tool-slot is-${slot}${selected ? ' is-selected' : ''}${open ? ' is-open' : ''}${using ? ' is-using' : ''}${empty ? ' is-empty' : ''}${fill === 1 ? ' is-full' : ''}${slot === 'pickaxe' && haste > 0 ? ' is-haste' : ''}${slot === 'pickaxe' && poisoned ? ' is-poisoned' : ''}${slot === 'pickaxe' && webbed ? ' is-webbed' : ''}`}
         aria-label={label} aria-pressed={isHeld(slot) || slot === 'pickaxe' ? selected : undefined} aria-haspopup={isHeld(slot) ? undefined : 'dialog'}
         title={SLOT_NAMES[slot]}
         onClick={() => {
@@ -219,16 +227,14 @@ export const Toolbar = memo(function Toolbar({ level, onNeedDig }: { level: Leve
           event.preventDefault()
           putDown()
         }}>
-        {/* 中毒的动静：次数变了才动几下（一直动的话红包站外面的毛玻璃每一帧都要重新模糊） */}
-        {slot === 'poison' ? <><span key={`glow-${count}`} className="poison-glow" aria-hidden="true" /><span key={`spider-${count}`} className="poison-spider" aria-hidden="true" /></> : null}
         <ItemIcon kind={SLOT_ICONS[slot]} size={30} />
         {shape ? <><span className="glint" aria-hidden="true" /><ShapeGlyph shape={shape} /></> : null}
-        {slot === 'poison' ? <span key={`bubbles-${count}`} className="poison-bubbles" aria-hidden="true"><i /><i /><i /></span> : null}
         {slot === 'pickaxe' && cooling.seconds ? <span className="cooling-veil" style={{ transform: `scaleY(${cooling.left})` }} aria-hidden="true" /> : null}
-        {slot === 'pickaxe' && cooling.seconds && interval > 1 ? <span className="cooling-text" aria-hidden="true">{cooling.seconds}</span> : null}
+        {slot === 'pickaxe' && cooling.seconds ? <span className="cooling-text" aria-hidden="true">{cooling.seconds}</span> : null}
         {slot === 'pickaxe' && haste > 0 ? <span className="haste-badge" aria-hidden="true"><ItemIcon kind="potion" size={12} /></span> : null}
+        {slot === 'pickaxe' && poisoned ? <img className="poison-badge" src={new URL('assets/minecraft/1.21.4/textures/mob_effect/poison.png', document.baseURI).href} alt="" aria-hidden="true" draggable={false} /> : null}
         {fill !== null ? <span className="tool-bar" aria-hidden="true"><i style={{ width: `${fill * 100}%`, background: `hsl(${Math.round(fill * 120)} 85% 50%)` }} /></span> : null}
-        {number ? <McNumber key={number} text={number} tone={slot === 'poison' ? 'green' : 'white'} /> : null}
+        {number ? <McNumber key={number} text={number} tone={empty ? 'gray' : 'white'} /> : null}
       </button>
     </motion.div>
   }
@@ -305,9 +311,9 @@ interface Drop {
   stage: 'grow' | 'torch' | 'flow' | 'done'
 }
 
-/** 动画进行中工具条怎么排：from（和长出来的 incoming）排在火把后面；本来没有火把时火把格最后才出来。 */
+/** 动画进行中工具条怎么排：from（和长出来的 incoming）排在火把后面。 */
 function dropOrder(active: Slot[], drop: Drop): Slot[] {
-  const rest = active.filter(slot => slot !== 'coal' && slot !== 'stick' && !(slot === 'torch' && drop.torch0 === 0 && drop.stage !== 'done'))
+  const rest = active.filter(slot => slot !== 'coal' && slot !== 'stick')
   let at = rest.indexOf('torch') + 1
   if (at === 0) at = rest.filter(slot => ['pick-h', 'pick-v', 'pick-x', 'spyglass'].includes(slot)).length
   const showFrom = drop.stage !== 'done' || drop.from0 - 1 > 0
@@ -407,9 +413,9 @@ function useCraftDrop(me: Me | null, version: number, reduced: boolean, drop: Dr
         grow.animate([{ transform: 'translateY(8px) scale(0)' }, { transform: 'translateY(-4px) scale(1.25)', offset: 0.65 }, { transform: 'translateY(0) scale(1)' }], { duration: 190, easing: 'ease-out', fill: 'forwards' })
         later(190, () => {
           const lastOne = drop.from0 - 1 <= 0
-          const torch = drop.torch0 > 0 ? cell('torch') : null
+          // 火把格一直在（没有时是灰的 0），一滴流进去；万一没找到那一格：长出来的那个火把淡掉
+          const torch = cell('torch')
           if (!torch) {
-            // 本来没有火把：火把格这时长出来（它自己的长出来），长出来的那个火把淡掉；from 还有就把原来的图标放回来
             grow.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 180, fill: 'forwards' })
             const back = !lastOne ? icon?.animate([{ opacity: 0, transform: 'scale(.6)' }, { opacity: 1, transform: 'scale(1)' }], { duration: 200, delay: 80, fill: 'forwards' }) : null
             if (back) kept.push(back)
@@ -489,7 +495,7 @@ const GLYPHS: Record<string, number[]> = {
   4: [5, 3, 5, 9, 17, 31, 1, 1], 5: [5, 31, 16, 30, 1, 1, 17, 14], 6: [5, 6, 8, 16, 30, 17, 17, 14], 7: [5, 31, 17, 1, 2, 4, 4, 4],
   8: [5, 14, 17, 17, 14, 17, 17, 14], 9: [5, 14, 17, 17, 15, 1, 2, 12], '/': [5, 1, 2, 2, 4, 8, 8, 16],
 }
-function McNumber({ text, tone }: { text: string; tone: 'white' | 'green' }) {
+export function McNumber({ text, tone }: { text: string; tone: 'white' | 'green' | 'gray' }) {
   const rects: string[] = []
   const shadows: string[] = []
   let x = 0

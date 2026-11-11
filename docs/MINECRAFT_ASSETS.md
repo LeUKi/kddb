@@ -84,3 +84,7 @@
 iPhone 的 Safari 不一定能解 Ogg Vorbis，所以用 ffmpeg 转成 MP3（单声道 64 kbps，双声道的两个 96 kbps，去掉元数据），只转格式，没有剪辑、混音或改音量。放在 `sounds/` 下，路径照原来的（`sounds/dig/stone1.mp3`），合计 342,491 字节；`sounds/provenance.json` 记着每个文件的原始路径、原始 SHA-1 和大小、转换参数、转换后的大小和 SHA-256。下载的 `.ogg` 没有放进仓库。
 
 Minecraft 的美术和声音资源由 Mojang / Microsoft 持有权利；本项目没有将其重新授权为自己的原创素材。Wiki 的 `License Mojang` 标记也不等于给游戏图像授予 Wiki 正文的许可。项目与 Minecraft、Mojang 或 Microsoft 没有官方关联。
+
+## 2026-11-11 效果图标
+
+身上的效果（`docs/V3_ITEMS.md` §10）照原版右上角的效果图标画。同一个 1.21.4 客户端 JAR（核对过 SHA-1，提取完已删）补提取 4 个 PNG，原样放进 `textures/`，记在 `manifest.json`（现在 115 条）：`mob_effect/poison.png`（中毒）、`mob_effect/mining_fatigue.png`（蜘蛛网让挖得慢）、`mob_effect/haste.png`（急迫药水）、`gui/sprites/hud/effect_background.png`（图标的底框）。设计稿里的弯铁轨 `block/rail_corner.png`、进度框和进度提示的底图只在设计稿里用，没有放进来。

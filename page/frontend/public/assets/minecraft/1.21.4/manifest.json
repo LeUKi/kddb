@@ -831,6 +831,38 @@
       "sha256": "e8646f1ed1f4bfd597d262cca3d8fac88ceaaa62807bbd5e607b2e3fe41c928a",
       "width": 128,
       "height": 128
+    },
+    {
+      "path": "textures/mob_effect/poison.png",
+      "source": "assets/minecraft/textures/mob_effect/poison.png",
+      "bytes": 189,
+      "sha256": "9645e52d3ba82d4aea34eb57e6852a0c1d54478b3ef2c28e9670408f55c268e4",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "path": "textures/mob_effect/mining_fatigue.png",
+      "source": "assets/minecraft/textures/mob_effect/mining_fatigue.png",
+      "bytes": 193,
+      "sha256": "c16e4a454f6be63aca317f3c36c11a62c58c4dd0ddab0aecef8f0f4afc05ec83",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "path": "textures/mob_effect/haste.png",
+      "source": "assets/minecraft/textures/mob_effect/haste.png",
+      "bytes": 222,
+      "sha256": "b74dea51205d93bb9b04c21dfdf30707ffd61f0ab4d33245aefceecbfe328ba2",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "path": "textures/gui/sprites/hud/effect_background.png",
+      "source": "assets/minecraft/textures/gui/sprites/hud/effect_background.png",
+      "bytes": 132,
+      "sha256": "fa92806c83c00f8469fc38a742e78224b77199237d573b695bacae6d9b736809",
+      "width": 24,
+      "height": 24
     }
   ],
   "source": "Mojang Minecraft Java Edition client JAR; unchanged extracted bytes",

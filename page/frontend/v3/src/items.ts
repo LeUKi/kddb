@@ -57,9 +57,9 @@ export function aboutSlot(slot: Slot, me: Me, items: boolean, interval: number, 
     case 'pick-h': case 'pick-v': case 'pick-x': return { count: `还能用 ${count} 次`, words: `一次挖开${SHAPE_NAMES[shapeOf(slot)!]}里没挖开的格子，挖过的跳过；不花镐子的机会。` }
     case 'spyglass': return { count: `还有 ${count} 个`, words: '看一格里是什么，只有你看得见，不花机会。' }
     case 'torch': return {
-      count: `还有 ${count} 个`,
-      words: v2 ? '插在一个挖开的格子上，照亮周围 9 格。颜色说这 9 格里一共有几个危险（TNT、末影水晶、刷怪笼，挖开的也算），插下去以后不变，大家都看得见。'
-        : '插在四个格子相交的角上，照亮旁边 4 格：绿色是没有危险，黄色 1～2 个，红色 3～4 个（TNT、末影水晶、刷怪笼）。大家都看得见。',
+      count: count > 0 ? `还有 ${count} 个` : '还没有',
+      words: (count > 0 ? '' : v2 ? '还没有火把：煤炭、木棍各挖到一个，就自动做成一个。' : `还没有火把：煤炭、木棍都攒满 ${CRAFT_NEED} 个，就自动做成一个。`) + (v2 ? '插在一个挖开的格子上，照亮周围 9 格。颜色说这 9 格里一共有几个危险（TNT、末影水晶、刷怪笼，挖开的也算），插下去以后不变，大家都看得见。'
+        : '插在四个格子相交的角上，照亮旁边 4 格：绿色是没有危险，黄色 1～2 个，红色 3～4 个（TNT、末影水晶、刷怪笼）。大家都看得见。'),
     }
     case 'key': return { count: `还有 ${count} 把`, words: '用试炼钥匙点试炼密室里的宝库，可以打开一次，开出一样东西；每个宝库每人只能开一次。' }
     case 'map': return { count: `还有 ${count} 张`, words: '随机标出地图上一格奖励（绿宝石常见，钻石少见），只有你看得见，镜头会飞过去。' }
@@ -206,7 +206,8 @@ export function slotsOf(me: Me, items: boolean, version = items ? 1 : 0): { acti
     }
     if ((me.spyglasses ?? 0) > 0) active.push('spyglass')
     if (owned) {
-      if (owned.torch > 0) active.push('torch')
+      // 火把一直在（没有时是灰的 0）：看得出这局能做火把（2026-11-11 用户转述的反馈）
+      active.push('torch')
       if (version >= 2) {
         if ((me.coal ?? 0) > 0) active.push('coal')
         if ((me.stick ?? 0) > 0) active.push('stick')
@@ -221,7 +222,7 @@ export function slotsOf(me: Me, items: boolean, version = items ? 1 : 0): { acti
   if (shields > 0) passive.push('shield')
   if (version < 2 && (me.coal ?? 0) > 0) passive.push('coal')
   if (version < 2 && (me.stick ?? 0) > 0) passive.push('stick')
-  if ((me.poison ?? 0) > 0) passive.push('poison')
+  // 中毒不在工具条上了：画成身上的效果（右上角、地图四周一圈绿、镐子上的标记，Effects.tsx）
   return { active, passive }
 }
 
