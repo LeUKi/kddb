@@ -76,3 +76,9 @@
 从红包站仓库的 `kit/` 同步到提交 `ac382cc`：`AGENTS.md`、`judge.d.ts`、`page/hb.d.ts`、`runtime/`、`cli/`（新增 `cli/lib/signer.mjs`，本地模拟器签身份令牌和 `X-Hb-Token`，并回答 `/api/hongbao/test`）。`ac382cc` 修了官方开发包的一处导入成环（11-02 起 `npm test` 一启动就报 `SLOW_MS` 未初始化），这里同步的是修好的版本。
 
 验证：`npm test` 73 / 73 通过，`npm run check` “可以去网站部署了”。判定器、测试、网页都没改。
+
+## 2026-11-12 同步（三方积分）
+
+从红包站仓库的 `kit/` 同步到提交 `a73c69f`（kit 最后一次改动）：`AGENTS.md`、`judge.d.ts`、`page/hb.d.ts`、`runtime/`、`cli/`、`examples/`、两个 schema，官方 README 放在 `docs/UPSTREAM_KIT_README.md`。新东西是三方积分红包（`meta.points`）：金额都是多少个最小单位，`hongbao.step`、`unit`、`points`，`tools.money.format()` 按最小单位写，红包信息多了 `units`。kit 里新加的 `.claude/skills`、`.cursor/rules`、`.gitignore` 没有搬（项目自己的配置）。判定器怎么接见 [V3_ITEMS.md](V3_ITEMS.md) §11。
+
+验证：`npm test` 10 / 10（加了一条三方积分的），`npm run check` “可以去网站部署了”。

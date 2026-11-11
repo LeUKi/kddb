@@ -14,6 +14,78 @@ import { LEDGER_PROTOCOL, readVerdict } from "./verdict.mjs";
 
 const copyClaim = (claim) => ({ ...claim, user: { ...claim.user } });
 
+/** The issuer's host a test's 三方积分 has when it names none. */
+export const POINTS_TEST_HOST = "points.example.com";
+
+/**
+ * hongbao.unit, step and points as the site gives every judge (三方积分,
+ * hb's docs/third-party-points-design.md §10): LDC's, unless a test or
+ * simulate.json's hongbao.points makes it a 三方积分红包, where every
+ * amount the code sees counts its 最小单位.
+ */
+export function unitFieldsOf(points) {
+  if (!points) return { unit: "LDC", step: "0.01", points: null };
+  return {
+    unit: points.unit,
+    step: points.step,
+    points: {
+      name: points.name,
+      unit: points.unit,
+      host: points.host ?? POINTS_TEST_HOST,
+    },
+  };
+}
+
+const STEP = /^(?:0|[1-9]\d{0,8})(?:\.\d{1,2})?$/;
+
+// A 单位's width, as the site counts it: a 汉字, full-width character or
+// emoji 2, a letter or digit 1, joiners and marks 0.
+const WIDE =
+  /[\p{Extended_Pictographic}\u1100-\u115F\u2E80-\u303E\u3041-\u33FF\u3400-\u4DBF\u4E00-\u9FFF\uA000-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFF60\uFFE0-\uFFE6\u{20000}-\u{3FFFD}]/u;
+const ZERO_WIDTH = /[\p{M}\p{Cf}]/u;
+const unitWidth = (value) =>
+  [...value].reduce(
+    (width, char) =>
+      ZERO_WIDTH.test(char) ? width : width + (WIDE.test(char) ? 2 : 1),
+    0,
+  );
+
+/**
+ * A test's or simulate.json's hongbao.points, `{ name, unit, step, host? }`:
+ * why it is not one, or null.
+ */
+export function pointsProblem(points) {
+  if (points === undefined) return null;
+  if (points === null || typeof points !== "object" || Array.isArray(points))
+    return 'hongbao.points 要写成 { "name": "星星", "unit": "星星", "step": "1" }';
+  const extra = Object.keys(points).filter(
+    (key) => !["name", "unit", "step", "host"].includes(key),
+  );
+  if (extra.length > 0)
+    return `hongbao.points 里没有 ${extra.join("、")} 这一项`;
+  const text = (value, max) =>
+    typeof value === "string" &&
+    value.trim() !== "" &&
+    [...value].length <= max;
+  if (!text(points.name, 8)) return "hongbao.points.name 要是 1–8 个字";
+  if (!text(points.unit, 16) || unitWidth(points.unit.trim()) > 8)
+    return "hongbao.points.unit 最多 4 个汉字或 8 个字母";
+  if (
+    typeof points.step !== "string" ||
+    !STEP.test(points.step) ||
+    Number(points.step) < 0.01 ||
+    Number(points.step) > 100_000_000
+  )
+    return 'hongbao.points.step 是最小单位，写成字符串，0.01 的整数倍，0.01 到 1 亿（"0.01"、"1"、"100"）';
+  if (
+    points.host !== undefined &&
+    (typeof points.host !== "string" ||
+      !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(points.host))
+  )
+    return "hongbao.points.host 要是发行方的域名，比如 points.example.com";
+  return null;
+}
+
 /**
  * A 红包 before its first submission here: `hongbao` its fixed numbers
  * (title, total, count, minEach, openedAt, endsAt; from protocol 5 no
@@ -130,6 +202,7 @@ export function nextSubmission(scenario, { input, now, user, title }) {
     remainingCount: hongbao.count - scenario.claims.length,
     openedAt: hongbao.openedAt,
     endsAt: hongbao.endsAt,
+    ...unitFieldsOf(hongbao.points),
   };
   return {
     input,
@@ -180,6 +253,7 @@ function nextLedgered(scenario, { input, now, user, title }) {
       unclaimed,
       openedAt: hongbao.openedAt,
       endsAt: hongbao.endsAt,
+      ...unitFieldsOf(hongbao.points),
     },
     share: { min: 1, max: unclaimed, last: false },
     claims: scenario.claims.map(copyClaim),
