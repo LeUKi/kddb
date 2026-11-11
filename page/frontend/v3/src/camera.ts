@@ -48,6 +48,8 @@ export function withToolbar(width: number, height: number): Viewport {
 
 /** 挖卡这一级，卡和画面边之间至少留这么多。 */
 export const MARGIN = 16
+/** 挖卡这一级，卡的上下各留一行给卡周围的说明（区块名字、余量、噪音条，CardLabels.tsx）。 */
+export const LABEL_SPACE = 30
 /** 附近这一级的缩放（画面小时更小，至少放得下两块多）。 */
 export const MID_SCALE = 0.6
 
@@ -57,7 +59,7 @@ export const MID_SCALE = 0.6
  */
 export function digScale(view: Viewport) {
   const area = areaOf(view)
-  return Math.min(1, Math.max(0.5, (Math.min(area.width, area.height) - MARGIN * 2) / CARD_PX))
+  return Math.min(1, Math.max(0.5, (Math.min(area.width, area.height - LABEL_SPACE * 2) - MARGIN * 2) / CARD_PX))
 }
 
 /** 附近这一级：固定的缩放，画面大就多看到几块；画面小时缩到窄的那边放得下两块多。 */

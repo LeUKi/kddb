@@ -8,9 +8,11 @@ import { money } from './types'
 export const CREEPER_WARN_MS = 10_000
 
 /**
- * 苦力怕（docs/V3_ITEMS.md §3，防蹲守）：手上有分、开着网页、很久没挖也没用道具，它从地图右边
- * 探头，“嘶……”，倒数 10 秒；最后几秒胀大、闪白，和游戏里一样。这 10 秒里挖一格、用道具或领取，
- * 游戏站重新计时，它就走开；没走开就炸掉手上的 20%（末影箱里的炸不到），由游戏站核对时间再扣。
+ * 苦力怕（docs/V3_ITEMS.md §3、§9，防蹲守）：手上有分、开着网页、很久没挖也没用道具，它从地图右边
+ * 探头，“嘶……”，倒数 10 秒：头 1 秒从右边探进来，之后一点点往里挤、越变越大，白闪从一秒一次加快到
+ * 一秒八次（2026-11-11 用户：要吓人）。这 10 秒里挖一格、用道具或领取，游戏站重新计时，它就走开；
+ * 没走开就炸掉待领取的 20%（至少 0.01，末影箱里的炸不到），由游戏站核对时间再扣。只在这 10 秒里
+ * 每一帧动（直接改样式，不重画组件），平时不画。
  */
 export function Creeper() {
   const at = useAtomValue(creeperAtAtom)
@@ -75,7 +77,7 @@ export function Creeper() {
       if (!lost) return
       setFlash(Date.now())
       play('tnt')
-      toast(`苦力怕炸掉了手上的 ${money(lost)}`, 'bad')
+      toast(`苦力怕炸掉了待领取的 ${money(lost)}`, 'bad')
     })
   }, [coming, shownAt, left])
 
@@ -85,15 +87,59 @@ export function Creeper() {
     return () => window.clearTimeout(timer)
   }, [flash])
 
+  // 进场、变大、闪：倒数这 10 秒里每一帧直接改样式
+  const body = useRef<HTMLDivElement>(null)
+  const face = useRef<HTMLSpanElement>(null)
+  const hiss = useRef<HTMLParagraphElement>(null)
+  useEffect(() => {
+    const element = body.current
+    if (!coming || shownAt === null || !element) return
+    // 减少动画：探出来就停着，不变大、不闪
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      element.style.transform = 'translateX(45%) rotate(-10deg)'
+      return () => {
+        element.style.transform = ''
+      }
+    }
+    let frame = 0
+    let phase = 0
+    let last = performance.now()
+    const tick = () => {
+      const time = performance.now()
+      const t = Math.min(1, (Date.now() - shownAt) / CREEPER_WARN_MS)
+      // 头 10% 从右边探进来（藏一半），之后一点点往里挤到只藏一成
+      const enter = t < 0.1 ? 1 - (1 - t / 0.1) ** 3 : 1
+      const creep = t < 0.1 ? 0 : (t - 0.1) / 0.9
+      const hidden = 1.1 - enter * 0.55 - creep * creep * 0.45
+      const scale = 1 + t ** 1.6 * 1.9
+      element.style.transform = `translateX(${hidden * 100}%) scale(${scale}) rotate(${-14 + t * 10}deg)`
+      // 白闪：一秒一次加快到一秒八次
+      phase += ((time - last) / 1000) * (1 + t ** 1.3 * 7)
+      last = time
+      if (face.current) face.current.style.filter = phase % 1 > 0.62 ? 'brightness(2.6) saturate(.05)' : ''
+      if (hiss.current) {
+        hiss.current.style.fontSize = `${13 + t * 8}px`
+        hiss.current.style.right = `${40 + scale * 40}px`
+      }
+      if (t < 1) frame = requestAnimationFrame(tick)
+    }
+    frame = requestAnimationFrame(tick)
+    return () => {
+      cancelAnimationFrame(frame)
+      element.style.transform = ''
+      if (face.current) face.current.style.filter = ''
+    }
+  }, [coming, shownAt])
+
   const chest = me && totalOf(me) > me.points
   return <>
-    <div className={`creeper${coming ? ' is-on' : ''}${coming && left <= 3000 ? ' is-swell' : ''}${coming && left <= 1200 ? ' is-fast' : ''}`} aria-hidden="true">
-      <span className="creeper-face" />
+    <div ref={body} className={`creeper${coming ? ' is-on' : ''}`} aria-hidden="true">
+      <span ref={face} className="creeper-face" />
     </div>
-    {coming ? <p className="creeper-hiss" aria-hidden="true">嘶……</p> : null}
+    {coming ? <p ref={hiss} className="creeper-hiss" aria-hidden="true">嘶……</p> : null}
     {coming ? <div className="item-tip creeper-tip" role="alert">
       <b className="is-green">苦力怕来了</b>
-      {Math.max(0, Math.ceil(left / 1000))} 秒内挖一格、用个道具或者见好就收，它就走开；不然炸掉手上的 20%{chest ? '，末影箱里的炸不到' : ''}。
+      {Math.max(0, Math.ceil(left / 1000))} 秒内挖一格、用个道具或者见好就收，它就走开；不然炸掉待领取的 20%{chest ? '，末影箱里的炸不到' : ''}。
     </div> : null}
     {flash ? <div key={flash} className="creeper-flash" aria-hidden="true" /> : null}
   </>

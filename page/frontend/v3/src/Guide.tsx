@@ -81,8 +81,8 @@ export function Guide({ rules, unit, onClose }: { rules: Rules; unit: string; on
     spy: [`TNT！扣掉 ${rules.tntPercent}%（${money(penalty)} ${unit}）`, '再挖一格试试。'],
     hold: ['挖到望远镜，它进了下面的工具条', '道具都放在工具条里。点它就能使用。'],
     aim: ['使用望远镜', mouse ? '指着格子就能预览要看哪一格，点一下确认；右键、Esc 或再点它取消。' : '点一格先预览，同一格再点一次确认。拖动还是挪地图。'],
-    done: items && peekAt !== null ? ['望远镜看见了：钻石，只有你看得见', `点「见好就收」才领进红包；机会用完、奖池分完会自动领。截止前 2 分钟停止挖掘，没领的作废。`]
-      : [`TNT！扣掉 ${rules.tntPercent}%（${money(penalty)} ${unit}）`, `点「见好就收」才领进红包；机会用完、奖池分完会自动领。截止前 2 分钟停止挖掘，没领的作废。`],
+    done: items && peekAt !== null ? ['望远镜看见了：钻石，只有你看得见', `点「见好就收」才算领到；机会用完、奖池分完会自动领取。截止前 2 分钟停止挖掘，没领的作废。`]
+      : [`TNT！扣掉 ${rules.tntPercent}%（${money(penalty)} ${unit}）`, `点「见好就收」才算领到；机会用完、奖池分完会自动领取。截止前 2 分钟停止挖掘，没领的作废。`],
   }
 
   const card = (id: 'a' | 'b') => <div className={`guide-card${(id === 'b') === onB ? ' is-focused' : ''}`}>
@@ -103,7 +103,7 @@ export function Guide({ rules, unit, onClose }: { rules: Rules; unit: string; on
 
   return <div className="rules-backdrop" onClick={onClose}>
     <section className="guide" role="dialog" aria-modal="true" aria-label="练习" onClick={event => event.stopPropagation()}>
-      <header className="guide-head"><span>练习 · 不用真机会</span><button type="button" className="guide-close" onClick={onClose} aria-label="关闭练习">×</button></header>
+      <header className="guide-head"><span>练习（不花机会）</span><button type="button" className="guide-close" onClick={onClose} aria-label="关闭练习">×</button></header>
       <div className="guide-copy" role="status"><h2>{words[step][0]}</h2><p>{words[step][1]}</p></div>
       <div className="guide-score">示例奖励 <b>{money(points)}</b> {unit}</div>
       <div className="guide-map">

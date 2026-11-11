@@ -5,9 +5,8 @@ import { ItemIcon } from '../../src/ItemIcon'
 import { mutedAtom, play, setMuted } from './sound'
 import { blockedAtom, chestNoteAtom, claim, claimingAtom, creeperShownAtom, digIntervalAtom, heldAtom, focusRequestAtom, gameAtom, hongbaoAtom, meAtom, readyAtAtom, settledAtom, summaryOpenAtom, totalOf } from './state'
 import { outOfPicks } from './items'
-import type { Kind, PublicCard } from './types'
-import { BIOME_NAMES, KIND_NAMES, KINDS, money } from './types'
-import { crystalPercent, eyeStatus, isTreasure } from './eye'
+import { money } from './types'
+import { crystalPercent, eyeStatus } from './eye'
 
 /**
  * 数字变了从旧的滚到新的；减少动画时直接到位。滚动直接改这一小段文字（motion 值），
@@ -94,7 +93,7 @@ export function TopBar({ onRules }: { onRules: () => void }) {
   const chest = me.chest ?? 0
   return <header className={`top-bar${confirming ? ' is-confirming' : ''}`}>
     <div className="earned">
-      <span>{settled ? '已领到' : '矿洞里的奖励'}</span>
+      <span>{settled ? '已领到' : '待领取'}</span>
       <strong><Tween value={settled ? Math.round(Number(settled.amount) * 100) : me.points} format={money} /> <small>{settled?.unit ?? unit}</small>
         {chest > 0 && !settled ? <button type="button" className="chest-plus" onClick={() => setChestNote(value => value ? 0 : Date.now())} aria-expanded={chestNote > 0}
           aria-label={`末影箱里存着 ${money(chest)}，炸不到，领取时一起加上`}><ItemIcon kind="ender" size={12} />+{money(chest)}</button> : null}
@@ -104,7 +103,7 @@ export function TopBar({ onRules }: { onRules: () => void }) {
       {settled ? <span className="claim-done">领取完成</span>
         : <button type="button" className="claim-button" disabled={claiming === 'working' || empty} aria-expanded={asks ? confirming : undefined}
           onClick={() => asks ? setConfirming(true) : void claim()}>
-          {claiming === 'working' ? '正在领取' : claimed || claiming === 'filled' ? '再交一次' : empty && blocked ? '没有奖励' : blocked ? '领取' : '见好就收'}
+          {claiming === 'working' ? '正在领取' : claimed || claiming === 'filled' ? '重新提交' : empty && blocked ? '没有奖励' : blocked ? '领取' : '见好就收'}
         </button>}
     </div>
     <SoundButton />
@@ -138,7 +137,7 @@ function ClaimConfirm({ points, chest, chances, unit, onCancel, onConfirm }: { p
     <motion.div className="claim-confirm" role="alertdialog" aria-modal="true" aria-labelledby="claim-confirm-title" aria-describedby="claim-confirm-text"
       initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}>
       <p id="claim-confirm-title" className="claim-confirm-title">领取 {money(points)} {unit}？</p>
-      <p id="claim-confirm-text">{chest > 0 ? `手上 ${money(points - chest)}，加上末影箱里的 ${money(chest)}。` : ''}领取以后就不能再挖这个红包了，剩下的{chances > 0 ? ` ${chances} 次机会` : '机会和附魔镐'}作废。</p>
+      <p id="claim-confirm-text">{chest > 0 ? `待领取 ${money(points - chest)}，加上末影箱里的 ${money(chest)}。` : ''}领取以后这一局就不能再挖了了，剩下的{chances > 0 ? ` ${chances} 次机会` : '机会和附魔镐'}作废。</p>
       <div className="claim-confirm-actions">
         <button ref={stay} type="button" onClick={onCancel}>继续挖</button>
         <button type="button" className="is-primary" onClick={onConfirm}>领取</button>
@@ -165,39 +164,19 @@ function SoundButton() {
   </button>
 }
 
-/** 下面一条：居中这张卡、奖池、截止，和收益卡的按钮。 */
-export function BottomBar({ card }: { card: PublicCard | null }) {
+/**
+ * 下面一条：奖池、截止、末影之眼在哪，和收益卡的按钮。这张卡的名字、挖了几格、还剩什么放在卡的周围
+ * （CardLabels.tsx，2026-11-11 用户：底部的不需要了，都放在区块周围）。
+ */
+export function BottomBar() {
   const game = useAtomValue(gameAtom)
   const hongbao = useAtomValue(hongbaoAtom)
   const setFocus = useSetAtom(focusRequestAtom)
   const setSummary = useSetAtom(summaryOpenAtom)
   if (!game) return null
   const unit = hongbao?.unit ?? 'LDC'
-  const fixedCount = card?.fixed ? Object.keys(card.fixed).length : 0
-  const opened = card ? card.cells.filter(Boolean).length : 0
-  const treasure = card ? isTreasure(card) : false
-  const left = (kind: Kind) => card?.left[kind] ?? 0
-  const items = !!game?.rules.items
-  // 宝藏卡只列它有的几样（以前开的宝藏卡没有末影水晶）；普通卡照旧（挖完的绿宝石不列），末影之眼有才列；
-  // 有道具栏的局只列还剩的（装饰、宝库、岩浆不列）
-  const shown = (kind: Kind) => items ? !['deco', 'vault', 'lava'].includes(kind) && left(kind) > 0
-    : treasure ? ['emerald', 'diamond', 'apple'].includes(kind) || (kind === 'crystal' && card?.left.crystal !== undefined)
-      : kind === 'crystal' ? false : kind === 'eye' ? left(kind) > 0 : left(kind) > 0 || kind !== 'emerald'
   const eye = eyeStatus(game.cards, game.rules.eyeEvery)
   return <footer className="bottom-bar">
-    {card ? <div className="card-info">
-      <div className="card-title">
-        <b>{card.kind ? BIOME_NAMES[card.kind] : `第 ${card.id} 张卡`}</b>
-        <span>{card.size}×{card.size} · 已挖 <Tween value={opened} />/{card.cells.length - fixedCount}{card.closed ? ' · 监守者醒了' : card.finished ? ' · 挖完了' : ''}</span>
-      </div>
-      <ul className="card-left" aria-label="这张卡还剩">
-        {KINDS.filter(shown).map((kind: Kind) =>
-          <li key={kind} className={left(kind) === 0 ? 'is-out' : kind === 'eye' ? 'is-eye' : kind === 'crystal' ? 'is-crystal' : ''} title={KIND_NAMES[kind]}>
-            <ItemIcon kind={kind} size={18} />
-            <Tween value={left(kind)} />
-          </li>)}
-      </ul>
-    </div> : null}
     {/* 手机上排成固定的几行（奖池和人数、截止和收益、末影之眼），文字变长变短、提示换成按钮都不换行：底栏一变高，地图就跟着改大小、重新对准 */}
     <div className="game-info">
       <span className="info-line">
@@ -256,7 +235,7 @@ export function Rules({ onClose, onPractice }: { onClose: () => void; onPractice
       <h2>怎么玩</h2>
       <ul>
         <li>矿洞卡铺成一张地图，大家一起挖。放大到一张卡上才能挖，点一格用 1 次机会。</li>
-        <li>挖到的奖励先记在矿洞里，点「见好就收」才领进红包；机会用完、奖池分完会自动领取。</li>
+        <li>挖到的奖励先是待领取，点「见好就收」才算领到；机会用完、奖池分完会自动领取。</li>
         <li><b>截止前要领取</b>：截止前 2 分钟停止挖掘，开着网页的人自动领取，没领的作废。</li>
         <li>末影珍珠会在这张卡旁边长出一张新卡；旧卡挖完以前一直能挖。</li>
       </ul>
@@ -270,24 +249,26 @@ export function Rules({ onClose, onPractice }: { onClose: () => void; onPractice
         <dt><ItemIcon kind="tnt" size={18} /> TNT</dt><dd>扣掉还没领的奖励的 {rules.tntPercent}%（盾牌能挡一次）</dd>
         {rules.items ? <><dt><ItemIcon kind="shield" size={18} /> 盾牌</dt><dd>自动挡下一次 TNT 或末影水晶；最多带 3 面，再挖到换成一份小奖</dd>
           <dt><ItemIcon kind="spyglass" size={18} /> 望远镜</dt><dd>看一格是什么，只有你看得见</dd>
-          <dt><ItemIcon kind="coal" size={18} /> 煤炭、木棍</dt><dd>各攒满 2 个，自动做成一个火把；满了再挖到不算</dd>
-          <dt><ItemIcon kind="torch" size={18} /> 火把</dt><dd>插在四格相交的地方，大家都看得见：绿色是这 4 格里没有危险，黄色 1～2 个，红色 3～4 个（TNT、末影水晶、刷怪笼）</dd>
+          {(rules.items ?? 0) >= 2 ? <><dt><ItemIcon kind="coal" size={18} /> 煤炭、木棍</dt><dd>各有一个就自动做成一个火把，多的攒着</dd>
+            <dt><ItemIcon kind="torch" size={18} /> 火把</dt><dd>插在挖开的格子上，照亮周围 9 格，大家都看得见。颜色说这 9 格里一共有几个危险（TNT、末影水晶、刷怪笼，挖开的也算）：绿色没有，黄色 1～2 个，橙色 3～4 个，红色 5 个以上；插下去以后不变</dd></>
+            : <><dt><ItemIcon kind="coal" size={18} /> 煤炭、木棍</dt><dd>各攒满 2 个，自动做成一个火把；满了再挖到不算</dd>
+              <dt><ItemIcon kind="torch" size={18} /> 火把</dt><dd>插在四个格子相交的角上，大家都看得见：绿色是这 4 格里没有危险，黄色 1～2 个，红色 3～4 个（TNT、末影水晶、刷怪笼）</dd></>}
           <dt><ItemIcon kind="map" size={18} /> 藏宝图</dt><dd>随机标出地图上一格奖励，只有你看得见；奖励越大越难标到</dd>
           <dt><ItemIcon kind="potion" size={18} /> 急迫药水</dt><dd>10 秒里每次挖只要隔 1 秒</dd>
           <dt><ItemIcon kind="key" size={18} /> 试炼钥匙</dt><dd>开试炼密室里的宝库：每个宝库每人一次，开出奖励或附魔台</dd>
           <dt><ItemIcon kind="table" size={18} /> 附魔台</dt><dd>两种附魔镐挑一种（横三格、竖三格、十字），一次挖开一片，不花镐子的机会</dd>
-          <dt><ItemIcon kind="ender" size={18} /> 末影箱</dt><dd>末地宝藏里有；手上的一半存进去（谁都炸不到，领取时一起算），另一半毁掉</dd>
-          <dt><ItemIcon kind="cobweb" size={18} /> 蜘蛛网、刷怪笼</dt><dd>废弃矿井里有：蜘蛛网让下一次多等 5 秒；刷怪笼让你中毒，之后 3 次每挖一次扣手上 5%</dd>
-          <dt><ItemIcon kind="lava" size={18} /> 下界、深暗之域</dt><dd>下界每挖 3 格岩浆流一格，吞掉的格子就没了，远古残骸烧不掉；深暗之域挖得越多噪音越大，到了不知道的那一下监守者醒来，挖响它的人手上扣一半，那张卡关掉</dd>
-          {rules.creeper !== 0 ? <><dt><ItemIcon kind="spawner" size={18} /> 苦力怕</dt><dd>手上有分、开着网页却 {rules.creeper ?? 60} 秒没挖也没用道具，苦力怕会来，10 秒内不挖就炸掉手上的 20%</dd></> : null}</>
+          <dt><ItemIcon kind="ender" size={18} /> 末影箱</dt><dd>末地宝藏里有；待领取的一半存进去（谁都炸不到，领取时一起算），另一半退回奖池</dd>
+          <dt><ItemIcon kind="cobweb" size={18} /> 蜘蛛网、刷怪笼</dt><dd>废弃矿井里有：蜘蛛网让下一次多等 {(rules.items ?? 0) >= 2 ? 10 : 5} 秒；刷怪笼让你中毒，之后 3 次每挖一次扣待领取的 5%</dd>
+          <dt><ItemIcon kind="lava" size={18} /> 下界、深暗之域</dt><dd>下界每挖 3 格岩浆流一格，吞掉的格子就没了，远古残骸烧不掉；深暗之域每挖一格噪音加一，噪音进了危险区（卡下面的噪音条）就随时可能惊醒监守者：挖出这一下的人，待领取的奖励扣掉一半，那张卡关掉。点卡上面区块名字旁边的问号能看说明</dd>
+          {rules.creeper !== 0 ? <><dt><ItemIcon kind="spawner" size={18} /> 苦力怕</dt><dd>有待领取的奖励、开着网页却 {rules.creeper ?? 60} 秒没挖也没用道具，苦力怕会来，10 秒内不挖就炸掉待领取的 20%{(rules.items ?? 0) >= 2 ? '（至少 0.01）。关了网页、离开 5 分钟以上又没领取的，苦力怕每分钟来一次，直到炸完' : ''}</dd></> : null}</>
           : <><dt><ItemIcon kind="shield" size={18} /> 盾牌</dt><dd>挡下一次 TNT；已经有了就转成一份小奖</dd>
             <dt><ItemIcon kind="spyglass" size={18} /> 望远镜</dt><dd>看到这张卡上一个没开的格子，只有你看得见</dd></>}
         <dt><ItemIcon kind="pearl" size={18} /> 末影珍珠</dt><dd>旁边长出一张新卡</dd>
-        {rules.eyeEvery ? <><dt><ItemIcon kind="eye" size={18} /> 末影之眼</dt><dd>每 {rules.eyeEvery} 张卡有一颗，那张卡发紫光；挖到它，远处开出末地宝藏（3×3{rules.endMix === 2 ? '，每张随机：钻石 3–5 颗、双铁镐 1–2 把、金苹果 0–1 个，其余是绿宝石' : ''}），没领奖的人都能挖</dd>
+        {rules.eyeEvery ? <><dt><ItemIcon kind="eye" size={18} /> 末影之眼</dt><dd>每 {rules.eyeEvery} 张卡有一颗，那张卡发紫光；挖到它，远处开出末地宝藏（3×3{rules.endMix === 2 ? '，每张随机：钻石 3–5 颗、双铁镐 1–2 把、附魔金苹果 0–1 个，其余是绿宝石' : ''}），没领奖的人都能挖</dd>
           <dt><ItemIcon kind="crystal" size={18} /> 末影水晶</dt><dd>藏在末地宝藏里，一张{rules.endMix === 2 ? '一到两颗' : '一颗'}；踩中扣掉还没领的奖励的 {crystalPercent(rules)}%（TNT 的两倍，盾牌能挡）</dd></> : null}
       </dl> : null}
       <p className="rules-tip">拖动地图平移，滚轮或捏合缩放。点旁边的卡就能换过去，方向键也行；+/- 缩放。全图那一级能看到所有的卡，不能拖动。</p>
-      <p className="rules-tip">工具条浮在地图左下角（横屏在左边）：第 1 格是镐子，上面是剩下的机会；挖到的道具排在后面，放不下时可以滑。点一格弹出它的说明，点“使用”就用。对格子用的道具点“使用”以后，顶上一直有一行说明和取消，去地图上点：手机上先点一下预览，同一处再点一次确认；电脑上指着就能预览，点一下确认。说明弹窗里选“不再提示”就直接开始，顶上的问号能再看。取消也可以再点它、按 Esc 或点右键。拖动永远是挪地图。电脑上按 1–9 选。</p>
+      <p className="rules-tip">工具条浮在地图左下角（横屏在左边）：第 1 格是镐子，上面是剩下的机会；挖到的道具排在后面，放不下时可以滑。点一格弹出它的说明，点「使用」就用。望远镜、火把这类要选位置的道具，点「使用」以后地图顶上会一直显示提示和「取消」，去地图上点：手机上先点一下预览，同一处再点一次确认；电脑上鼠标移过去就能预览，点一下确认。说明弹窗里选「不再提示」就直接开始，顶上的问号能再看。取消也可以再点它、按 Esc 或点右键。拖动始终是移动地图。电脑上按 1–9 选。</p>
       <div className="rules-actions">
         <button type="button" className="rules-practice" onClick={onPractice}>练习一下</button>
         <button type="button" onClick={onClose}>知道了</button>
@@ -311,7 +292,7 @@ export function ChestNote() {
   if (!shown || chest <= 0 || settled || held || creeper) return null
   return <motion.div key={shown} className="item-tip top-hint chest-note" role="status" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}>
     <ItemIcon kind="ender" size={22} />
-    <p><b className="is-green">+{money(chest)} 在末影箱里</b>炸不到，金苹果也不翻它，领取时一起加上。</p>
+    <p><b className="is-green">+{money(chest)} 在末影箱里</b>炸不到，也不参与附魔金苹果翻倍，领取时一起加上。</p>
     <button type="button" onClick={() => setShown(0)}>知道了</button>
   </motion.div>
 }

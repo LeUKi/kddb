@@ -170,7 +170,7 @@ describe("一局", () => {
     assert.equal(two.broadcast, null);
     assert.match(String(one.answer.voucher), new RegExp(`^kd3\\.${Date.parse(info.openedAt ?? "")}\\.10001\\.${one.answer.points}\\.k1\\.`));
     const after = await room.dig(info, 10001, "xiaoming", { cardId: 1, index: 3 }, NOW + 6000);
-    assert.equal(after.answer.message, "你已经领取了，不能再挖这个红包");
+    assert.equal(after.answer.message, "你已经领取了，这一局不能再挖了");
   });
   it("红包结束了不能挖；没领的不能再领", async () => {
     const room = new MineRoom(memory(), tools);
@@ -328,14 +328,14 @@ describe("道具和区块（docs/V3_ITEMS.md §4）", () => {
     const left = game.pool - game.used;
     const torch = await one.use(info, 10001, "xiaoming", { item: "torch", cardId: 1, index: 6 }, NOW);
     assert.equal(torch.answer.ok, true);
-    assert.deepEqual(/** @type {any} */ (torch.answer.card).torches, [{ at: 6, level: 1, name: "xiaoming" }]);
+    assert.deepEqual(/** @type {any} */ (torch.answer.card).torches, [{ at: 6, level: 1, name: "xiaoming", v: 2 }]);
     assert.deepEqual(torch.pushes, [[{ type: "card", card: torch.answer.card, left, over: false }, null]]);
     assert.equal(game.seq, seq);
     assert.equal(one.recent.length, 1);
     assert.equal(/** @type {any} */ (storage.map.get("card:1")).torches.length, 1);
     const boom = await one.dig(info, 10002, "xiaohong", { cardId: 1, index: 0 }, NOW, { compact: true });
     // 第 2 版：挖开了颜色也不变
-    assert.deepEqual(boom.cell?.torches, [{ at: 6, level: 1, name: "xiaoming" }]);
+    assert.deepEqual(boom.cell?.torches, [{ at: 6, level: 1, name: "xiaoming", v: 2 }]);
     const trial = biome(game, "trial");
     // 没插过火把的卡的推送没有这一项
     const plain = await one.dig(info, 10002, "xiaohong", { cardId: trial.id, index: 1 }, NOW + 2000, { compact: true });

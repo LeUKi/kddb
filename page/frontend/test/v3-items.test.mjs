@@ -9,11 +9,13 @@ let server
 let items
 let live
 let chart
+let regions
 before(async () => {
   server = await createServer({ root: fileURLToPath(new URL('../', import.meta.url)), configFile: false, server: { middlewareMode: true, watch: null }, appType: 'custom', logLevel: 'silent' })
   items = await server.ssrLoadModule('/v3/src/items.ts')
   live = await server.ssrLoadModule('/v3/src/live.ts')
   chart = await server.ssrLoadModule('/v3/src/chart.ts')
+  regions = await server.ssrLoadModule('/v3/src/regions.ts')
 })
 after(() => server.close())
 
@@ -127,7 +129,7 @@ test('收益图：第几格只数挖的，中毒、末影箱、宝库这些不�
   ]
   const marker = chart.chartOf(trail).markers.find(item => item.kind === 'diamond')
   assert.equal(marker.dig, 2)
-  assert.match(chart.markerWords(marker, value => String(value)), /^第 2 格：钻石/)
+  assert.match(chart.markerWords(marker, value => String(value)), /^第 2 次挖：钻石/)
 })
 
 test('手里还有附魔台就不算挖不动（换得到附魔镐）', () => {
@@ -142,3 +144,35 @@ test('宝库：卡挖完了照样能开（关了的不行）', () => {
   assert.equal(items.vaultsLeft(card(2, { closed: true, vaults: { 1: 2 } })), false)
 })
 
+
+test('第 2 版：煤炭、木棍排在火把后面；火把照 3×3（出界的不算），只插挖开的格子', () => {
+  const me = {
+    chances: 3, shield: false, shields: 0, spyglasses: 1, peeks: [], points: 10, digs: 3, status: 'playing', lastResult: null,
+    items: { torch: 1, map: 0, potion: 1, ender: 0, table: 0, key: 2, pick: { h: 0, v: 0, x: 0 } }, coal: 3, stick: 0, poison: 2,
+  }
+  assert.deepEqual(items.slotsOf(me, true, 2), { active: ['spyglass', 'torch', 'coal', 'key', 'potion'], passive: ['poison'] })
+  assert.deepEqual(items.torchArea(5, 0), [0, 1, 5, 6])
+  assert.deepEqual(items.torchArea(5, 12), [6, 7, 8, 11, 12, 13, 16, 17, 18])
+  const c = card(5, { fixed: { 1: 'lava' } })
+  c.cells[0] = { kind: 'emerald', uid: 1, name: 'a', at: 1 }
+  c.cells[2] = { kind: 'diamond', uid: 0, name: '', at: 1, burn: 1 }
+  assert.deepEqual([0, 1, 2, 3].map(index => items.dugCell(c, index)), [true, false, false, false])
+  assert.equal(items.aimWhat('torch', 2), '点一个挖开的格子，照亮周围 9 格')
+  assert.equal(items.aimTarget('torch', 1), '角')
+  const about = items.aboutSlot('coal', me, true, 1, null, 2)
+  assert.deepEqual(about.count, '3 个')
+})
+
+test('卡周围的说明：余量只列宝贝和道具数；深暗之域的危险区是格子数的 45%–75%', () => {
+  const plain = { left: { emerald: 9, diamond: 3, apple: 0, tnt: 6, pearl: 1, shield: 2, spyglass: 1, coal: 3, map: 1, key: 1, potion: 1 } }
+  const out = regions.leftoversOf(plain)
+  assert.deepEqual(out.treasures, [{ kind: 'diamond', count: 3 }, { kind: 'pearl', count: 1 }])
+  assert.deepEqual([out.goods, out.goodsCount], [['shield', 'spyglass', 'map', 'potion'], 6])
+  assert.deepEqual(regions.leftoversOf({ left: { emerald: 4, tnt: 2 } }), { treasures: [], goods: [], goodsCount: 0 })
+  const deep = { cells: Array(49).fill(null), fixed: {}, noise: 18, closed: false }
+  assert.deepEqual(regions.noiseOf(deep), { noise: 18, low: 23, high: 36, cells: 49, danger: false, closed: false, toDanger: 5 })
+  assert.equal(regions.noiseOf({ ...deep, noise: 23 }).danger, true)
+  assert.equal(regions.regionName({ id: 7 }), '第 7 张卡')
+  assert.equal(regions.regionName({ id: 7, kind: 'deep' }), '深暗之域')
+  assert.match(regions.regionAbout({ kind: 'mine' }, { items: 2, tntPercent: 25 })[0], /多等 10 秒/)
+})

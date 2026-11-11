@@ -6,8 +6,11 @@ import type { Held } from './items'
 import type { Direction } from './camera'
 import { BLOCK_PX, CARD_BORDER, CARD_PX, cellPx, entranceWave, GAP, PAD, SLOT_PX } from './camera'
 import { drawThumb, THUMB_PX, whenImages } from './thumb'
+import { torchWords } from './aim'
+import { toast } from './state'
 import type { DigResult, Peek, PublicCard, Torch } from './types'
 import { BIOME_NAMES, KIND_NAMES, money } from './types'
+import { torchArea } from './items'
 
 const ROWS = 'ABCDEFG'
 
@@ -40,6 +43,8 @@ export interface CardProps {
   peeked: number | null
   /** 自己开过的宝库（这张卡的格号） */
   opened: number[]
+  /** 第几版的道具规则（rules.items；第 2 版火把插在挖开的格子上、照 3×3） */
+  version: number
   onDig: (cardId: number, index: number) => void
   /** 拿着道具时点到、指到一格（qx、qy：点在这一格的右半、下半；指着时 hover 为真） */
   onAim: (cardId: number, index: number, qx: 0 | 1, qy: 0 | 1, hover: boolean) => void
@@ -52,7 +57,7 @@ export interface CardProps {
  * 一张卡：外框都一样大，放在它的区块正中（区块中心在 x·408, y·408，392 见方）。点区块就是换到这张；
  * 能挖的那张只有格子能点。
  */
-export const CardView = memo(function CardView({ card, focused, diggable, detail, names, current, myUid, peeks, pending, fresh, entrance, held, preview, peeked, opened, onDig, onAim, onTorch, onPick }: CardProps) {
+export const CardView = memo(function CardView({ card, focused, diggable, detail, names, current, myUid, peeks, pending, fresh, entrance, held, preview, peeked, opened, version, onDig, onAim, onTorch, onPick }: CardProps) {
   const side = cellPx(card.size)
   const blockStyle = {
     left: card.x * SLOT_PX - BLOCK_PX / 2,
@@ -106,15 +111,26 @@ export const CardView = memo(function CardView({ card, focused, diggable, detail
     },
   } : {}
   const previewClass = (index: number, dug: boolean) => !preview || !inPreview.has(index) ? ''
-    : held === 'torch' ? ' in-torch' : held === 'spyglass' ? ' in-look' : held === 'key' ? ' in-key'
+    : held === 'torch' ? (version >= 2 ? '' : ' in-torch') : held === 'spyglass' ? ' in-look' : held === 'key' ? ' in-key'
       : dug || skipped.has(index) ? ' in-skip' : preview.ok ? ' in-box' : ' in-skip'
-  const torchAt = (at: number) => ({
-    left: PAD + (at % card.size) * (side + GAP) - GAP / 2,
-    top: PAD + Math.floor(at / card.size) * (side + GAP) - GAP / 2,
+  // 第 1 版的火把在四格相交的角上，第 2 版（v: 2）在格子正中
+  const torchAt = (at: number, center = false) => ({
+    left: PAD + (at % card.size) * (side + GAP) + (center ? side / 2 : -GAP / 2),
+    top: PAD + Math.floor(at / card.size) * (side + GAP) + (center ? side / 2 : -GAP / 2),
   })
-  const ghost = preview && held === 'torch' && preview.ok ? torchAt(preview.at) : null
+  /** 几格围成的框（第 2 版火把照亮的 3×3、预览） */
+  const areaOf = (cells: number[]) => {
+    const rows = cells.map(index => Math.floor(index / card.size))
+    const cols = cells.map(index => index % card.size)
+    const [r0, r1, c0, c1] = [Math.min(...rows), Math.max(...rows), Math.min(...cols), Math.max(...cols)]
+    return { left: PAD + c0 * (side + GAP) - 3, top: PAD + r0 * (side + GAP) - 3, width: (c1 - c0 + 1) * (side + GAP) - GAP + 6, height: (r1 - r0 + 1) * (side + GAP) - GAP + 6 }
+  }
+  const torch2 = held === 'torch' && version >= 2
+  const ghost = preview && held === 'torch' && preview.ok ? torchAt(preview.at, torch2) : null
+  const torchOn = new Map((card.torches ?? []).filter(torch => torch.v === 2).map(torch => [torch.at, torch]))
   return <div className={blockClass} style={blockStyle} onClick={pick} data-card={card.id}>
-    {card.kind === 'deep' ? <div className="card-noise" aria-label={`噪音 ${card.noise ?? 0}${card.closed ? '，监守者醒了，这张卡关了' : ''}`}>
+    {/* 挖卡这一级的当前卡：噪音在卡下面的噪音条里（CardLabels），这里不再写 */}
+    {card.kind === 'deep' && !names ? <div className="card-noise" aria-label={`噪音 ${card.noise ?? 0}${card.closed ? '，监守者醒了，这张卡关了' : ''}`}>
       <ItemIcon kind="sculk" size={22} /><span>噪音 {card.noise ?? 0}</span>{card.closed ? <b>监守者醒了</b> : null}
     </div> : null}
     <div className={className} style={style} {...(card.torches?.length ? {
@@ -126,8 +142,8 @@ export const CardView = memo(function CardView({ card, focused, diggable, detail
         const x = (event.clientX - rect.left) / scale - CARD_BORDER
         const y = (event.clientY - rect.top) / scale - CARD_BORDER
         const near = card.torches!.find(torch => {
-          const at = torchAt(torch.at)
-          return Math.hypot(x - at.left, y - at.top) < side * 0.32
+          const at = torchAt(torch.at, torch.v === 2)
+          return Math.hypot(x - at.left, y - at.top) < side * (torch.v === 2 ? 0.5 : 0.32)
         })
         onTorch(near ?? null, event)
       },
@@ -156,9 +172,10 @@ export const CardView = memo(function CardView({ card, focused, diggable, detail
           className={`map-cell fixed fixed-lava is-burned${recent ? ' just-burned' : ''}${previewClass(index, true)}`} aria-label={`${name}：被岩浆吞掉了（${KIND_NAMES[cell.kind]}）`}>
           {recent ? <ItemIcon kind={cell.kind} size={icon} className="burned-icon" /> : null}
         </div>
-        return <div key={index} style={wave(index)} {...aimHandlers(index)}
-          className={`map-cell revealed kind-${cell.kind}${mine ? ' is-mine' : ''}${recent ? (recent.mine ? ' just-mine' : ' just-other') : ''}${previewClass(index, true)}`}
-          aria-label={`${name}：${KIND_NAMES[cell.kind]}，${cell.name} 挖的`}>
+        const lit = torchOn.get(index)
+        return <div key={index} style={wave(index)} {...(aiming ? aimHandlers(index) : lit ? { onClick: () => toast(torchWords(lit)) } : {})}
+          className={`map-cell revealed kind-${cell.kind}${mine ? ' is-mine' : ''}${lit ? ' has-torch' : ''}${recent ? (recent.mine ? ' just-mine' : ' just-other') : ''}${previewClass(index, true)}`}
+          aria-label={`${name}：${KIND_NAMES[cell.kind]}，${cell.name} 挖的${lit ? `；插着${torchWords(lit)}` : ''}`}>
           <ItemIcon kind={cell.kind} size={icon} />
           {current ? <span className="cell-who" aria-hidden={!names}>{mine ? '我' : cell.name}</span> : null}
           {recent?.mine && recent.result ? <span className={`cell-float${recent.result.amount < 0 ? ' is-bad' : ''}`}>{floatText(recent.result)}</span> : null}
@@ -185,11 +202,18 @@ export const CardView = memo(function CardView({ card, focused, diggable, detail
         {busy ? <ItemIcon kind="pickaxe" size={Math.round(icon * 0.92)} className="digging-pick" /> : null}
       </button>
     })}
-    {(card.torches ?? []).map(torch => <span key={torch.at} className={`torch torch-${torch.level}`} style={torchAt(torch.at)} role="img"
-      aria-label={torch.level === 0 ? '绿色火把：这 4 格里没有危险' : torch.level === 1 ? '黄色火把：这 4 格里有 1～2 个危险' : '红色火把：这 4 格里有 3～4 个危险'}>
-      <ItemIcon kind={torch.level === 0 ? 'torch-green' : torch.level === 1 ? 'torch' : 'torch-red'} size={Math.round(side * 0.85)} />
-    </span>)}
-    {ghost ? <span className="torch torch-ghost" style={ghost} aria-hidden="true"><ItemIcon kind="torch" size={Math.round(side * 0.85)} /></span> : null}
+    {/* 第 2 版的火把：照亮的 3×3 有一层同色的光 */}
+    {[...torchOn.values()].map(torch => <span key={`halo-${torch.at}`} className={`torch-halo halo-${torch.level}`} style={areaOf(torchArea(card.size, torch.at))} aria-hidden="true" />)}
+    {(card.torches ?? []).map(torch => torch.v === 2
+      ? <span key={torch.at} className={`torch is-v2 torch2-${torch.level}`} style={torchAt(torch.at, true)} role="img" aria-label={`${torchWords(torch)}`}>
+        <ItemIcon kind={torch.level === 0 ? 'torch-green' : torch.level === 3 ? 'torch-red' : 'torch'} size={Math.round(side * 0.85)} className={torch.level === 2 ? 'is-orange' : ''} />
+      </span>
+      : <span key={torch.at} className={`torch torch-${torch.level}`} style={torchAt(torch.at)} role="img"
+        aria-label={torch.level === 0 ? '绿色火把：这 4 格里没有危险' : torch.level === 1 ? '黄色火把：这 4 格里有 1～2 个危险' : '红色火把：这 4 格里有 3～4 个危险'}>
+        <ItemIcon kind={torch.level === 0 ? 'torch-green' : torch.level === 1 ? 'torch' : 'torch-red'} size={Math.round(side * 0.85)} />
+      </span>)}
+    {torch2 && preview ? <span className={`torch-frame${preview.ok ? '' : ' is-bad'}`} style={areaOf(preview.cells)} aria-hidden="true" /> : null}
+    {ghost ? <span className={`torch torch-ghost${torch2 ? ' is-v2' : ''}`} style={ghost} aria-hidden="true"><ItemIcon kind="torch" size={Math.round(side * 0.85)} /></span> : null}
     {card.closed ? <div className="card-closed" aria-hidden="true"><span>监守者醒了</span></div> : null}
     </div>
   </div>
@@ -221,7 +245,8 @@ function floatText(result: DigResult) {
   if (result.kind === 'totem') return '+3 次'
   if (result.kind === 'pearl') return '新卡！'
   if (result.kind === 'shield') return result.blocked ? '挡住了' : '盾牌'
-  if (result.kind === 'tnt' || result.kind === 'crystal') return '挡住了'
+  // 没有盾牌、待领取是 0 时踩到：没挡，只是没东西可扣
+  if (result.kind === 'tnt' || result.kind === 'crystal') return result.blocked ? '挡住了' : '没扣到'
   // 有道具栏的局：道具收进工具条
   if (result.kind === 'spyglass') return result.text.startsWith('获得望远镜') ? '+1 望远镜' : '看到一格'
   const got: Partial<Record<DigResult['kind'], string>> = {

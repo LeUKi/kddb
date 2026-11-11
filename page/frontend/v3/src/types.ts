@@ -13,8 +13,12 @@ export const KIND_NAMES: Record<Kind, string> = {
 /** 区块（docs/V3_ITEMS.md §2）：末地宝藏、试炼密室、废弃矿井、下界、深暗之域；普通卡没有 */
 export type Biome = 'end' | 'trial' | 'mine' | 'nether' | 'deep'
 export const BIOME_NAMES: Record<Biome, string> = { end: '末地宝藏', trial: '试炼密室', mine: '废弃矿井', nether: '下界', deep: '深暗之域' }
-/** 火把：插在 at 那一格的左上角（四格相交处）；level 0 绿（4 格里没有危险）、1 黄（1–2 个）、2 红（3–4 个） */
-export interface Torch { at: number; level: 0 | 1 | 2; name: string }
+/**
+ * 火把。第 1 版的局（rules.items 1）：插在 at 那一格的左上角（四格相交处），level 0 绿（4 格里没有危险）、
+ * 1 黄（1–2 个）、2 红（3–4 个），按没挖开的算。第 2 版（2）：插在 at 那一格（挖开的）上，照 3×3，level
+ * 0 绿、1 黄（1–2 个）、2 橙（3–4 个）、3 红（5 个以上），挖开的也算，插下就定了；游戏站给的带 v: 2。
+ */
+export interface Torch { at: number; level: 0 | 1 | 2 | 3; name: string; v?: 2 }
 /** 附魔镐的形状 */
 export type Shape = 'h' | 'v' | 'x'
 
@@ -54,8 +58,8 @@ export interface Rules {
   digInterval?: number
   /** 2：末地宝藏每张随机配（2026-11-07 起开的局）；旧局没有 */
   endMix?: 2
-  /** 1：道具栏、新格子和区块（docs/V3_ITEMS.md）；旧局没有 */
-  items?: 1
+  /** 1：道具栏、新格子和区块（docs/V3_ITEMS.md）；2：第 2 版道具规则（§9）；旧局没有 */
+  items?: 1 | 2
   /** 多少秒不挖苦力怕会来；0 不来 */
   creeper?: number
 }
@@ -90,10 +94,11 @@ export interface Me {
   /** 开过的宝库："卡号:格" */
   vaultsOpened?: string[]
 }
-export interface State { game: PublicGame; me: Me; blocked: string | null }
+/** drained：不在的时候苦力怕炸掉的（回来时游戏站先算掉） */
+export interface State { game: PublicGame; me: Me; blocked: string | null; drained?: number }
 
 /** 逐格记录：挖到什么（k）、这一格加减多少分（a）、挖完手里多少分（p）、盾牌挡住了（b）。 */
-export interface Step { k: Kind; a: number; p: number; b?: 1 }
+export interface Step { k: Kind | 'poison' | 'creeper' | 'warden' | 'ender' | 'vault'; a: number; p: number; b?: 1 }
 export interface TopEntry { uid: number; name: string; points: number }
 /** 收益卡（game/shared/rules.mjs 的 summaryOf）。 */
 export interface Summary {
@@ -122,7 +127,9 @@ export interface LiveCell {
 export interface LiveCard { type: 'card'; card: PublicCard; left?: number; over?: boolean }
 export interface LiveDig { type: 'dig'; seq: number; card: PublicCard; newCard: PublicCard | null; feed: FeedItem; left: number; over: boolean; stats: Stats }
 export type LiveStep = LiveCell | LiveDig
-export type Live = LiveStep | LiveCard | { type: 'claim'; name: string; points: number; stats: Stats }
+/** 不领的人被苦力怕炸了（docs/V3_ITEMS.md §9）：奖池变了；uids 是被炸的人 */
+export interface LiveDrain { type: 'drain'; uids: number[]; left: number; over: boolean }
+export type Live = LiveStep | LiveCard | LiveDrain | { type: 'claim'; name: string; points: number; stats: Stats }
 
 /** 10000 → "100.00"。 */
 export function money(points: number) {

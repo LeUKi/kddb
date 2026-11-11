@@ -147,6 +147,11 @@ export function mergeLive(game: PublicGame, ahead: Map<number, LiveStep>, messag
       next = { ...next, stats: message.stats }
       continue
     }
+    // 不领的人被苦力怕炸了：炸掉的回到奖池（docs/V3_ITEMS.md §9）
+    if (message.type === 'drain') {
+      next = { ...next, left: message.left, over: next.over || message.over }
+      continue
+    }
     show(message)
     if (message.seq <= next.seq) continue
     if (message.seq > next.seq + 1) {

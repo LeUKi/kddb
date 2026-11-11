@@ -698,7 +698,7 @@ export function coolingOf(/** @type {Game} */ game, /** @type {Player} */ player
  * 只剩附魔镐时镐子挖不了，由 dig 自己说。
  */
 export function digBlocked(/** @type {Game} */ game, /** @type {Player} */ player, /** @type {number} */ now, { cooling = true } = {}) {
-  if (player.status === "claimed") return "你已经领取了，不能再挖这个红包";
+  if (player.status === "claimed") return "你已经领取了，这一局不能再挖了";
   // 手里没有分就不叫他领：领 0 分只会在红包里记一笔“领取 0.00”
   const ask = totalOf(player) > 0 ? "，请领取" : "";
   if (game.over) return `奖池已经分完，游戏结束了${ask}`;
@@ -759,7 +759,7 @@ function startAction(/** @type {Game} */ game, /** @type {Player} */ player, /**
 
 /** 中毒那一下写在结果的话里。 */
 function noteText(/** @type {Player} */ player, /** @type {number} */ lost) {
-  return `；中毒扣掉 ${formatPoints(lost)}（5%，向下取整），${player.poison ? `还要扣 ${player.poison} 次` : "毒解了"}`;
+  return `；中毒扣掉 ${formatPoints(lost)}（5%），${player.poison ? `还要扣 ${player.poison} 次` : "毒解了"}`;
 }
 
 /**
@@ -966,7 +966,7 @@ function digCell(/** @type {Game} */ game, /** @type {Player} */ player, /** @ty
       break;
     case "ender":
       if (bag) bag.ender += 1;
-      text = "获得末影箱：用它把手上的分一半存进箱子、一半毁掉，箱子里的谁也扣不到";
+      text = "获得末影箱：用它把待领取的一半存进末影箱、另一半退回奖池，存进去的谁也扣不到";
       publicText = "捡到了一个末影箱";
       break;
     case "debris":
@@ -1009,11 +1009,11 @@ function digCell(/** @type {Game} */ game, /** @type {Player} */ player, /** @ty
   game.used += amount;
   if (wanted > 0) {
     text = `${label}，奖励 +${formatPoints(amount)}${amount < wanted ? "（奖池只剩这么多）"
-      : appleCapped ? `（金苹果一次最多加 ${formatPoints(appleCapped)}）` : ""}`;
+      : appleCapped ? `（附魔金苹果一次最多加 ${formatPoints(appleCapped)}）` : ""}`;
   } else if (kind === "tnt" && !blockedTnt) {
-    text = `TNT！奖励 -${formatPoints(-amount)}（${rules.tntPercent}%，向下取整）`;
+    text = `TNT！奖励 -${formatPoints(-amount)}（${rules.tntPercent}%）`;
   } else if (kind === "crystal" && !blockedTnt) {
-    text = `末影水晶爆炸！奖励 -${formatPoints(-amount)}（双倍，${crystalPercent(rules)}%，向下取整）`;
+    text = `末影水晶爆炸！奖励 -${formatPoints(-amount)}（双倍，${crystalPercent(rules)}%）`;
   }
   player.trail?.push({ k: kind, a: amount, p: totalOf(player), ...(blockedTnt ? { b: /** @type {1} */ (1) } : {}) });
 
@@ -1035,7 +1035,7 @@ function digCell(/** @type {Game} */ game, /** @type {Player} */ player, /** @ty
     card.closed = true;
     card.finished = true;
     if (warden > 0) player.trail?.push({ k: "warden", a: -warden, p: totalOf(player) });
-    text += `${text ? "。" : ""}噪音惊醒了监守者，${warden > 0 ? `手上的奖励被扣掉一半（-${formatPoints(warden)}），` : ""}这张卡关闭了`;
+    text += `${text ? "。" : ""}噪音惊醒了监守者，${warden > 0 ? `待领取的奖励被扣掉一半（-${formatPoints(warden)}），` : ""}这张卡关闭了`;
     publicText += "，惊醒了监守者，这张卡关闭了";
   }
   // 地图不能长不动：监守者关掉的卡、岩浆里都可能把最后几颗珍珠带走；还能挖的卡上一颗都不剩时，
@@ -1215,10 +1215,15 @@ export function torchLevel(/** @type {Card} */ card, /** @type {number} */ at) {
 const TORCH_WORDS = ["绿色：这四格里没有危险", "黄色：这四格里有 1–2 个危险", "红色：这四格里有 3–4 个危险"];
 const TORCH_WORDS_2 = ["绿色：周围 9 格里没有危险", "黄色：周围 9 格里有 1～2 个危险", "橙色：周围 9 格里有 3～4 个危险", "红色：周围 9 格里有 5 个以上危险"];
 
-/** 亮着的火把，给大家看的样子（第 1 版颜色每次都按现在的牌算，第 2 版是插下时定的）。 */
+/**
+ * 亮着的火把，给大家看的样子（第 1 版颜色每次都按现在的牌算，第 2 版是插下时定的）。第 2 版的带 v: 2：
+ * 网页按它画在格子上、照 3×3、四种颜色（第 1 版画在角上、三种颜色）。
+ */
 export function publicTorches(/** @type {Card} */ card) {
   return (card.torches ?? []).filter((torch) => torchLit(card, torch.at))
-    .map((torch) => ({ at: torch.at, level: torch.level ?? torchLevel(card, torch.at), name: torch.name }));
+    .map((torch) => (torch.level === undefined
+      ? { at: torch.at, level: torchLevel(card, torch.at), name: torch.name }
+      : { at: torch.at, level: torch.level, name: torch.name, v: 2 }));
 }
 
 /**
@@ -1324,7 +1329,7 @@ function itemEffect(
       player.trail?.push({ k: "ender", a: -destroyed, p: totalOf(player) });
       return {
         ok: true, budget: true, stored, destroyed,
-        text: `存进末影箱 ${formatPoints(stored)}，毁掉 ${formatPoints(destroyed)}（留在红包里）。箱子里的分谁也扣不到，领取时和手上的一起算`,
+        text: `存进末影箱 ${formatPoints(stored)}，${formatPoints(destroyed)} 退回奖池。存进去的谁也扣不到，领取时一起算`,
       };
     }
     case "potion": {
@@ -1445,7 +1450,7 @@ export function creeperBlast(/** @type {Game} */ game, /** @type {Player} */ pla
   game.used -= lost;
   player.activeAt = now;
   if (lost > 0) player.trail?.push({ k: "creeper", a: -lost, p: totalOf(player) });
-  return { ok: true, lost, text: `苦力怕爆炸了！手上的奖励 -${formatPoints(lost)}（${CREEPER_PERCENT}%，向下取整）` };
+  return { ok: true, lost, text: `苦力怕爆炸了！待领取的奖励 -${formatPoints(lost)}（${CREEPER_PERCENT}%）` };
 }
 
 /** 苦力怕炸一次扣多少：20% 向下取整；第 2 版的局至少 0.01（以前 0.04 以下扣 0，永远扣不完）。 */

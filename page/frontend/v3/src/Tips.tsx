@@ -5,8 +5,8 @@ import { useEffect, useRef, useState } from 'react'
 import { ItemIcon } from '../../src/ItemIcon'
 import { aimInfo, torchHoverAtom, torchWords } from './aim'
 import { useCooling } from './Hud'
-import { AIM_WHAT, hasMouse, SLOT_ICONS, SLOT_NAMES } from './items'
-import { aimAtom, aimedCardAtom, creeperShownAtom, dialogAtom, heldAtom, meAtom, putDown } from './state'
+import { aimWhat, hasMouse, SLOT_ICONS, SLOT_NAMES } from './items'
+import { aimAtom, aimedCardAtom, creeperShownAtom, dialogAtom, heldAtom, itemsVersionAtom, meAtom, putDown } from './state'
 
 /**
  * 电脑上跟着指针的小提示（docs/V3_ITEMS.md §5）：指到火把上说颜色的意思，指到宝库上说还能开几次，
@@ -66,9 +66,10 @@ export function StepBar() {
   const card = useAtomValue(aimedCardAtom)
   const me = useAtomValue(meAtom)
   const creeper = useAtomValue(creeperShownAtom)
+  const version = useAtomValue(itemsVersionAtom)
   const setDialog = useSetAtom(dialogAtom)
   if (!held || creeper) return null
-  let line = AIM_WHAT[held]
+  let line = aimWhat(held, version)
   let tone = ''
   if (aim && card) {
     const info = aimInfo(held, card, aim.index, me)

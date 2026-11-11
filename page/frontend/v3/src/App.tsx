@@ -8,18 +8,15 @@ import { installSound } from './sound'
 import { gameAtom, hongbaoAtom, meAtom, phaseAtom, problemAtom, signIn, start, summaryOpenAtom, toastAtom } from './state'
 import { SummaryCard } from './Summary'
 import { ItemDialogs } from './Dialogs'
-import type { PublicCard } from './types'
 
 export function App() {
   const phase = useAtomValue(phaseAtom)
   const problem = useAtomValue(problemAtom)
-  const [card, setCard] = useState<PublicCard | null>(null)
   const [rules, setRules] = useState(false)
   const [guide, setGuide] = useState(false)
   const game = useAtomValue(gameAtom)
   const me = useAtomValue(meAtom)
   const hongbao = useAtomValue(hongbaoAtom)
-  const onFocus = useCallback((next: PublicCard | null) => setCard(next), [])
   const [summary, setSummary] = useAtom(summaryOpenAtom)
   const closeSummary = useCallback(() => setSummary(null), [setSummary])
 
@@ -71,8 +68,8 @@ export function App() {
           : phase === 'out' ? <div className="state-card"><p>{problem}</p></div>
           : <>
             <TopBar onRules={() => setRules(true)} />
-            <MapView onFocus={onFocus} />
-            <BottomBar card={card} />
+            <MapView />
+            <BottomBar />
           </>}
     {rules ? <Rules onClose={() => setRules(false)} onPractice={() => { setRules(false); setGuide(true) }} /> : null}
     {phase === 'ready' ? <ItemDialogs /> : null}

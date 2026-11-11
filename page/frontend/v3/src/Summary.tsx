@@ -2,10 +2,11 @@ import { useAtomValue } from 'jotai'
 import { motion } from 'motion/react'
 import { useEffect, useMemo, useState } from 'react'
 import { ItemIcon } from '../../src/ItemIcon'
-import { CHART, chartOf, iconOf, markerWords } from './chart'
+import type { Point } from './chart'
+import { CHART, chartOf, iconOf, markerWords, pointAt, pointWords, tickOf } from './chart'
 import { hongbaoAtom, loadSummary, settledAtom, uidAtom } from './state'
 import type { Summary } from './types'
-import { money } from './types'
+import { KIND_NAMES, money } from './types'
 
 // 收益卡（docs/V3_MAP.md §6）：底栏“收益”点开，这一局对他结束了（领到了、奖池分完或机会
 // 用完而手里没分）自动弹一次。打开时才向游戏站要数据、才画曲线，平时不占资源。排成一张
@@ -17,10 +18,8 @@ export function SummaryCard({ reason, onClose }: { reason: 'button' | 'end'; onC
   const uid = useAtomValue(uidAtom)
   const [summary, setSummary] = useState<Summary | null>(null)
   const [problem, setProblem] = useState('')
-  // 点了哪个图标（显示那一格挖到了什么），点别处就关；电脑上指着就显示，移开就收
-  const [picked, setPicked] = useState<number | null>(null)
-  const [hovered, setHovered] = useState<number | null>(null)
-  const shown = hovered ?? picked
+  // 拖到（电脑上指着）的那一步：说那一步挖到了什么；电脑上移开就收，手机上点别处就收
+  const [scrub, setScrub] = useState<Point | null>(null)
   const unit = settled?.unit ?? hongbao?.unit ?? 'LDC'
 
   const load = () => {
@@ -37,6 +36,7 @@ export function SummaryCard({ reason, onClose }: { reason: 'button' | 'end'; onC
   }, [onClose])
 
   const chart = useMemo(() => summary?.me.trail?.length ? chartOf(summary.me.trail) : null, [summary])
+  chartRef.current = chart
   const me = summary?.me
   const ended = reason === 'end'
   const headline = settled ? `领到 ${settled.amount}`
@@ -47,7 +47,7 @@ export function SummaryCard({ reason, onClose }: { reason: 'button' | 'end'; onC
   return <div className="summary-backdrop" onClick={onClose}>
     <motion.section className="summary" role="dialog" aria-modal="true" aria-label="我的收益" onClick={event => {
       event.stopPropagation()
-      setPicked(null)
+      setScrub(null)
     }}
       initial={{ opacity: 0, y: 18, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: 'spring', stiffness: 320, damping: 28 }}>
       <header className="summary-head">
@@ -77,32 +77,44 @@ export function SummaryCard({ reason, onClose }: { reason: 'button' | 'end'; onC
                 </svg>
                 <span className="chart-zero" style={{ top: `${(chart.baseY / CHART.height) * 100}%` }} aria-hidden="true">0</span>
                 {chart.peak ? <span className={`chart-peak${side(chart.peak.x)}`} style={{ left: `${(chart.peak.x / CHART.width) * 100}%`, top: `${(chart.peak.y / CHART.height) * 100}%` }}>最高 {money(chart.peak.points)}</span> : null}
-                {/* 钻石、金苹果、踩雷、盾牌挡住直接画图标，点一下（电脑上指着）说这一格挖到了什么 */}
-                {chart.markers.map(marker => {
-                  const words = markerWords(marker, money)
-                  return <motion.button key={marker.step} type="button" className={`chart-icon${shown === marker.step ? ' is-picked' : ''}`} aria-label={words} aria-pressed={picked === marker.step}
-                    style={{ left: `${(marker.x / CHART.width) * 100}%`, top: `${(marker.y / CHART.height) * 100}%`, x: '-50%', y: '-50%' }}
-                    initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.25 + (marker.step / Math.max(1, me.digs)) * 0.7, duration: 0.25 }}
-                    onPointerEnter={event => { if (event.pointerType === 'mouse') setHovered(marker.step) }}
-                    onPointerLeave={event => { if (event.pointerType === 'mouse') setHovered(now => now === marker.step ? null : now) }}
-                    onClick={event => {
-                      event.stopPropagation()
-                      setPicked(now => now === marker.step ? null : marker.step)
-                    }}>
-                    <ItemIcon kind={iconOf(marker)} size={16} />
-                  </motion.button>
+                {/* 线上只标两件事：最大的一笔、被炸得最狠的一下（其余在下面的刻度上） */}
+                {[chart.best, chart.worst].map(marker => {
+                  if (!marker) return null
+                  const icon = iconOf(marker)
+                  return <span key={marker.step} className={`chart-mark${marker.amount < 0 ? ' is-bad' : ''}`} title={markerWords(marker, money)}
+                    style={{ left: `${(marker.x / CHART.width) * 100}%`, top: `${(marker.y / CHART.height) * 100}%` }}>
+                    {icon ? <ItemIcon kind={icon} size={20} /> : <i className="chart-dot" />}
+                    {marker.amount < 0 ? <b>{money(marker.amount)}</b> : null}
+                  </span>
                 })}
-                {(() => {
-                  const marker = chart.markers.find(item => item.step === shown)
-                  return marker ? <span className={`chart-tip${side(marker.x)}`} style={{ left: `${(marker.x / CHART.width) * 100}%`, top: `${(marker.y / CHART.height) * 100}%` }} role="status">{markerWords(marker, money)}</span> : null
-                })()}
+                {/* 拖动、指着：竖线跟着走，说这一步 */}
+                <div className="chart-scrub" aria-hidden="true"
+                  onPointerDown={event => {
+                    event.stopPropagation()
+                    event.currentTarget.setPointerCapture(event.pointerId)
+                    setScrub(scrubAt(event.currentTarget, event.clientX))
+                  }}
+                  onPointerMove={event => {
+                    if (event.pointerType === 'mouse' || event.buttons) setScrub(scrubAt(event.currentTarget, event.clientX))
+                  }}
+                  onPointerLeave={event => { if (event.pointerType === 'mouse') setScrub(null) }}
+                  onClick={event => event.stopPropagation()} />
+                {scrub ? <>
+                  <span className="chart-guide" style={{ left: `${(scrub.x / CHART.width) * 100}%` }} aria-hidden="true" />
+                  <span className="chart-guide-dot" style={{ left: `${(scrub.x / CHART.width) * 100}%`, top: `${(scrub.y / CHART.height) * 100}%` }} aria-hidden="true" />
+                  <span className={`chart-tip${side(scrub.x)}`} style={{ left: `${(scrub.x / CHART.width) * 100}%` }} role="status">{pointWords(scrub, money, KIND_NAMES)}</span>
+                </> : null}
+              </div>
+              {/* 刻度：大奖金色、被炸红色、盾牌挡住蓝色 */}
+              <div className="chart-ticks" aria-hidden="true">
+                {chart.markers.map(marker => <i key={marker.step} className={`is-${tickOf(marker.mark)}`} style={{ left: `${(marker.x / CHART.width) * 100}%` }} />)}
               </div>
               <figcaption>
-                <span>第 1 格</span>
-                <span>第 {me.digs} 格</span>
+                <span>第 1 次挖</span>
+                <span>第 {me.digs} 次挖</span>
               </figcaption>
             </figure>
-              : <p className="summary-note">{me.trail === null ? '你在开始记录以前就来过这一局，没有逐格的曲线。' : '还没挖过，挖几格以后这里会画出收益曲线。'}</p>}
+              : <p className="summary-note">{me.trail === null ? '你来的时候这一局还没开始记录，所以没有收益曲线。' : '还没挖过，挖几格以后这里会画出收益曲线。'}</p>}
             <dl className="summary-stats">
               <div><dt>挖了</dt><dd>{me.digs} 格</dd></div>
               <div><dt>最大一笔</dt><dd>{me.best > 0 ? `+${money(me.best)}` : '—'}</dd></div>
@@ -121,12 +133,20 @@ export function SummaryCard({ reason, onClose }: { reason: 'button' | 'end'; onC
             <p className="summary-foot">{summary.stats.players} 人挖过 · {summary.stats.claimed} 人领了 · 奖池{summary.over ? '已经分完' : `还剩 ${money(summary.left)} ${unit}`}</p>
           </>}
       <div className="summary-actions">
-        <span>截图就能分享这张卡</span>
+        <span>截图就能分享这份战绩</span>
         <button type="button" onClick={onClose}>{ended ? '好的' : '知道了'}</button>
       </div>
     </motion.section>
   </div>
 }
+
+/** 拖到的位置（屏幕上的 x）→ 最近的那一步。 */
+function scrubAt(element: HTMLElement, clientX: number) {
+  const rect = element.getBoundingClientRect()
+  return pointAt(chartRef.current!, ((clientX - rect.left) / rect.width) * CHART.width)
+}
+/** 拖动时找点用的那张图（每次画都换） */
+const chartRef: { current: ReturnType<typeof chartOf> | null } = { current: null }
 
 /** 贴着图左右两头的提示往里靠，不出框。 */
 function side(x: number) {

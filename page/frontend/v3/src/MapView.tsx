@@ -1,9 +1,10 @@
 import { useAtomValue, useSetAtom } from 'jotai'
 import type { MotionStyle } from 'motion/react'
-import { animate, motion, useMotionValue, useReducedMotion } from 'motion/react'
+import { animate, AnimatePresence, motion, useMotionValue, useReducedMotion } from 'motion/react'
 import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Entrance } from './CardView'
 import { CardView } from './CardView'
+import { CardLabels } from './CardLabels'
 import { useGesture } from '@use-gesture/react'
 import type { Camera, Direction, Level, Viewport, WheelZoom } from './camera'
 import { BLOCK_PX, withToolbar, cameraAt, cardNear, cardToward, cellCenter, centerOf, edgeFacing, edgePointer, entryPoint, fullyOnScreen, nearestCard, nearestLevel, onScreen, overviewCamera, scaleOf, SLOT_PX, wheelZoom } from './camera'
@@ -12,7 +13,9 @@ import { cardAt, MapCanvas } from './MapCanvas'
 import { landMs, PearlFlight } from './PearlFlight'
 import { isTreasure } from './eye'
 import { useCooling } from './Hud'
-import { aimAtom, blockedAtom, dig, focusRequestAtom, freshAtom, gameAtom, heldAtom, hongbaoAtom, meAtom, newCardAtom, peekedAtom, pendingAtom, putDown, settledAtom, store, uidAtom } from './state'
+import {
+  aimAtom, blockedAtom, dig, focusRequestAtom, freshAtom, gameAtom, heldAtom, hongbaoAtom, itemsVersionAtom, meAtom, newCardAtom, peekedAtom, pendingAtom, putDown, settledAtom, store, uidAtom,
+} from './state'
 import { Toolbar } from './Toolbar'
 import { aimInfo, anchorFor, torchHoverAtom, applyAt } from './aim'
 import { shapeOf, vaultsLeft } from './items'
@@ -65,7 +68,7 @@ function readLastSeen(hongbao: string) {
  * 按钮、+/-）、方向键、四周的迷雾、居中的卡边框亮。镜头只改一个 transform；
  * 挖卡那一级才能挖，点别的区块就换过去；全图那一级不能拖。
  */
-export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => void }) {
+export function MapView() {
   const game = useAtomValue(gameAtom)
   const me = useAtomValue(meAtom)
   const hongbao = useAtomValue(hongbaoAtom)
@@ -82,6 +85,7 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
   const reduced = useReducedMotion() ?? false
   const cooling = useCooling()
   const held = useAtomValue(heldAtom)
+  const version = useAtomValue(itemsVersionAtom)
   const peeked = useAtomValue(peekedAtom)
   const aim = useAtomValue(aimAtom)
   const setAim = useSetAtom(aimAtom)
@@ -191,7 +195,6 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
   const cullAt = useDeferredValue(settled)
   const cullFocus = useDeferredValue(focused)
   useEffect(() => {
-    onFocus(focused)
     // 落定以前镜头还在原点，算出来的不是他看的那张，别记
     if (focused && hongbao && landed.current)
       try {
@@ -199,7 +202,7 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
       } catch {
         // 记不住就算了
       }
-  }, [focused, hongbao, onFocus])
+  }, [focused, hongbao])
 
   // 全图那一级不能拖：长出新卡时重新放下所有卡
   useEffect(() => {
@@ -462,7 +465,7 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
 
   // 地图上方一条：为什么现在不能挖（不用等点了才知道）
   const banner = settled_ ? null
-    : me?.status === 'claimed' ? '已经领取，凭证还没交上：点上面的「再交一次」'
+    : me?.status === 'claimed' ? '已经领取，但还没提交成功：点上面的「重新提交」'
       : blocked
   const detailScale = cullAt.scale >= 0.4
   /** 近处（画面里，或当前卡四周一圈）：放大到能看清的级别时画格子 */
@@ -573,12 +576,15 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
           preview={level === 2 && current ? previewOf(card) : null}
           peeked={peekShown?.cardId === card.id ? peekShown.index : null}
           opened={openedOf.get(card.id) ?? NO_OPENED}
+          version={version}
           onDig={dig}
           onAim={onAim}
           onTorch={onTorch}
           onPick={pick}
         />
       })}
+      {/* 卡周围的说明：挖卡这一级、落定了才出来，换卡时淡出淡入 */}
+      <AnimatePresence>{level === 2 && focused && warm === null ? <CardLabels key={focused.id} card={focused} /> : null}</AnimatePresence>
       {entrance?.flight ? <PearlFlight key={newCard?.at} from={entrance.flight.from} to={entrance.flight.to} variant={entrance.flight.variant} /> : null}
     </motion.div>
     <div className="map-fog" aria-hidden="true" />
@@ -595,7 +601,7 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
     {/* 缩放：地图右下角竖着一列，半透明 */}
     <div className="zoom zoom-float" role="group" aria-label="缩放">
       <button type="button" onClick={() => changeLevel(1)} disabled={level === 2} aria-label="放大">＋</button>
-      <span>{level === 2 ? '挖卡' : level === 1 ? '附近' : '全图'}</span>
+      <span>{level === 2 ? '单张' : level === 1 ? '附近' : '全图'}</span>
       <button type="button" onClick={() => changeLevel(-1)} disabled={level === 0} aria-label="缩小">－</button>
     </div>
     {banner ? <p className="map-banner" role="status">{banner}</p>

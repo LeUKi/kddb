@@ -549,7 +549,7 @@ describe("什么时候不能挖", () => {
     assert.equal(digBlocked(g, fresh, now + MIN_INTERVAL_MS - 1, { cooling: false }), null);
     assert.equal(digBlocked(g, p, now + 5000), "机会用完了，请领取");
     claim(g, p);
-    assert.equal(digBlocked(g, p, now + 5000), "你已经领取了，不能再挖这个红包");
+    assert.equal(digBlocked(g, p, now + 5000), "你已经领取了，这一局不能再挖了");
     const late = newPlayer(g, 10003, "小刚");
     assert.equal(digBlocked(g, late, T0 + DAY - WRAP_UP_MS), "快截止了，已经停止挖掘");
     late.points = 10;
@@ -764,7 +764,7 @@ describe("新局的道具（docs/V3_ITEMS.md §3）", () => {
     const first = dig(g, p, { cardId: 1, index: 4, now: later() });
     assert.ok(first.ok);
     assert.equal(first.result.poison, 1); // 30 的 5% 是 1.5，向下取整
-    assert.match(first.result.text, /中毒扣掉 0\.01（5%，向下取整），还要扣 2 次/);
+    assert.match(first.result.text, /中毒扣掉 0\.01（5%），还要扣 2 次/);
     assert.deepEqual([p.points, p.poison, p.shields, g.used], [39, 2, 3, 39]);
     dig(g, p, { cardId: 1, index: 5, now: later() }); // 39 → 38 → 48
     const last = dig(g, p, { cardId: 1, index: 6, now: later() }); // 48 → 46 → 56
@@ -847,7 +847,7 @@ describe("新局的道具（docs/V3_ITEMS.md §3）", () => {
     const used = useItem(g, p, { item: "ender", now: later() });
     assert.ok(used.ok);
     assert.deepEqual([used.stored, used.destroyed], [24, 25]);
-    assert.match(used.text, /存进末影箱 0\.24，毁掉 0\.25/);
+    assert.match(used.text, /存进末影箱 0\.24，0\.25 退回奖池/);
     assert.deepEqual([p.points, p.chest, g.used, p.items.ender], [0, 24, 24, 0]);
     assert.deepEqual(p.trail.at(-1), { k: "ender", a: -25, p: 24 });
     assert.match(useItem(g, p, { item: "ender", now: later() }).message, /没有末影箱/);
@@ -1179,7 +1179,7 @@ describe("新局的道具（docs/V3_ITEMS.md §3）", () => {
     const loud = dig(g, p, { cardId: card.id, index: 22, now: later() });
     assert.ok(loud.ok);
     assert.equal(loud.result.warden, 15);
-    assert.match(loud.result.text, /噪音惊醒了监守者，手上的奖励被扣掉一半（-0\.15），这张卡关闭了/);
+    assert.match(loud.result.text, /噪音惊醒了监守者，待领取的奖励被扣掉一半（-0\.15），这张卡关闭了/);
     assert.match(loud.feed.text, /惊醒了监守者/);
     assert.deepEqual([p.points, p.chest, p.shields, g.used, card.closed, card.finished], [15, 7, 2, 15, true, true]);
     assert.deepEqual(p.trail.at(-1), { k: "warden", a: -15, p: 22 });
@@ -1258,7 +1258,7 @@ describe("新局的道具（docs/V3_ITEMS.md §3）", () => {
     const boom = creeperBlast(g, p, t + 68_000);
     assert.ok(boom.ok);
     assert.equal(boom.lost, 2);
-    assert.match(boom.text, /苦力怕爆炸了！手上的奖励 -0\.02（20%，向下取整）/);
+    assert.match(boom.text, /苦力怕爆炸了！待领取的奖励 -0\.02（20%）/);
     assert.deepEqual([p.points, p.chest, g.used, p.activeAt], [8, 100, 8, t + 68_000]);
     assert.deepEqual(p.trail.at(-1), { k: "creeper", a: -2, p: 108 });
     assert.equal(privatePlayer(p, g, t + 68_000).creeperMs, 60_000);

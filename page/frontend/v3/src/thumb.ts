@@ -46,7 +46,9 @@ const FRAMES: Partial<Record<NonNullable<PublicCard['kind']>, [string, string]>>
   end: ['#d9c27a', '#2a2637'], trial: ['#8c6a4a', '#2b2d2a'], mine: ['#8a6b45', '#2a2118'], nether: ['#8a3a2c', '#2a1214'], deep: ['#1f6a73', '#0d1418'],
 }
 /** 火把在远处只剩一个光点：绿、黄、红 */
+/** 火把的光：第 1 版绿、黄、红；第 2 版（v: 2）绿、黄、橙、红 */
 const TORCH_COLORS = ['#7cf08a', '#ffd75a', '#ff5a3c']
+const TORCH_COLORS_2 = ['#7cf08a', '#ffd75a', '#ff9a3c', '#ff4b4b']
 
 /** 挖开的格子底色（和 v3.css 的 .map-cell.kind-* 一样） */
 export const CELL_COLORS: Partial<Record<Kind, string>> = {
@@ -185,13 +187,16 @@ function drawCells(context: CanvasRenderingContext2D, card: PublicCard, left: nu
   if (card.torches?.length) {
     const side = cellPx(card.size)
     for (const torch of card.torches) {
-      const cx = left + ((torch.at % card.size) * (side + GAP) - GAP / 2) * scale
-      const cy = top + (Math.floor(torch.at / card.size) * (side + GAP) - GAP / 2) * scale
-      const radius = Math.max(1.5, side * 0.5 * scale)
+      // 第 1 版在角上，第 2 版在格子正中
+      const shift = torch.v === 2 ? side / 2 : -GAP / 2
+      const cx = left + ((torch.at % card.size) * (side + GAP) + shift) * scale
+      const cy = top + (Math.floor(torch.at / card.size) * (side + GAP) + shift) * scale
+      const radius = Math.max(1.5, side * (torch.v === 2 ? 0.8 : 0.5) * scale)
+      const color = (torch.v === 2 ? TORCH_COLORS_2 : TORCH_COLORS)[torch.level]
       const glow = context.createRadialGradient(cx, cy, 0, cx, cy, radius)
-      glow.addColorStop(0, TORCH_COLORS[torch.level])
-      glow.addColorStop(0.25, `${TORCH_COLORS[torch.level]}cc`)
-      glow.addColorStop(1, `${TORCH_COLORS[torch.level]}00`)
+      glow.addColorStop(0, color)
+      glow.addColorStop(0.25, `${color}cc`)
+      glow.addColorStop(1, `${color}00`)
       context.fillStyle = glow
       context.fillRect(cx - radius, cy - radius, radius * 2, radius * 2)
     }

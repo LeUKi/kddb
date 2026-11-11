@@ -49,31 +49,41 @@ export function classOf(slot: Slot): ItemClass {
  * 道具登记表（docs/ITEM_UX.md §6）：弹窗右上角的数量、一两句它做什么；瞄准类还有点什么、步骤条上的一句。
  * 新道具在这里加一行，工具条、弹窗、步骤条都照着它画。
  */
-export function aboutSlot(slot: Slot, me: Me, items: boolean, interval: number, blocked: string | null): { count: string; words: string } {
+export function aboutSlot(slot: Slot, me: Me, items: boolean, interval: number, blocked: string | null, version = items ? 1 : 0): { count: string; words: string } {
   const count = countOf(me, slot)
+  const v2 = version >= 2
   switch (slot) {
-    case 'pickaxe': return { count: `还剩 ${me.chances} 次`, words: blocked ?? `点一格没挖开的格子就是挖，用 1 次机会${interval > 1 ? `；每次至少隔 ${interval} 秒` : ''}。` }
+    case 'pickaxe': return { count: `还剩 ${me.chances} 次`, words: blocked ?? `点一个没挖开的格子就能挖开，每次用掉 1 次机会${interval > 1 ? `；每次至少隔 ${interval} 秒` : ''}。` }
     case 'pick-h': case 'pick-v': case 'pick-x': return { count: `还能用 ${count} 次`, words: `一次挖开${SHAPE_NAMES[shapeOf(slot)!]}里没挖开的格子，挖过的跳过；不花镐子的机会。` }
     case 'spyglass': return { count: `还有 ${count} 个`, words: '看一格里是什么，只有你看得见，不花机会。' }
-    case 'torch': return { count: `还有 ${count} 个`, words: '插在两格之间的缝上，照亮旁边 4 格：绿色是没有危险，黄色 1～2 个，红色 3～4 个（TNT、末影水晶、刷怪笼）。大家都看得见。' }
-    case 'key': return { count: `还有 ${count} 把`, words: '点试炼密室里的宝库开它，开出一样东西；每个宝库每人只能开一次。' }
+    case 'torch': return {
+      count: `还有 ${count} 个`,
+      words: v2 ? '插在一个挖开的格子上，照亮周围 9 格。颜色说这 9 格里一共有几个危险（TNT、末影水晶、刷怪笼，挖开的也算），插下去以后不变，大家都看得见。'
+        : '插在四个格子相交的角上，照亮旁边 4 格：绿色是没有危险，黄色 1～2 个，红色 3～4 个（TNT、末影水晶、刷怪笼）。大家都看得见。',
+    }
+    case 'key': return { count: `还有 ${count} 把`, words: '用试炼钥匙点试炼密室里的宝库，可以打开一次，开出一样东西；每个宝库每人只能开一次。' }
     case 'map': return { count: `还有 ${count} 张`, words: '随机标出地图上一格奖励（绿宝石常见，钻石少见），只有你看得见，镜头会飞过去。' }
     case 'potion': return { count: `还有 ${count} 瓶`, words: '用了以后 10 秒里，每次挖只要隔 1 秒。' }
-    case 'ender': return { count: `还有 ${count} 个`, words: '手上的奖励一半存进去（炸不到），一半毁掉。' }
-    case 'table': return { count: `还有 ${count} 个`, words: '随机给两种附魔镐，挑一种。' }
+    case 'ender': return { count: `还有 ${count} 个`, words: '待领取的奖励一半存进末影箱（炸不到），另一半退回奖池。' }
+    case 'table': return { count: `还有 ${count} 个`, words: '随机给出两种附魔镐，挑一种。' }
     case 'shield': return { count: `${count}/${items ? SHIELD_CAP : 1} 面`, words: `踩到 TNT 或末影水晶时自动挡下一次，用掉一面。${items ? `最多带 ${SHIELD_CAP} 面，再挖到换成一份小奖。` : '再挖到就换成一份小奖。'}` }
-    case 'coal': case 'stick': return { count: `${count}/${CRAFT_NEED}`, words: `煤炭、木棍都攒满 ${CRAFT_NEED} 个，自动做成一个火把；满了再挖到不算。` }
-    case 'poison': return { count: `还有 ${count} 次`, words: '接下来每挖一次，扣手上 5%，盾牌挡不住。' }
+    case 'coal': case 'stick': return v2
+      ? { count: `${count} 个`, words: `煤炭、木棍各有一个就自动做成一个火把。现在有 ${count} 个${SLOT_NAMES[slot]}，再挖到${slot === 'coal' ? '木棍' : '煤炭'}就做。` }
+      : { count: `${count}/${CRAFT_NEED}`, words: `煤炭、木棍都攒满 ${CRAFT_NEED} 个，自动做成一个火把；满了再挖到不算。` }
+    case 'poison': return { count: `还有 ${count} 次`, words: '接下来每挖一次，扣待领取的 5%，盾牌挡不住。' }
   }
 }
 
-/** 瞄准类：在地图上点什么（步骤条上没预览时的那一句）。 */
-export const AIM_WHAT: Record<Held, string> = {
-  'pick-h': '点一格，框住的格子一起挖开', 'pick-v': '点一格，框住的格子一起挖开', 'pick-x': '点一格，框住的格子一起挖开',
-  spyglass: '点一格，看看里面是什么', torch: '点两格之间的缝，照亮旁边 4 格', key: '点试炼密室里的宝库',
+/** 瞄准类：在地图上点什么（步骤条上没预览时的那一句）；version 是 rules.items（第 2 版火把插在挖开的格子上）。 */
+export function aimWhat(held: Held, version = 1) {
+  if (held === 'torch') return version >= 2 ? '点一个挖开的格子，照亮周围 9 格' : '点四个格子相交的角，照亮旁边 4 格'
+  return held === 'spyglass' ? '点一格，看看里面是什么' : held === 'key' ? '点试炼密室里的宝库' : '点一格，框住的格子一起挖开'
 }
 /** 瞄准类：点的是什么（引导弹窗里“怎么用”那句） */
-export const AIM_TARGET: Record<Held, string> = { 'pick-h': '格子', 'pick-v': '格子', 'pick-x': '格子', spyglass: '格子', torch: '缝', key: '宝库' }
+export function aimTarget(held: Held, version = 1) {
+  if (held === 'torch') return version >= 2 ? '挖开的格子' : '角'
+  return held === 'key' ? '宝库' : '格子'
+}
 
 /** 有鼠标（指着就能预览）还是触屏（点一下预览） */
 export const hasMouse = () => typeof window !== 'undefined' && !!window.matchMedia?.('(hover: hover) and (pointer: fine)').matches
@@ -153,6 +163,22 @@ export function cornerCells(size: number, at: number) {
   return [at - size - 1, at - size, at - 1, at]
 }
 
+/** 第 2 版火把（插在 at 格上）照亮的格子：以它为中心的 3×3，出界的不算。 */
+export function torchArea(size: number, at: number) {
+  const row = Math.floor(at / size)
+  const col = at % size
+  const cells: number[] = []
+  for (let r = row - 1; r <= row + 1; r++)
+    for (let c = col - 1; c <= col + 1; c++) if (r >= 0 && c >= 0 && r < size && c < size) cells.push(r * size + c)
+  return cells
+}
+
+/** 这一格挖开了（插第 2 版火把的地方）：有人挖开的，不是固定的、不是被岩浆吞掉的。 */
+export function dugCell(card: PublicCard, index: number) {
+  const cell = card.cells[index]
+  return !!cell && !cell.burn && !card.fixed?.[index]
+}
+
 /** 这张卡上还有能开的宝库（卡挖完了宝库照样能开）。 */
 export function vaultsLeft(card: PublicCard) {
   return !card.closed && Object.values(card.vaults ?? {}).some(left => left > 0)
@@ -163,8 +189,11 @@ export function diggable(card: PublicCard, index: number) {
   return !card.closed && card.cells[index] === null && !card.fixed?.[index]
 }
 
-/** 工具条上有哪些格：镐子以外主动的、被动的（被动排在一道线后面）。没有道具栏的旧局只有盾牌。 */
-export function slotsOf(me: Me, items: boolean): { active: Slot[]; passive: Slot[] } {
+/**
+ * 工具条上有哪些格：镐子以外主动的、被动的（被动排在一道线后面）。没有道具栏的旧局只有盾牌。
+ * 第 2 版（version 2）：煤炭、木棍排在火把后面，合成时是相邻两格之间的动画（docs/V3_ITEMS.md §9）。
+ */
+export function slotsOf(me: Me, items: boolean, version = items ? 1 : 0): { active: Slot[]; passive: Slot[] } {
   const active: Slot[] = []
   const passive: Slot[] = []
   const shields = me.shields ?? (me.shield ? 1 : 0)
@@ -178,6 +207,10 @@ export function slotsOf(me: Me, items: boolean): { active: Slot[]; passive: Slot
     if ((me.spyglasses ?? 0) > 0) active.push('spyglass')
     if (owned) {
       if (owned.torch > 0) active.push('torch')
+      if (version >= 2) {
+        if ((me.coal ?? 0) > 0) active.push('coal')
+        if ((me.stick ?? 0) > 0) active.push('stick')
+      }
       if (owned.key > 0) active.push('key')
       if (owned.map > 0) active.push('map')
       if (owned.potion > 0) active.push('potion')
@@ -186,8 +219,8 @@ export function slotsOf(me: Me, items: boolean): { active: Slot[]; passive: Slot
     }
   }
   if (shields > 0) passive.push('shield')
-  if ((me.coal ?? 0) > 0) passive.push('coal')
-  if ((me.stick ?? 0) > 0) passive.push('stick')
+  if (version < 2 && (me.coal ?? 0) > 0) passive.push('coal')
+  if (version < 2 && (me.stick ?? 0) > 0) passive.push('stick')
   if ((me.poison ?? 0) > 0) passive.push('poison')
   return { active, passive }
 }

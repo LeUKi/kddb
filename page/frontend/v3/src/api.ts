@@ -31,7 +31,7 @@ export class GameApi {
   async hello(): Promise<State> {
     const { nonce } = await this.raw<{ nonce: string }>('GET', 'nonce')
     const identity = await hb.identity({ nonce })
-    if (!identity.identified) throw new ApiError(401, identity.message ?? identityWords[identity.reason] ?? '没能认出你')
+    if (!identity.identified) throw new ApiError(401, identity.message ?? identityWords[identity.reason] ?? '身份确认失败，稍后再试')
     const answer = await this.raw<State & { ticket: string; uid: number }>('POST', 'hello', undefined, `Bearer ${identity.token}`)
     this.ticket = answer.ticket
     this.uid = answer.uid
@@ -159,9 +159,9 @@ export class GameApi {
 
 const identityWords: Record<string, string> = {
   login: '登录以后才能挖',
-  denied: '要允许矿洞夺宝认出你，才能记你的分',
+  denied: '需要允许矿洞夺宝确认你的身份，才能记录奖励',
   away: '回到红包页再试一次',
   busy: '红包页正忙，稍后再试',
-  unavailable: '现在认不了人，稍后再试',
-  error: '没能认出你，稍后再试',
+  unavailable: '暂时无法确认身份，稍后再试',
+  error: '身份确认失败，稍后再试',
 }

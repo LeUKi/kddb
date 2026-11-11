@@ -20,6 +20,8 @@ export const problemAtom = atom('')
 export const gameAtom = atom<PublicGame | null>(null)
 /** 只看规则里的几样（工具条用）：gameAtom 每次推送都换，订阅它的组件每挖一格都要重画 */
 export const itemsGameAtom = atom(get => !!get(gameAtom)?.rules.items)
+/** 第几版的道具规则（rules.items：0 没有道具栏，1 第一版，2 第二版，docs/V3_ITEMS.md §9） */
+export const itemsVersionAtom = atom(get => get(gameAtom)?.rules.items ?? 0)
 export const digIntervalAtom = atom(get => get(gameAtom)?.rules.digInterval ?? 1)
 export const hasGameAtom = atom(get => get(gameAtom) !== null)
 export const meAtom = atom<Me | null>(null)
@@ -62,6 +64,8 @@ export type Dialog = { type: 'ender' } | { type: 'table' } | { type: 'vault'; te
    * （有“不再提示”和“使用”），help 是步骤条上的问号（只有“知道了”，关掉回到这一步）
    */
   | { type: 'item'; slot: Slot; mode?: 'enter' | 'help' }
+  /** 卡上面区块名字旁边的问号：这个区块的说明（docs/V3_ITEMS.md §9） */
+  | { type: 'region'; cardId: number }
 export const dialogAtom = atom<Dialog | null>(null)
 /** 本机时间：苦力怕什么时候来（null 是不来）、急迫药水到什么时候 */
 export const creeperAtAtom = atom<number | null>(null)
@@ -235,6 +239,8 @@ function commit(merge: Merge) {
 
 /** 整局（认人、补不上时）：比手上的旧就只收自己的那份。 */
 function acceptState(state: State) {
+  // 不在的时候苦力怕来过（docs/V3_ITEMS.md §9）：回来时游戏站先算掉，说一声
+  if (state.drained) toast(`你不在的时候苦力怕来过，炸掉了待领取的 ${money(state.drained)}`, 'bad')
   setMe(state.me)
   store.set(blockedAtom, state.blocked)
   const merge = mergeState(store.get(gameAtom), state.game, ahead)
@@ -290,6 +296,34 @@ function flushLive() {
 function applyLive(messages: Live[]) {
   const game = store.get(gameAtom)
   if (game) commit(mergeLive(game, ahead, messages))
+  const uid = store.get(uidAtom)
+  if (messages.some(message => message.type === 'drain' && uid !== null && message.uids.includes(uid))) drainedMe()
+}
+
+/**
+ * 推送说自己在不在的时候被苦力怕炸了：重新要一次自己的，说一声炸掉了多少。网页在后台时等回到前台再要
+ * （要一次就算动了一下，后台里一直要会让游戏站的计时一直重来）。
+ */
+let drainWaiting = false
+function drainedMe() {
+  if (document.visibilityState !== 'visible') {
+    if (drainWaiting) return
+    drainWaiting = true
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return
+      document.removeEventListener('visibilitychange', onVisible)
+      drainWaiting = false
+      drainedMe()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return
+  }
+  const before = store.get(meAtom)?.points ?? 0
+  void api?.state().then(state => {
+    acceptState(state)
+    const lost = before - state.me.points
+    if (lost > 0 && !state.drained) toast(`你不在的时候苦力怕来过，炸掉了待领取的 ${money(lost)}`, 'bad')
+  }, () => {})
 }
 
 /** 奖池分完：手里有分的自动领；没有分的只说游戏结束了，不领（领了也是 0）。 */

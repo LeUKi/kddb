@@ -5,8 +5,9 @@ import { useEffect, useRef } from 'react'
 import type { IconKind } from '../../src/game'
 import { ItemIcon } from '../../src/ItemIcon'
 import type { Held } from './items'
-import { aboutSlot, AIM_TARGET, hasMouse, isHeld, SHAPE_NAMES, SHAPES, shapeOf, skipGuide, SLOT_ICONS, SLOT_NAMES } from './items'
-import { applyItem, blockedAtom, dialogAtom, digIntervalAtom, heldAtom, itemsGameAtom, meAtom } from './state'
+import { aboutSlot, aimTarget, hasMouse, isHeld, SHAPE_NAMES, SHAPES, shapeOf, skipGuide, SLOT_ICONS, SLOT_NAMES } from './items'
+import { regionAbout, regionIcon, regionName } from './regions'
+import { applyItem, blockedAtom, dialogAtom, digIntervalAtom, gameAtom, heldAtom, itemsGameAtom, itemsVersionAtom, meAtom } from './state'
 import type { Shape } from './types'
 import { money } from './types'
 
@@ -19,6 +20,8 @@ export function ItemDialogs() {
   const [dialog, setDialog] = useAtom(dialogAtom)
   const me = useAtomValue(meAtom)
   const items = useAtomValue(itemsGameAtom)
+  const version = useAtomValue(itemsVersionAtom)
+  const game = useAtomValue(gameAtom)
   const interval = useAtomValue(digIntervalAtom)
   const blocked = useAtomValue(blockedAtom)
   const setHeld = useSetAtom(heldAtom)
@@ -43,16 +46,16 @@ export function ItemDialogs() {
   let note: ReactNode = null
   if (dialog.type === 'item') {
     const slot = dialog.slot
-    const about = aboutSlot(slot, me, items, interval, blocked)
+    const about = aboutSlot(slot, me, items, interval, blocked, version)
     title = SLOT_NAMES[slot]
     icon = SLOT_ICONS[slot]
     note = about.count
     const held = isHeld(slot) ? slot : null
     body = <>
       {held && shapeOf(held) ? <div className="item-demo"><span className="shape-pick"><ShapeGlyph shape={shapeOf(held)!} big /><ItemIcon kind="pickaxe" size={32} /><span className="glint" /></span></div> : null}
-      {held === 'torch' ? <TorchDemo /> : null}
+      {held === 'torch' ? <TorchDemo version={version} /> : null}
       <p>{about.words}</p>
-      {held ? <p className="item-how">{howToAim(held)}</p> : null}
+      {held ? <p className="item-how">{howToAim(held, version)}</p> : null}
       {/* 按钮（docs/ITEM_UX.md §3.2）：主按钮在最右；“不再提示”只在瞄准类进入前的引导里，靠左 */}
       <div className="dialog-actions">
         {held && dialog.mode === 'enter' ? <>
@@ -80,19 +83,19 @@ export function ItemDialogs() {
     icon = 'ender'
     const half = Math.floor(me.points / 2)
     body = me.points <= 0 ? <>
-      <p>手上还没有奖励，现在存不了，先留着。</p>
+      <p>还没有待领取的奖励，现在存不了，先留着。</p>
       <div className="dialog-actions"><button type="button" ref={first} onClick={close}>知道了</button></div>
     </> : <>
       <div className="chest-flow">
-        <span className="chip">手上 {money(me.points)}</span>
+        <span className="chip">待领取 {money(me.points)}</span>
         <span aria-hidden="true">→</span>
         <span className="chip is-green"><ItemIcon kind="ender" size={14} />存进 {money(half)}</span>
-        <span className="chip is-gone">毁掉 {money(me.points - half)}</span>
+        <span className="chip is-gone">退回奖池 {money(me.points - half)}</span>
       </div>
       <ul>
-        <li>存进去的 TNT、末影水晶、苦力怕都炸不到，金苹果也不翻它，领取时一起加上。</li>
-        <li>毁掉的留在红包里，后面的人还能挖到。</li>
-        <li>手上从 0 重新攒。一个末影箱只能用一次。</li>
+        <li>存进去的奖励不会被 TNT、末影水晶、苦力怕炸掉，也不参与附魔金苹果翻倍，领取时一起加上。</li>
+        <li>另一半退回奖池，后面的人还能挖到。</li>
+        <li>待领取从 0 重新攒。一个末影箱只能用一次。</li>
       </ul>
       <div className="dialog-actions">
         <button type="button" ref={first} onClick={close}>取消</button>
@@ -104,7 +107,7 @@ export function ItemDialogs() {
     icon = 'table'
     const choices = me.tableChoices ?? []
     body = <>
-      <p>随机给两种，挑一种，得到这把附魔镐 2 次。用它不花镐子的机会，一次挖开形状里没挖开的格子。</p>
+      <p>随机给出两种附魔镐，挑一种，能用 2 次。用它不花镐子的机会，一次挖开形状里没挖开的格子。</p>
       <div className="shape-choices">
         {choices.map((shape: Shape) => <button key={shape} type="button" onClick={() => { close(); void applyItem('table', { choice: shape }) }}>
           <span className="shape-pick"><ShapeGlyph shape={shape} big /><ItemIcon kind="pickaxe" size={32} /><span className="glint" /></span>
@@ -112,7 +115,15 @@ export function ItemDialogs() {
           <small>一次挖 {SHAPES[shape].length} 格</small>
         </button>)}
       </div>
-      <div className="dialog-actions"><button type="button" ref={first} onClick={close}>先不挑</button></div>
+      <div className="dialog-actions"><button type="button" ref={first} onClick={close}>取消</button></div>
+    </>
+  } else if (dialog.type === 'region') {
+    const card = game?.cards.find(item => item.id === dialog.cardId)
+    title = card ? regionName(card) : '这张卡'
+    icon = card ? regionIcon(card) : 'pickaxe'
+    body = <>
+      {card && game ? regionAbout(card, game.rules).map(text => <p key={text}>{text}</p>) : null}
+      <div className="dialog-actions"><button type="button" ref={first} className="is-primary" onClick={close}>知道了</button></div>
     </>
   } else if (dialog.type === 'vault') {
     title = '宝库开了'
@@ -139,17 +150,27 @@ export function ShapeGlyph({ shape, big = false }: { shape: Shape; big?: boolean
 }
 
 /** 使用以后怎么选位置：触屏点两下（预览、确认），鼠标指着点一下（docs/ITEM_UX.md §4）。 */
-function howToAim(held: Held) {
-  const where = AIM_TARGET[held]
+function howToAim(held: Held, version: number) {
+  const where = aimTarget(held, version)
   return hasMouse()
-    ? `使用以后，指到哪里预览到哪里，点一下确认。顶上会一直有说明和取消。`
-    : `使用以后，在地图上点${where}预览位置，同一处再点一次确认。顶上会一直有说明和取消。`
+    ? `使用以后，鼠标移到哪里就预览哪里，点一下确认。地图顶上会一直显示提示和「取消」。`
+    : `使用以后，在地图上点${where}预览位置，同一处再点一次确认。地图顶上会一直显示提示和「取消」。`
 }
 
-/** 火把：3×3 的小格子，亮着四格，火把插在中间那个角上。 */
-function TorchDemo() {
+/**
+ * 火把：3×3 的小格子。第 1 版亮着四格、火把插在中间那个角上；第 2 版插在中间那一格上，九格都亮，
+ * 下面四种颜色说危险有几个。
+ */
+function TorchDemo({ version }: { version: number }) {
+  if (version >= 2) return <div className="item-demo is-torch2"><span className="torch-demo is-v2" aria-hidden="true">
+    {Array.from({ length: 9 }, (_, index) => <i key={index} className="on" />)}
+    <ItemIcon kind="torch" size={26} className="torch-demo-torch" />
+  </span>
+    <span className="torch-levels" aria-hidden="true">{TORCH_LEVEL_WORDS.map((words, level) => <span key={level} className={`torch-level is-${level}`}><i />{words}</span>)}</span>
+  </div>
   return <div className="item-demo"><span className="torch-demo" aria-hidden="true">
     {Array.from({ length: 9 }, (_, index) => <i key={index} className={[1, 2, 4, 5].includes(index) ? 'on' : ''} />)}
     <ItemIcon kind="torch" size={26} className="torch-demo-torch" />
   </span></div>
 }
+const TORCH_LEVEL_WORDS = ['没有危险', '危险 1～2 个', '危险 3～4 个', '危险 5 个以上']

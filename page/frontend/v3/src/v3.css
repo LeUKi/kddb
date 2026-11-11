@@ -266,12 +266,25 @@ button.eye-status { cursor: pointer; }
 .chart-icon { position: absolute; display: grid; place-items: center; width: 22px; height: 22px; padding: 0; background: none; border: 0; border-radius: 50%; cursor: pointer; }
 .chart-icon .item-icon { filter: drop-shadow(0 1px 0 #000) drop-shadow(0 0 2px #000c); }
 .chart-icon.is-picked { background: #ffffff1a; box-shadow: 0 0 0 1px #e9b56b; }
-.chart-tip { position: absolute; z-index: 2; margin-top: -32px; padding: 2px 6px; color: var(--ink); font-size: 11px; white-space: nowrap; background: #11171df2; border: 1px solid #56636b; border-radius: 4px; transform: translateX(-50%); pointer-events: none; }
+.chart-tip { position: absolute; z-index: 3; top: -26px; padding: 2px 6px; color: var(--ink); font-size: 11px; white-space: nowrap; background: #11171df2; border: 1px solid #56636b; border-radius: 4px; transform: translateX(-50%); pointer-events: none; }
 .chart-tip.is-right { transform: translateX(-100%); }
 .chart-tip.is-left { transform: none; }
 .chart-peak { position: absolute; margin: -28px 0 0; padding: 1px 5px; color: #f3cc8f; font-size: 11px; white-space: nowrap; background: #11171dcc; border-radius: 4px; transform: translateX(-50%); pointer-events: none; }
 /* 最高点靠边时标签往里放，不出框 */
 .chart-peak.is-right { transform: translateX(-100%); }
+/* 线上只标两件事（最大的一笔、被炸得最狠的一下），其余在下面一条刻度上；拖动看每一步（2026-11-11） */
+.chart-mark { position: absolute; z-index: 1; display: flex; align-items: center; gap: 2px; translate: -50% -50%; pointer-events: none; }
+.chart-mark .item-icon { filter: drop-shadow(0 1px 0 #000) drop-shadow(0 0 2px #000c); }
+.chart-mark b { padding: 0 4px; color: #fff; font-size: 11px; font-weight: 600; background: #c4434d; border-radius: 4px; }
+.chart-dot { display: block; width: 8px; height: 8px; border-radius: 50%; background: #e0505c; border: 2px solid #11171d; }
+.chart-scrub { position: absolute; inset: -8px 0; z-index: 2; cursor: crosshair; touch-action: none; }
+.chart-guide { position: absolute; top: 0; bottom: 0; z-index: 2; width: 0; border-left: 1px dashed #c8c2b6; pointer-events: none; }
+.chart-guide-dot { position: absolute; z-index: 2; width: 9px; height: 9px; translate: -50% -50%; border-radius: 50%; background: #e9b56b; border: 2px solid #11171d; pointer-events: none; }
+.chart-ticks { position: relative; height: 10px; margin: 4px 0 0; }
+.chart-ticks i { position: absolute; bottom: 0; width: 2px; height: 10px; margin-left: -1px; border-radius: 1px; }
+.chart-ticks i.is-gain { height: 7px; background: #e9b56b; }
+.chart-ticks i.is-loss { background: #e0505c; }
+.chart-ticks i.is-block { height: 7px; background: #7fb6ff; }
 .chart-peak.is-left { transform: none; }
 .summary-chart figcaption { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; color: var(--muted); font-size: 11px; }
 .summary-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 0; }
@@ -377,7 +390,7 @@ button.eye-status { cursor: pointer; }
 
 @media (prefers-reduced-motion: reduce) {
   .jp-marker, .jp-marker::after, .map-block::before, .map-card::after,
-  .map-block, .map-card, .map-block.is-grown, .map-block.is-grown .map-card, .map-block.is-grown .map-cell, .map-block.is-grown .thumb-canvas, .map-cell.just-mine, .map-cell.just-other, .digging-pick, .cell-float, .new-marker, .toast, .sheen, .tool-slot, .tool-cell .tool-slot::after, .glint, .glint::before, .poison-spider, .poison-bubbles i, .poison-glow, .lava-icon, .fixed-lava, .torch, .creeper, .creeper.is-swell, .creeper-flash, .tool-count, .map-cell.in-box, .card-noise img,
+  .map-block, .map-card, .map-block.is-grown, .map-block.is-grown .map-card, .map-block.is-grown .map-cell, .map-block.is-grown .thumb-canvas, .map-cell.just-mine, .map-cell.just-other, .digging-pick, .cell-float, .new-marker, .toast, .sheen, .tool-slot, .tool-cell .tool-slot::after, .glint, .glint::before, .poison-spider, .poison-bubbles i, .poison-glow, .lava-icon, .fixed-lava, .torch, .creeper, .creeper-flash, .tool-count, .map-cell.in-box, .card-noise img,
   .map-cell.revealed > .item-icon, .cell-who, .map-cell.just-other::after { animation: none !important; transition: none !important; }
   /* 不呼吸，直接亮着 */
   .map-view .map-block.has-eye::before, .map-view .map-block.is-end:not(.is-done)::before { opacity: 1; }
@@ -456,6 +469,19 @@ button.eye-status { cursor: pointer; }
 .poison-bubbles i:nth-child(2) { left: 22px; animation-delay: .55s; }
 .poison-bubbles i:nth-child(3) { left: 32px; animation-delay: 1.1s; }
 @keyframes bubble { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-24px); opacity: 0; } }
+/* 第 2 版的合成（水滴，Toolbar.tsx useCraftDrop）：垫在格子后面的壳模糊再收边，两格之间就连成液桥 */
+.toolbar-slots { position: relative; }
+.toolbar-slots > .tool-cell { position: relative; z-index: 1; }
+.craft-defs { position: absolute; width: 0; height: 0; }
+.craft-goo { position: absolute; inset: 0; z-index: 0; overflow: hidden; filter: url(#craft-goo); pointer-events: none; }
+.craft-shell { position: absolute; width: 48px; height: 48px; border-radius: 9px; background: #4a565e; }
+.craft-shell.is-drop { width: 40px; height: 40px; margin: 4px; border-radius: 50%; }
+.craft-drop { position: absolute; z-index: 2; display: grid; place-items: center; width: 40px; height: 40px; margin: 4px; background: linear-gradient(#313c45, #232b31); border: 2px solid #4a565e; border-radius: 50%; pointer-events: none; }
+.craft-drop img, .craft-grow { width: 30px; height: 30px; image-rendering: pixelated; }
+.craft-drop img { width: 26px; height: 26px; transform: none !important; }
+.craft-grow { position: absolute; inset: 0; margin: auto; z-index: 1; pointer-events: none; }
+.craft-flash { position: absolute; inset: 0; z-index: 1; border-radius: 50%; background: radial-gradient(#fff, #fff0 70%); pointer-events: none; animation: craft-flash .26s ease-out forwards; }
+@keyframes craft-flash { from { opacity: .9; transform: scale(.4); } to { opacity: 0; transform: scale(1.4); } }
 /* 合成火把：煤炭、木棍飞到一起，闪一下，火把飞进它那一格 */
 .craft-fly { position: absolute; z-index: 9; width: 28px; height: 28px; image-rendering: pixelated; pointer-events: none; }
 .craft-burst { position: absolute; z-index: 9; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%; background: radial-gradient(circle, #fff 0 20%, #ffd75a 36%, transparent 70%); animation: craft-burst .45s ease-out forwards; pointer-events: none; }
@@ -499,11 +525,32 @@ button.eye-status { cursor: pointer; }
 /* —— 火把（大家都看得见）：插在四格相交处，绿 0、黄 1–2、红 3–4 个危险；光照在旁边 4 格上 —— */
 .torch { position: absolute; z-index: 3; display: grid; place-items: center; width: 0; height: 0; pointer-events: none; }
 .torch::before { content: ''; position: absolute; width: 96px; height: 96px; border-radius: 50%; background: radial-gradient(circle, var(--torch-light) 0, transparent 68%); opacity: .55; pointer-events: none; }
-.torch > .item-icon { position: relative; filter: drop-shadow(0 0 1px #000) drop-shadow(0 0 3px var(--torch-light)); animation: torch-flicker 1.2s steps(4) 3; }
+.torch > .item-icon { filter: drop-shadow(0 0 1px #000) drop-shadow(0 0 3px var(--torch-light)); animation: torch-flicker 1.2s steps(4) 3; }
 .torch-0 { --torch-light: #7cf08a; }
 .torch-1 { --torch-light: #ffd75a; }
 .torch-2 { --torch-light: #ff5a3c; }
 .torch-ghost { --torch-light: #ffd75a; opacity: .6; pointer-events: none; }
+/* 第 2 版的火把（docs/V3_ITEMS.md §9）：插在格子正中，照亮的 3×3 有一层同色的光；四种颜色。橙色是原版火把
+   把色相往红挪（贴图都是原版的，不另画） */
+/* 0 宽的点上放图标：网格居中对超出的东西不管用（图标从点往右下长），自己挪回中心（火焰在上，略往上）。
+   第 1 版的角上也一样（以前画进了右下那一格） */
+.torch::before { left: -48px; top: -48px; }
+.torch > .item-icon { position: absolute; left: 0; top: 0; translate: -50% -56%; }
+.torch.is-v2::before { left: -35px; top: -35px; width: 70px; height: 70px; opacity: .5; }
+.torch2-0 { --torch-light: #7cf08a; }
+.torch2-1 { --torch-light: #ffd75a; }
+.torch2-2 { --torch-light: #ff9a3c; }
+.torch2-3 { --torch-light: #ff4b4b; }
+.torch .item-icon.is-orange { filter: hue-rotate(-24deg) saturate(1.8) drop-shadow(0 0 1px #000) drop-shadow(0 0 3px var(--torch-light)); animation: none; }
+.torch-halo { position: absolute; z-index: 2; border-radius: 6px; pointer-events: none; background: radial-gradient(closest-side, color-mix(in srgb, var(--halo) 34%, transparent), color-mix(in srgb, var(--halo) 16%, transparent) 75%, color-mix(in srgb, var(--halo) 8%, transparent)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--halo) 30%, transparent); }
+.halo-0 { --halo: #5fdc7c; }
+.halo-1 { --halo: #ffd84a; }
+.halo-2 { --halo: #ff9a3c; }
+.halo-3 { --halo: #ff4b4b; }
+.map-cell.revealed.has-torch { cursor: help; }
+.map-cell.revealed.has-torch > .item-icon { position: absolute; left: 6%; bottom: 6%; width: 38% !important; height: 38% !important; opacity: .6; }
+.torch-frame { position: absolute; z-index: 3; border: 2px dashed #f3cc8f; border-radius: 6px; background: #f3cc8f1c; box-shadow: 0 0 12px #f3cc8f40; pointer-events: none; }
+.torch-frame.is-bad { border-color: #ff7a6b; background: #ff7a6b1a; box-shadow: none; }
 @keyframes torch-flicker { 40% { filter: drop-shadow(0 0 1px #000) drop-shadow(0 0 5px var(--torch-light)) brightness(1.2); } 70% { filter: drop-shadow(0 0 1px #000) drop-shadow(0 0 2px var(--torch-light)) brightness(.95); } }
 
 /* —— 区块（docs/V3_ITEMS.md §2）：不同的石头、不能挖的格子 —— */
@@ -576,6 +623,16 @@ button.eye-status { cursor: pointer; }
 .torch-demo i { width: 26px; height: 26px; background: #4a5056; border-radius: 2px; box-shadow: inset 0 0 0 1px #ffffff1a; }
 .torch-demo i.on { background: #4a5056; box-shadow: inset 0 0 0 2px #ffe36e, inset 0 0 0 99px #ffe36e26; }
 .torch-demo .torch-demo-torch { position: absolute; left: calc(5px + 26px * 2 + 3px * 1.5); top: calc(5px + 26px + 3px * .5); translate: -50% -50%; filter: drop-shadow(0 0 4px #ffcc55); }
+.item-demo.is-torch2 { display: flex; align-items: center; justify-content: center; gap: 16px; }
+.torch-demo.is-v2 i.on { box-shadow: inset 0 0 0 2px #ffd84a, inset 0 0 0 99px #ffd84a26; }
+.torch-demo.is-v2 .torch-demo-torch { left: 50%; top: 50%; }
+.torch-levels { display: grid; gap: 4px; font-size: 12px; color: var(--ink); }
+.torch-level { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+.torch-level i { width: 11px; height: 11px; border-radius: 3px; background: var(--c); box-shadow: 0 0 6px var(--c); }
+.torch-level.is-0 { --c: #5fdc7c; }
+.torch-level.is-1 { --c: #ffd84a; }
+.torch-level.is-2 { --c: #ff9a3c; }
+.torch-level.is-3 { --c: #ff4b4b; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 .dialog-actions button { padding: 7px 16px; color: var(--ink); background: #2a2234; border: 1px solid #5b4a75; border-radius: 8px; }
 .dialog-actions button.is-primary { color: #1b1408; background: var(--gold); border-color: var(--gold); font-weight: 600; }
@@ -583,12 +640,10 @@ button.eye-status { cursor: pointer; }
 .dialog-actions button.is-quiet { margin-right: auto; padding-left: 2px; padding-right: 6px; color: #b9a6d9; background: none; border-color: transparent; }
 
 /* —— 苦力怕：从地图右边探头，“嘶……”；最后几秒胀大、闪白；炸的时候整块白一下 —— */
-.creeper { position: absolute; right: 0; top: 34%; z-index: 5; width: 64px; height: 64px; transform: translateX(120%); transition: transform .5s cubic-bezier(.3, 1.5, .5, 1); pointer-events: none; filter: drop-shadow(0 3px 6px #000); }
-.creeper.is-on { transform: translateX(40%) rotate(-14deg); }
+.creeper { position: absolute; right: 0; top: 34%; z-index: 5; width: 64px; height: 64px; transform: translateX(120%); transform-origin: 100% 50%; transition: transform .5s ease-in; pointer-events: none; filter: drop-shadow(0 3px 6px #000); }
+/* 来了以后由 Creeper.tsx 每一帧改 transform（进场、变大）和脸的 filter（闪白） */
+.creeper.is-on { transition: none; }
 .creeper-face { display: block; width: 64px; height: 64px; background: var(--creeper) -64px -64px / 512px 256px; image-rendering: pixelated; }
-.creeper.is-swell .creeper-face { animation: creeper-swell .5s steps(2) infinite; }
-.creeper.is-fast .creeper-face { animation-duration: .22s; }
-@keyframes creeper-swell { 50% { filter: brightness(2.4) saturate(.1); transform: scale(1.14); } }
 .creeper-hiss { position: absolute; right: 54px; top: calc(34% - 18px); z-index: 5; margin: 0; color: #8ff09c; font-size: 13px; font-weight: 600; text-shadow: 0 1px 2px #000; pointer-events: none; }
 /* 提示放在地图最上面，不挡格子 */
 .creeper-tip { position: absolute; left: 50%; top: 8px; z-index: 7; width: max-content; max-width: min(340px, calc(100% - 24px)); padding: 8px 12px; translate: -50% 0; }
@@ -599,3 +654,36 @@ button.eye-status { cursor: pointer; }
 .guide-tools { display: flex; justify-content: center; gap: 6px; margin: 10px 0 0; }
 .guide-tools .tool-slot.is-hint { border-color: #8fe3f0; box-shadow: 0 0 0 2px #8fe3f040, 0 0 12px #8fe3f066; animation: count-bump .5s var(--ease-out) 2; }
 
+
+/* —— 卡周围的说明（CardLabels.tsx，docs/V3_ITEMS.md §9）：挖卡这一级，卡的上面一行区块名字和问号、
+   挖了几格，下面一行余量或噪音条。在地图里跟着拖动走，字按镜头缩放反着缩（--px 是 1/缩放）；
+   宽度是卡在屏幕上的宽 —— */
+.card-labels { position: absolute; z-index: 4; pointer-events: none; }
+.card-head, .card-foot { position: absolute; left: 0; display: flex; align-items: center; gap: 8px; width: calc(100% / var(--px, 1)); min-height: 24px; transform: scale(var(--px, 1)); color: var(--ink); font-size: 13px; white-space: nowrap; }
+.card-head { bottom: 100%; justify-content: space-between; transform-origin: left bottom; padding-bottom: 6px; }
+.card-foot { top: 100%; transform-origin: left top; padding-top: 6px; }
+.region-name { display: inline-flex; align-items: center; gap: 6px; padding: 2px 3px 2px 10px; color: var(--ink); background: #1c252ce6; border: 1px solid #56636b; border-radius: 999px; font: inherit; font-weight: 600; pointer-events: auto; cursor: pointer; }
+.region-name i { display: grid; place-items: center; width: 18px; height: 18px; color: var(--ink); background: #33414a; border-radius: 50%; font-size: 11px; font-style: normal; font-weight: 700; }
+.region-name.is-trial { border-color: #7d8f73; }
+.region-name.is-mine { border-color: #8a6a44; }
+.region-name.is-nether { border-color: #9c4632; }
+.region-name.is-deep { border-color: #1f6a73; }
+.region-name.is-end { border-color: #b59a5a; }
+@media (hover: hover) { .region-name:hover { border-color: #8a979f; } }
+.card-progress { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px #000; }
+.leftovers { display: inline-flex; align-items: center; gap: 10px; min-width: 0; padding: 2px 10px; background: #1c252cc8; border-radius: 999px; font-variant-numeric: tabular-nums; }
+.leftovers.is-empty { color: var(--muted); font-size: 12px; }
+.leftovers-label { color: var(--muted); font-size: 12px; }
+.leftover { display: inline-flex; align-items: center; gap: 3px; }
+.goods-stack { display: inline-flex; padding-left: 4px; }
+.goods-stack .item-icon { margin-left: -5px; filter: drop-shadow(0 0 1px #000); }
+.noise-line { display: flex; flex: 1; align-items: center; gap: 7px; min-width: 0; padding: 2px 10px 2px 6px; background: #071216d9; border: 1px solid #1f6a73; border-radius: 999px; color: #b9f6ff; font-size: 12px; }
+.noise-line b { font-size: 13px; font-variant-numeric: tabular-nums; }
+.noise-line.is-danger { border-color: #8a3040; }
+.noise-line.is-danger .noise-words { color: #ff9aa4; }
+.noise-line.is-closed { flex: 0 1 auto; }
+.noise-track { position: relative; flex: 1; min-width: 50px; height: 8px; border-radius: 99px; background: linear-gradient(90deg, #1f4b55 0 var(--a), #6b2230 var(--a) var(--b), #3a1117 var(--b)); box-shadow: inset 0 0 0 1px #00000066; }
+.noise-track::after { content: ''; position: absolute; left: var(--a); width: calc(var(--b) - var(--a)); top: 0; bottom: 0; background: repeating-linear-gradient(135deg, #ff5a6a55 0 4px, transparent 4px 8px); }
+.noise-track i { position: absolute; top: 50%; left: var(--n); z-index: 1; width: 12px; height: 12px; translate: -50% -50%; border-radius: 50%; background: #8fe3f0; border: 2px solid #0b1215; box-shadow: 0 0 6px #8fe3f0; transition: left .3s var(--ease-out); }
+.noise-line.is-danger .noise-track i { background: #ff8c97; box-shadow: 0 0 6px #ff8c97; }
+.noise-words { flex: none; }
