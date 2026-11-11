@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { after, before, test } from 'node:test'
+import { inflateSync } from 'node:zlib'
 import { fileURLToPath } from 'node:url'
 import { createServer } from 'vite'
 
@@ -10,12 +12,14 @@ let items
 let live
 let chart
 let regions
+let mcfont
 before(async () => {
   server = await createServer({ root: fileURLToPath(new URL('../', import.meta.url)), configFile: false, server: { middlewareMode: true, watch: null }, appType: 'custom', logLevel: 'silent' })
   items = await server.ssrLoadModule('/v3/src/items.ts')
   live = await server.ssrLoadModule('/v3/src/live.ts')
   chart = await server.ssrLoadModule('/v3/src/chart.ts')
   regions = await server.ssrLoadModule('/v3/src/regions.ts')
+  mcfont = await server.ssrLoadModule('/v3/src/mcfont.ts')
 })
 after(() => server.close())
 
@@ -163,16 +167,91 @@ test('第 2 版：煤炭、木棍排在火把后面；火把照 3×3（出界的
   assert.deepEqual(about.count, '3 个')
 })
 
-test('卡周围的说明：余量只列宝贝和道具数；深暗之域的危险区是格子数的 45%–75%', () => {
-  const plain = { left: { emerald: 9, diamond: 3, apple: 0, tnt: 6, pearl: 1, shield: 2, spyglass: 1, coal: 3, map: 1, key: 1, potion: 1 } }
-  const out = regions.leftoversOf(plain)
-  assert.deepEqual(out.treasures, [{ kind: 'diamond', count: 3 }, { kind: 'pearl', count: 1 }])
-  assert.deepEqual([out.goods, out.goodsCount], [['shield', 'spyglass', 'map', 'potion'], 6])
-  assert.deepEqual(regions.leftoversOf({ left: { emerald: 4, tnt: 2 } }), { treasures: [], goods: [], goodsCount: 0 })
+test('卡周围的说明：余量报还藏着多少钱、有哪几样宝贝，挖得差不多了指去最富的那张；深暗之域的危险区是格子数的 45%–75%', () => {
+  const rules = { smallReward: 10, bigMultiplier: 5 }
+  // 9 绿宝石 + 3 钻石 ×5 + 1 箱子矿车 ×1.5 = 25.5 份小奖 → 255（2.55），宝贝按先后最多 4 样
+  const plain = { id: 1, left: { emerald: 9, diamond: 3, apple: 0, tnt: 6, pearl: 1, minecart: 1, shield: 2, coal: 3 }, finished: false }
+  const out = regions.leftoversOf(plain, rules, 10000)
+  assert.deepEqual(out, { worth: 255, kinds: ['diamond', 'pearl', 'minecart', 'emerald'], poor: false })
+  assert.equal(regions.worthOf(plain, rules, 100), 100, '不超过奖池剩下的')
+  assert.deepEqual([255, 1000, 85, 5, 0].map(regions.aboutMoney), ['2.6', '10.0', '0.85', '0.05', '0.00'])
+  // 只剩一颗绿宝石：挖得差不多了；挖完、关了的也算
+  assert.equal(regions.leftoversOf({ left: { emerald: 1, tnt: 2 }, finished: false }, rules, 10000).poor, true)
+  assert.equal(regions.leftoversOf({ left: { diamond: 2 }, finished: true }, rules, 10000).poor, true)
+  const cards = [
+    { ...plain, id: 1 },
+    { id: 2, left: { emerald: 1 }, finished: false },
+    { id: 3, left: { debris: 3, diamond: 1 }, finished: false },
+    { id: 4, left: { debris: 9 }, finished: false, closed: true },
+    { id: 5, left: { emerald: 10 }, finished: false },
+  ]
+  assert.deepEqual(regions.richestOf(cards, rules, 10000, 2), { card: cards[2], worth: 350 })
+  assert.equal(regions.richestOf(cards, rules, 10000, 3).card.id, 1)
+  assert.equal(regions.richestOf([cards[1]], rules, 10000, 2), null)
+  // 和最富的（350）比：255 是 2/3 以上 → 3 档，100 是 1/3 以下 → 1 档；不够 2 份小奖的、关了的不亮
+  assert.deepEqual([...regions.richnessOf(cards, rules, 10000)], [[1, 3], [3, 3], [5, 1]])
+  assert.deepEqual([...regions.richnessOf(cards.slice(0, 2), rules, 10000)], [[1, 3]])
   const deep = { cells: Array(49).fill(null), fixed: {}, noise: 18, closed: false }
   assert.deepEqual(regions.noiseOf(deep), { noise: 18, low: 23, high: 36, cells: 49, danger: false, closed: false, toDanger: 5 })
   assert.equal(regions.noiseOf({ ...deep, noise: 23 }).danger, true)
   assert.equal(regions.regionName({ id: 7 }), '第 7 张卡')
   assert.equal(regions.regionName({ id: 7, kind: 'deep' }), '深暗之域')
   assert.match(regions.regionAbout({ kind: 'mine' }, { items: 2, tntPercent: 25 })[0], /多等 10 秒/)
+})
+
+/** 读 font/ascii.png 的不透明度（1 位调色板的 PNG，0 号色透明）：测试里不用画布也能量字宽。 */
+function asciiAlpha() {
+  const data = readFileSync(fileURLToPath(new URL('../public/assets/minecraft/1.21.4/textures/font/ascii.png', import.meta.url)))
+  let at = 8
+  let width = 0
+  const parts = []
+  while (at < data.length) {
+    const length = data.readUInt32BE(at)
+    const type = data.toString('latin1', at + 4, at + 8)
+    const body = data.subarray(at + 8, at + 8 + length)
+    if (type === 'IHDR') {
+      width = body.readUInt32BE(0)
+      assert.deepEqual([body[8], body[9], body[12]], [1, 3, 0], '1 位调色板、不隔行')
+    }
+    if (type === 'IDAT') parts.push(body)
+    at += 12 + length
+  }
+  const raw = inflateSync(Buffer.concat(parts))
+  const stride = Math.ceil(width / 8)
+  const rows = []
+  let previous = Buffer.alloc(stride)
+  for (let y = 0; y * (stride + 1) < raw.length; y++) {
+    const filter = raw[y * (stride + 1)]
+    const line = Buffer.from(raw.subarray(y * (stride + 1) + 1, (y + 1) * (stride + 1)))
+    for (let x = 0; x < stride; x++) {
+      const left = x ? line[x - 1] : 0
+      const up = previous[x]
+      const corner = x ? previous[x - 1] : 0
+      const paeth = () => {
+        const p = left + up - corner
+        const [a, b, c] = [Math.abs(p - left), Math.abs(p - up), Math.abs(p - corner)]
+        return a <= b && a <= c ? left : b <= c ? up : corner
+      }
+      line[x] = (line[x] + [0, left, up, (left + up) >> 1, paeth()][filter]) & 255
+    }
+    rows.push(line)
+    previous = line
+  }
+  return (x, y) => ((rows[y][x >> 3] >> (7 - (x & 7))) & 1 ? 255 : 0)
+}
+
+test('原版乱码：字宽从字图量出来，乱码只换成同样宽的字，阴影是颜色的四分之一', () => {
+  const font = mcfont.measureFont(asciiAlpha())
+  // 数字都是 5 像素宽（乱码里的个数不会忽长忽短），i 是 1，空格算 3
+  assert.deepEqual([...'0123456789'].map(ch => font.glyphs.get(ch).w), Array(10).fill(5))
+  assert.deepEqual(['i', 'l', ' ', 'W'].map(ch => font.glyphs.get(ch).w), [1, 2, 3, 5])
+  assert.equal(mcfont.textWidth(font, '12'), 12)
+  assert.ok(font.byWidth.get(5).length > 40, '5 像素宽的字够多，乱码看着在跳')
+  for (let n = 0; n < 50; n++) {
+    const shown = mcfont.obfuscated(font, '7', Math.random)
+    assert.equal(shown.w, 5)
+  }
+  assert.equal(mcfont.obfuscated(font, ' ', () => 0.5), font.glyphs.get(' '))
+  assert.equal(mcfont.shadowOf('#ffaa00'), '#3f2a00')
+  assert.equal(mcfont.shadowOf('#ffffff'), '#3f3f3f')
 })

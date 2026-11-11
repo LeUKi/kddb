@@ -45,6 +45,8 @@ export interface CardProps {
   opened: number[]
   /** 第几版的道具规则（rules.items；第 2 版火把插在挖开的格子上、照 3×3） */
   version: number
+  /** 越富越亮的档位（0 不亮，1～3，regions.ts richnessOf）：区块外面一圈静止的金光 */
+  rich: number
   onDig: (cardId: number, index: number) => void
   /** 拿着道具时点到、指到一格（qx、qy：点在这一格的右半、下半；指着时 hover 为真） */
   onAim: (cardId: number, index: number, qx: 0 | 1, qy: 0 | 1, hover: boolean) => void
@@ -57,7 +59,7 @@ export interface CardProps {
  * 一张卡：外框都一样大，放在它的区块正中（区块中心在 x·408, y·408，392 见方）。点区块就是换到这张；
  * 能挖的那张只有格子能点。
  */
-export const CardView = memo(function CardView({ card, focused, diggable, detail, names, current, myUid, peeks, pending, fresh, entrance, held, preview, peeked, opened, version, onDig, onAim, onTorch, onPick }: CardProps) {
+export const CardView = memo(function CardView({ card, focused, diggable, detail, names, current, myUid, peeks, pending, fresh, entrance, held, preview, peeked, opened, version, rich, onDig, onAim, onTorch, onPick }: CardProps) {
   const side = cellPx(card.size)
   const blockStyle = {
     left: card.x * SLOT_PX - BLOCK_PX / 2,
@@ -79,7 +81,7 @@ export const CardView = memo(function CardView({ card, focused, diggable, detail
   const end = card.kind === 'end'
   const biome = card.kind ?? null
   const hasEye = !end && (card.left.eye ?? 0) > 0
-  const blockClass = `map-block${focused ? ' is-focused' : ''}${entrance ? ' is-grown' : ''}${end ? ' is-end' : ''}${biome && !end ? ` is-${biome}` : ''}${hasEye ? ' has-eye' : ''}${card.finished ? ' is-done' : ''}${card.closed ? ' is-closed' : ''}`
+  const blockClass = `map-block${focused ? ' is-focused' : ''}${entrance ? ' is-grown' : ''}${end ? ' is-end' : ''}${biome && !end ? ` is-${biome}` : ''}${hasEye ? ' has-eye' : ''}${!end && !hasEye && rich > 0 ? ` rich-${rich}` : ''}${card.finished ? ' is-done' : ''}${card.closed ? ' is-closed' : ''}`
   const className = `map-card${focused ? ' is-focused' : ''}${card.finished ? ' is-finished' : ''}${detail ? '' : ' is-thumb'}${end ? ' is-end' : ''}${biome && !end ? ` biome-${biome}` : ''}${names ? ' show-names' : ''}`
   const pick = diggable ? undefined : () => onPick(card.id)
   const label = biome ? BIOME_NAMES[biome] : `第 ${card.id} 张卡`

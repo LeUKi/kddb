@@ -823,6 +823,14 @@
       "sha256": "02386867edcf8af7d4a205360800991ab6be475dc4c80752c9145efb2699a8ac",
       "width": 64,
       "height": 32
+    },
+    {
+      "path": "textures/font/ascii.png",
+      "source": "assets/minecraft/textures/font/ascii.png",
+      "bytes": 810,
+      "sha256": "e8646f1ed1f4bfd597d262cca3d8fac88ceaaa62807bbd5e607b2e3fe41c928a",
+      "width": 128,
+      "height": 128
     }
   ],
   "source": "Mojang Minecraft Java Edition client JAR; unchanged extracted bytes",

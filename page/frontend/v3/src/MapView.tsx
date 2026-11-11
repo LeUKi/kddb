@@ -10,6 +10,7 @@ import type { Camera, Direction, Level, Viewport, WheelZoom } from './camera'
 import { BLOCK_PX, withToolbar, cameraAt, cardNear, cardToward, cellCenter, centerOf, edgeFacing, edgePointer, entryPoint, fullyOnScreen, nearestCard, nearestLevel, onScreen, overviewCamera, scaleOf, SLOT_PX, wheelZoom } from './camera'
 import type { Flight, Point } from './PearlFlight'
 import { cardAt, MapCanvas } from './MapCanvas'
+import { richnessOf } from './regions'
 import { landMs, PearlFlight } from './PearlFlight'
 import { isTreasure } from './eye'
 import { useCooling } from './Hud'
@@ -25,6 +26,7 @@ import { ChestNote } from './Hud'
 import type { DigResult, Peek, PublicCard, Torch } from './types'
 
 const DRAG_SLOP = 6
+const NO_RICH = new Map<number, number>()
 const NO_PEEKS: Peek[] = []
 const NO_OPENED: number[] = []
 const NO_PENDING: Record<string, true> = {}
@@ -115,6 +117,8 @@ export function MapView() {
   const flight = useRef(0)
   const landed = useRef(false)
   const cards = useMemo(() => game?.cards ?? [], [game])
+  // 越富越亮（docs/V3_ITEMS.md §9）：按还藏着多少钱，区块外面三档静止的金光
+  const richness = useMemo(() => (game ? richnessOf(game.cards, game.rules, game.left) : NO_RICH), [game])
 
   const camera = useCallback((): Camera => ({ x: x.get(), y: y.get(), scale: scale.get() }), [x, y, scale])
 
@@ -551,7 +555,7 @@ export function MapView() {
     <div className="map-canvas" ref={box} onClickCapture={onClickCapture} onContextMenu={onContextMenu}
       onPointerDownCapture={event => { lastPointer.current = event.pointerType }}>
     <motion.div className="map-world" style={{ x, y, scale, transformOrigin: '0 0', '--px': 1 / settled.scale } as MotionStyle}>
-      <MapCanvas cards={cards} view={view} skip={entrance?.cardId ?? null} inDom={dom} onPick={pickOnCanvas} onHover={hoverOnCanvas} />
+      <MapCanvas cards={cards} rich={richness} view={view} skip={entrance?.cardId ?? null} inDom={dom} onPick={pickOnCanvas} onHover={hoverOnCanvas} />
       {hoverCard && !dom.has(hoverCard.id) ? <div className="map-hover" aria-hidden="true"
         style={{ left: hoverCard.x * SLOT_PX - BLOCK_PX / 2, top: hoverCard.y * SLOT_PX - BLOCK_PX / 2, width: BLOCK_PX, height: BLOCK_PX }} /> : null}
       {cards.map(card => {
@@ -577,6 +581,7 @@ export function MapView() {
           peeked={peekShown?.cardId === card.id ? peekShown.index : null}
           opened={openedOf.get(card.id) ?? NO_OPENED}
           version={version}
+          rich={richness.get(card.id) ?? 0}
           onDig={dig}
           onAim={onAim}
           onTorch={onTorch}

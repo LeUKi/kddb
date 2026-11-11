@@ -47,17 +47,73 @@ export function regionAbout(card: Pick<PublicCard, 'kind'>, rules: Pick<Rules, '
   }
 }
 
-/** 余量里列出来的“宝贝”：钱和长卡的东西。TNT、蜘蛛网、刷怪笼、绿宝石、煤炭木棍不列（劝退、太长）。 */
-export const TREASURES: Kind[] = ['diamond', 'apple', 'debris', 'pearl', 'eye']
-/** 合成一项“道具 N”的：能拿进工具条或帮上忙的。 */
-export const GOODS: Kind[] = ['shield', 'spyglass', 'totem', 'map', 'potion', 'key', 'minecart', 'ender']
+/**
+ * 余量（docs/V3_ITEMS.md §9，2026-11-11 用户选的“按第 9 节全做”）：不报“还剩几个”（只剩一个反而劝退），
+ * 报这张卡还藏着多少钱、有哪几样宝贝（几个用原版乱码盖住），挖得差不多了就指去最富的那张。
+ * 钱只按大家本来就看得到的余量算，没多给信息。
+ */
 
-/** 卡下面的余量：还没挖到的宝贝（各几个）、道具一共几个（和最多四个图标）。 */
-export function leftoversOf(card: Pick<PublicCard, 'left'>) {
-  const treasures = TREASURES.flatMap(kind => ((card.left[kind] ?? 0) > 0 ? [{ kind, count: card.left[kind] ?? 0 }] : []))
-  const goods = GOODS.filter(kind => (card.left[kind] ?? 0) > 0)
-  const goodsCount = goods.reduce((sum, kind) => sum + (card.left[kind] ?? 0), 0)
-  return { treasures, goods: goods.slice(0, 4), goodsCount }
+/** 每样东西大约值几份小奖：钻石按规则的倍数；附魔金苹果让手上的翻倍（有上限），按 3 份；箱子矿车一半是 2～4 份小奖。 */
+export function worthEach(rules: Pick<Rules, 'bigMultiplier'>): Partial<Record<Kind, number>> {
+  return { emerald: 1, diamond: rules.bigMultiplier || 5, debris: 10, apple: 3, minecart: 1.5 }
+}
+
+/** 一张卡还藏着多少钱（和奖池一样的单位，整数）：不超过奖池剩下的。 */
+export function worthOf(card: Pick<PublicCard, 'left'>, rules: Pick<Rules, 'smallReward' | 'bigMultiplier'>, poolLeft: number) {
+  const each = worthEach(rules)
+  let small = 0
+  for (const [kind, worth] of Object.entries(each) as [Kind, number][]) small += (card.left[kind] ?? 0) * worth
+  return Math.max(0, Math.min(Math.round(small * rules.smallReward), poolLeft))
+}
+
+/** “还藏着约 X”：1 以上取一位小数，不到 1 取两位（10000 → "100.0"，85 → "0.85"）。 */
+export function aboutMoney(points: number) {
+  return points >= 100 ? (Math.round(points / 10) / 10).toFixed(1) : (points / 100).toFixed(2)
+}
+
+/** 卡下面列出来的宝贝（最多 4 样，按这个先后）：值钱的、能长出新卡的。 */
+export const TREASURES: Kind[] = ['debris', 'diamond', 'apple', 'eye', 'pearl', 'minecart', 'emerald']
+
+/** 还没挖完、没关的卡。 */
+const open = (card: Pick<PublicCard, 'finished' | 'closed'>) => !card.finished && !card.closed
+
+/** 这张卡算挖得差不多了：挖完、关了，或者藏着的不到 2 份小奖。 */
+export const poorCard = (card: Pick<PublicCard, 'finished' | 'closed'>, worth: number, rules: Pick<Rules, 'smallReward'>) =>
+  !open(card) || worth < rules.smallReward * 2
+
+/** 卡下面那一行：还藏着多少钱、有哪几样宝贝。 */
+export function leftoversOf(card: Pick<PublicCard, 'left' | 'finished' | 'closed'>, rules: Pick<Rules, 'smallReward' | 'bigMultiplier'>, poolLeft: number) {
+  const worth = worthOf(card, rules, poolLeft)
+  const kinds = TREASURES.filter(kind => (card.left[kind] ?? 0) > 0).slice(0, 4)
+  return { worth, kinds, poor: poorCard(card, worth, rules) }
+}
+
+/** 最富的那张（不算 except，不算挖得差不多的）；没有就是 null。 */
+export function richestOf(cards: PublicCard[], rules: Pick<Rules, 'smallReward' | 'bigMultiplier'>, poolLeft: number, except?: number) {
+  let best: { card: PublicCard; worth: number } | null = null
+  for (const card of cards) {
+    if (card.id === except || !open(card)) continue
+    const worth = worthOf(card, rules, poolLeft)
+    if (poorCard(card, worth, rules)) continue
+    if (!best || worth > best.worth) best = { card, worth }
+  }
+  return best
+}
+
+/**
+ * 地图上越富越亮（静止的金光，三档）：和最富的那张比，三分之二以上 3 档，三分之一以上 2 档，
+ * 别的 1 档；挖得差不多的不亮。只给有亮光的卡（键是卡号）。
+ */
+export function richnessOf(cards: PublicCard[], rules: Pick<Rules, 'smallReward' | 'bigMultiplier'>, poolLeft: number) {
+  const worths = new Map<number, number>()
+  for (const card of cards) {
+    const worth = worthOf(card, rules, poolLeft)
+    if (!poorCard(card, worth, rules)) worths.set(card.id, worth)
+  }
+  const most = Math.max(0, ...worths.values())
+  const levels = new Map<number, 1 | 2 | 3>()
+  for (const [id, worth] of worths) levels.set(id, worth * 3 > most * 2 ? 3 : worth * 3 > most ? 2 : 1)
+  return levels
 }
 
 /**

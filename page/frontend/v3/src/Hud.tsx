@@ -137,7 +137,7 @@ function ClaimConfirm({ points, chest, chances, unit, onCancel, onConfirm }: { p
     <motion.div className="claim-confirm" role="alertdialog" aria-modal="true" aria-labelledby="claim-confirm-title" aria-describedby="claim-confirm-text"
       initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}>
       <p id="claim-confirm-title" className="claim-confirm-title">领取 {money(points)} {unit}？</p>
-      <p id="claim-confirm-text">{chest > 0 ? `待领取 ${money(points - chest)}，加上末影箱里的 ${money(chest)}。` : ''}领取以后这一局就不能再挖了了，剩下的{chances > 0 ? ` ${chances} 次机会` : '机会和附魔镐'}作废。</p>
+      <p id="claim-confirm-text">{chest > 0 ? `待领取 ${money(points - chest)}，加上末影箱里的 ${money(chest)}。` : ''}领取以后这一局就不能再挖了，剩下的{chances > 0 ? ` ${chances} 次机会` : '机会和附魔镐'}作废。</p>
       <div className="claim-confirm-actions">
         <button ref={stay} type="button" onClick={onCancel}>继续挖</button>
         <button type="button" className="is-primary" onClick={onConfirm}>领取</button>

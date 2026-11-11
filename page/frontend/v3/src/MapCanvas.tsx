@@ -70,13 +70,14 @@ function reopen(element: HTMLCanvasElement, context: CanvasRenderingContext2D, p
  * 一张光的贴图：区块（side 见方，四周留 pad）外面一圈光、里面淡淡的底色、一条细边。
  * px：屏幕 1px 在画布上合多少像素（全图那一级），光和边的粗细按它算，和网页里的一样。
  */
-function glowSprite(glow: 'eye' | 'end', side: number, pad: number, px: number) {
+function glowSprite(glow: Glow, side: number, pad: number, px: number) {
   if (typeof document === 'undefined') return null
   const sprite = document.createElement('canvas')
   sprite.width = sprite.height = Math.ceil(side + pad * 2)
   const context = sprite.getContext('2d')
   if (!context) return null
   const end = glow === 'end'
+  const rich = RICH[glow as RichGlow]
   const block = new Path2D()
   if ('roundRect' in block) block.roundRect(pad, pad, side, side, side * 16 / BLOCK_PX)
   else (block as Path2D).rect(pad, pad, side, side)
@@ -87,13 +88,15 @@ function glowSprite(glow: 'eye' | 'end', side: number, pad: number, px: number) 
   outside.addPath(block)
   context.clip(outside, 'evenodd')
   const away = sprite.width + side * 2
-  context.shadowColor = end ? '#ffbf3d8c' : '#9a6bff73'
-  context.shadowBlur = (end ? 56 : 40) * px
+  context.shadowColor = rich?.glow ?? (end ? '#ffbf3d8c' : '#9a6bff73')
+  context.shadowBlur = (rich?.blur ?? (end ? 56 : 40)) * px
   context.shadowOffsetX = away
   context.fillStyle = '#000'
   context.translate(-away, 0)
   context.fill(block)
   context.restore()
+  // 越富越亮的只有外面那圈光（和网页里的 .rich-N 一样），不加底色和边
+  if (rich) return sprite
   context.fillStyle = end ? '#ffd36b17' : '#9a6bff12'
   context.fill(block)
   context.lineWidth = (end ? 2 : 1.5) * px
@@ -116,11 +119,23 @@ export function cardAt<T extends Pick<PublicCard, 'x' | 'y'>>(bySlot: Map<string
   return Math.abs(world.x - x * SLOT_PX) <= half && Math.abs(world.y - y * SLOT_PX) <= half ? card : null
 }
 
-/** 发光的卡：藏着眼的（紫）、没挖完的末地宝藏（金）。 */
-export const glowOf = (card: PublicCard) => (isTreasure(card) ? !card.finished && 'end' : (card.left.eye ?? 0) > 0 && 'eye') || null
+type RichGlow = 'rich1' | 'rich2' | 'rich3'
+type Glow = 'eye' | 'end' | RichGlow
+/** 越富越亮的三档金光（regions.ts richnessOf；和 v3.css 的 .rich-N 一样）：静止的，只在档位变时重画 */
+const RICH: Record<RichGlow, { glow: string; blur: number }> = {
+  rich1: { glow: '#ffd24a33', blur: 28 },
+  rich2: { glow: '#ffd24a5c', blur: 36 },
+  rich3: { glow: '#ffd24a94', blur: 44 },
+}
 
-export function MapCanvas({ cards, view, skip, inDom, onPick, onHover }: {
+/** 发光的卡：没挖完的末地宝藏（金）、藏着眼的（紫），别的按还藏着多少钱分三档金光（rich：0 不亮）。 */
+export const glowOf = (card: PublicCard, rich = 0): Glow | null =>
+  isTreasure(card) ? (card.finished ? null : 'end') : (card.left.eye ?? 0) > 0 ? 'eye' : rich > 0 ? `rich${rich as 1 | 2 | 3}` : null
+
+export function MapCanvas({ cards, rich, view, skip, inDom, onPick, onHover }: {
   cards: PublicCard[]
+  /** 越富越亮的档位（卡号 → 1～3，regions.ts richnessOf） */
+  rich: Map<number, number>
   view: Viewport
   /** 不画的卡：刚长出来、入场动画还没放完的（它在网页里自己翻出来） */
   skip: number | null
@@ -240,9 +255,9 @@ export function MapCanvas({ cards, view, skip, inDom, onPick, onHover }: {
   // 一直放在网页里，缩到全图时浏览器要把十几张卡连光一起按原来的清晰度重新栅格化一遍，
   // 显卡忙半秒，红包站跟着卡。近处的、当前卡在网页里，光照旧（::before）
   const glowCanvas = useRef<HTMLCanvasElement>(null)
-  const wanted = new Map<number, string>()
+  const wanted = new Map<number, Glow>()
   for (const card of cards) {
-    const glow = glowOf(card)
+    const glow = glowOf(card, rich.get(card.id))
     if (glow && !inDom.has(card.id)) wanted.set(card.id, glow)
   }
   const glowKey = [...wanted].map(([id, glow]) => `${id}${glow}`).join(',')
@@ -250,7 +265,7 @@ export function MapCanvas({ cards, view, skip, inDom, onPick, onHover }: {
   // 按档取整，地图长一点不用整张重画
   const unit = view.width > 0 ? stepped(1 / overviewScale(view, corners)) : 10
   const glowDrawn = useRef({ geometry: '', glows: new Map<number, string>() })
-  const sprites = useRef<{ key: string; eye: HTMLCanvasElement | null; end: HTMLCanvasElement | null }>({ key: '', eye: null, end: null })
+  const sprites = useRef<{ key: string; made: Map<Glow, HTMLCanvasElement | null> }>({ key: '', made: new Map() })
   useLayoutEffect(() => {
     const element = glowCanvas.current
     const context = element?.getContext('2d')
@@ -272,10 +287,15 @@ export function MapCanvas({ cards, view, skip, inDom, onPick, onHover }: {
     const side = BLOCK_PX * scale
     const pad = Math.ceil(reach)
     const spriteKey = `${scale},${unit}`
-    if (sprites.current.key !== spriteKey) sprites.current = { key: spriteKey, eye: glowSprite('eye', side, pad, unit * scale), end: glowSprite('end', side, pad, unit * scale) }
-    const drawGlow = (card: PublicCard, glow: string) => {
+    if (sprites.current.key !== spriteKey) sprites.current = { key: spriteKey, made: new Map() }
+    const spriteOf = (glow: Glow) => {
+      const made = sprites.current.made
+      if (!made.has(glow)) made.set(glow, glowSprite(glow, side, pad, unit * scale))
+      return made.get(glow) ?? null
+    }
+    const drawGlow = (card: PublicCard, glow: Glow) => {
       const { x, y } = rectOf(card)
-      const sprite = glow === 'end' ? sprites.current.end : sprites.current.eye
+      const sprite = spriteOf(glow)
       if (sprite) context.drawImage(sprite, x - pad, y - pad)
     }
     const geometry = `${pixels.width}x${pixels.height}@${left},${top},${scale},${unit}`

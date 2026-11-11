@@ -43,6 +43,10 @@
 
 急迫药水的图标不是一张图：网页把药水瓶的液体层乘上急迫效果的颜色 `#d9c043` 再叠上瓶子，和游戏画药水图标的办法一样（`ItemIcon.tsx`）。
 
+### 2026-11-11 像素字
+
+余量里的个数用原版乱码（§k）盖住，要原版的字形：同一个 1.21.4 客户端 JAR（核对过 SHA-1，提取完已删）补提取 `assets/minecraft/textures/font/ascii.png`（128×128，1 位调色板，原样放进 `textures/font/`，记在 `manifest.json`，现在 111 条）。哪一格是哪个字照 JAR 里的 `font/include/default.json`，抄进 `page/frontend/v3/src/mcfont.ts`，没有另存这个 JSON。
+
 音效同样从 1.21.4 的资源索引按 SHA-1 下载、核对大小和散列，只转成 MP3：`random/fuse`（苦力怕）、`random/chestopen`、`block/enchantment_table/enchant1`、`liquid/lavapop`、`mob/warden/emerge`、`block/vault/open_shutter`、`random/pop`，记在 `sounds/provenance.json`。
 
 ## 背包渲染图

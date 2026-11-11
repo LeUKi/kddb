@@ -32,3 +32,13 @@ test('光变了的卡：灭了的、换色的、新亮的', () => {
   assert.deepEqual(canvas.glowChanges(drawn, wanted).sort(), [2, 3, 4])
   assert.deepEqual(canvas.glowChanges(wanted, new Map(wanted)), [])
 })
+
+test('远处的光：末地宝藏、藏着眼的照旧，别的按越富越亮的档位（docs/V3_ITEMS.md §9）', () => {
+  const plain = { id: 1, left: { diamond: 2 }, finished: false }
+  assert.equal(canvas.glowOf(plain), null)
+  assert.equal(canvas.glowOf(plain, 0), null)
+  assert.deepEqual([1, 2, 3].map(rich => canvas.glowOf(plain, rich)), ['rich1', 'rich2', 'rich3'])
+  assert.equal(canvas.glowOf({ ...plain, left: { eye: 1 } }, 3), 'eye')
+  assert.equal(canvas.glowOf({ ...plain, kind: 'end' }, 3), 'end')
+  assert.equal(canvas.glowOf({ ...plain, kind: 'end', finished: true }, 3), null)
+})
