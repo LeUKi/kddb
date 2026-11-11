@@ -287,7 +287,7 @@ export function Rules({ onClose, onPractice }: { onClose: () => void; onPractice
           <dt><ItemIcon kind="crystal" size={18} /> 末影水晶</dt><dd>藏在末地宝藏里，一张{rules.endMix === 2 ? '一到两颗' : '一颗'}；踩中扣掉还没领的奖励的 {crystalPercent(rules)}%（TNT 的两倍，盾牌能挡）</dd></> : null}
       </dl> : null}
       <p className="rules-tip">拖动地图平移，滚轮或捏合缩放。点旁边的卡就能换过去，方向键也行；+/- 缩放。全图那一级能看到所有的卡，不能拖动。</p>
-      <p className="rules-tip">工具条在地图下面（横屏在左边）：第 1 格是镐子，上面是剩下的机会；挖到的道具排在后面，放不下时可以滑。对格子用的道具点一下拿起来：手机上先点一下看看放在哪，再点一次才用；电脑上指着就能看，点一下就用。拖动永远是挪地图。电脑上按 1–9 选，Esc 或右键放下。</p>
+      <p className="rules-tip">工具条浮在地图左下角（横屏在左边）：第 1 格是镐子，上面是剩下的机会；挖到的道具排在后面，放不下时可以滑。点一格弹出它的说明，药水、藏宝图在里面确认。对格子用的道具点一下拿起来（第一次会先说明怎么用）：手机上先点一下看看放在哪，再点一次才用；电脑上指着就能看，点一下就用。再点它就放回去。拖动永远是挪地图。电脑上按 1–9 选，Esc 或右键放回去。</p>
       <div className="rules-actions">
         <button type="button" className="rules-practice" onClick={onPractice}>练习一下</button>
         <button type="button" onClick={onClose}>知道了</button>

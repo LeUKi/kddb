@@ -51,13 +51,14 @@ export const summaryOpenAtom = atom<'button' | 'end' | null>(null)
  */
 export type { Slot }
 export const heldAtom = atom<Held | null>(null)
-export const slotMenuAtom = atom<Slot | null>(null)
 /** 预览在哪：哪张卡的哪一格（形状的中心、火把那个角右下的格子、宝库） */
 export const aimAtom = atom<{ cardId: number; index: number } | null>(null)
 /** 刚用望远镜、藏宝图看到的格子（"卡号:格"）：格子上飘一下看到的是什么 */
 export const peekedAtom = atom<{ cell: string; at: number; words?: string } | null>(null)
 /** 弹窗：末影箱、附魔台、宝库开出的东西 */
 export type Dialog = { type: 'ender' } | { type: 'table' } | { type: 'vault'; text: string; kind: Kind | 'table' | null }
+  /** 工具条上点一格（用户选的 B）：药水、藏宝图确认；被动的和镐子只说明；对准格子的第一次拿起来时 teach，教一次 */
+  | { type: 'item'; slot: Slot; teach?: boolean }
 export const dialogAtom = atom<Dialog | null>(null)
 /** 本机时间：苦力怕什么时候来（null 是不来）、急迫药水到什么时候 */
 export const creeperAtAtom = atom<number | null>(null)
@@ -65,10 +66,9 @@ export const hasteUntilAtom = atom(0)
 /** 末影箱的说明开着（打开的时刻，0 是收起）：存进去时打开，点“知道了”收起 */
 export const chestNoteAtom = atom(0)
 
-/** 放下道具、收起说明（取消、用完、Esc、右键）。 */
+/** 放下道具（再点它、用完、Esc、右键）。 */
 export function putDown() {
   store.set(heldAtom, null)
-  store.set(slotMenuAtom, null)
   store.set(aimAtom, null)
 }
 

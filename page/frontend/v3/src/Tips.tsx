@@ -3,7 +3,7 @@ import type { RefObject } from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { aimInfo, torchHoverAtom, torchWords } from './aim'
 import { useCooling } from './Hud'
-import { aimAtom, gameAtom, heldAtom, meAtom } from './state'
+import { aimAtom, gameAtom, heldAtom, meAtom, store } from './state'
 
 /**
  * 电脑上跟着指针的小提示（docs/V3_ITEMS.md §5）：拿着道具时说这一下会怎样（挖开几格、跳过几格、
@@ -14,7 +14,6 @@ export function FollowTip({ box }: { box: RefObject<HTMLDivElement | null> }) {
   const held = useAtomValue(heldAtom)
   const aim = useAtomValue(aimAtom)
   const torch = useAtomValue(torchHoverAtom)
-  const game = useAtomValue(gameAtom)
   const me = useAtomValue(meAtom)
   const cooling = useCooling()
   const tip = useRef<HTMLDivElement>(null)
@@ -49,7 +48,8 @@ export function FollowTip({ box }: { box: RefObject<HTMLDivElement | null> }) {
   let text = ''
   if (torch) text = torchWords(torch)
   else if (held && aim) {
-    const card = game?.cards.find(item => item.id === aim.cardId)
+    // 不订阅整局（每次推送都换）：指针一动、换了位置就重新算
+    const card = store.get(gameAtom)?.cards.find(item => item.id === aim.cardId)
     if (card) text = aimInfo(held, card, aim.index, me).words
   } else if (!held && vault) text = vault
   else if (!held && cooling.seconds) text = `还要等 ${cooling.seconds} 秒才能再挖`

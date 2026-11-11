@@ -1,34 +1,28 @@
-import { useAtom, useAtomValue, useSetAtom } from 'jotai'
+import { useAtom, useAtomValue } from 'jotai'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import type { MutableRefObject, RefObject } from 'react'
 import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ItemIcon } from '../../src/ItemIcon'
-import type { IconKind } from '../../src/game'
-import { applyAtAim } from './aim'
 import type { Level } from './camera'
 import { makeCursors } from './cursor'
 import { ShapeGlyph } from './Dialogs'
 import { useCooling } from './Hud'
-import type { Held, Slot } from './items'
-import { CRAFT_NEED, countOf, isHeld, SHIELD_CAP, shapeOf, SLOT_NAMES, SLOT_USE, slotsOf, vaultsLeft } from './items'
+import type { Slot } from './items'
+import { CRAFT_NEED, countOf, isHeld, isTaught, SHIELD_CAP, shapeOf, SLOT_ICONS, SLOT_NAMES, SLOT_USE, slotsOf } from './items'
 import { play } from './sound'
-import { aimAtom, blockedAtom, dialogAtom, digIntervalAtom, hasGameAtom, hasteUntilAtom, heldAtom, itemsGameAtom, meAtom, putDown, settledAtom, slotMenuAtom, toast, applyItem } from './state'
-import type { Me, PublicCard } from './types'
-
-const ICONS: Record<Slot, IconKind> = {
-  pickaxe: 'pickaxe', 'pick-h': 'pickaxe', 'pick-v': 'pickaxe', 'pick-x': 'pickaxe', spyglass: 'spyglass', torch: 'torch', key: 'key',
-  map: 'map', potion: 'potion', ender: 'ender', table: 'table', shield: 'shield', coal: 'coal', stick: 'stick', poison: 'spawner',
-}
+import { blockedAtom, dialogAtom, digIntervalAtom, hasGameAtom, hasteUntilAtom, heldAtom, itemsGameAtom, meAtom, putDown, settledAtom, toast } from './state'
+import type { Me } from './types'
 
 /**
- * 工具条（docs/V3_ITEMS.md §5）：竖着的画面在地图下面，横着的在左边，位置一直留着。镐子固定在
- * 最前面，带着机会和冷却；后面是手里的道具，再隔一道线是被动的（盾牌、煤炭、木棍、中毒）。
- * 放不下时可以滑（两头渐隐，有箭头），电脑上滚轮、拖动也能滚。
+ * 工具条（docs/V3_ITEMS.md §5）：像右下角的缩放一样浮在地图上（竖着的画面在左下，横着的在左边居中），
+ * 只有自己那一块；挖卡时镜头让开它（camera.ts TOOLBAR_SPACE）。镐子固定在最前面，带着机会和冷却；
+ * 后面是手里的道具，再隔一道线是被动的（盾牌、煤炭、木棍、中毒）。放不下时可以滑（两头渐隐，有箭头）。
  *
- * 点法：对格子用的道具点一下拿在手上，地图上预览、再点一次才用；藏宝图、药水在提示框里确认；
- * 末影箱、附魔台打开弹窗；被动的点开只看说明。再点同一格、Esc、电脑上点右键都是放下。
+ * 点法（用户选的 B，2026-11-11）：道具的说明和确认都在弹窗里，按钮挨着说明，不在工具条旁边长气泡。
+ * 对格子用的点一下拿在手上（第一次拿时先弹窗教一次），地图上预览、再点一次才用；再点它、Esc、右键放回去。
+ * 药水、藏宝图弹窗确认；末影箱、附魔台弹窗；被动的和镐子弹窗说明。
  */
-export const Toolbar = memo(function Toolbar({ level, card, onNeedDig }: { level: Level; card: PublicCard | null; onNeedDig: () => void }) {
+export const Toolbar = memo(function Toolbar({ level, onNeedDig }: { level: Level; onNeedDig: () => void }) {
   const me = useAtomValue(meAtom)
   // 只订阅规则里用到的：别人每挖一格 gameAtom 都换，工具条不该跟着重画、重新量一遍（2026-11-11 量过）
   const hasGame = useAtomValue(hasGameAtom)
@@ -37,9 +31,7 @@ export const Toolbar = memo(function Toolbar({ level, card, onNeedDig }: { level
   const blocked = useAtomValue(blockedAtom)
   const settled = useAtomValue(settledAtom)
   const [held, setHeld] = useAtom(heldAtom)
-  const [menu, setMenu] = useAtom(slotMenuAtom)
-  const aim = useAtomValue(aimAtom)
-  const setDialog = useSetAtom(dialogAtom)
+  const [dialog, setDialog] = useAtom(dialogAtom)
   const cooling = useCooling()
   const hasteUntil = useAtomValue(hasteUntilAtom)
   const reduced = useReducedMotion() ?? false
@@ -59,59 +51,48 @@ export const Toolbar = memo(function Toolbar({ level, card, onNeedDig }: { level
 
   useEffect(makeCursors, [])
 
-  // 道具用完了、没了：放下它，收起它的说明
+  // 道具用完了、没了：放下它
   useEffect(() => {
     if (held && (!order.includes(held) || !playing)) putDown()
-    else if (menu && !order.includes(menu)) setMenu(null)
   })
-
-  // 点工具条和提示框外面：收起说明（拿着的道具不放下：拖地图、缩放、换卡都不算取消）
+  // 拿起来时不在挖卡这一级：飞到当前卡（弹窗里点“拿起来”也一样）
+  const needDig = useRef(onNeedDig)
+  needDig.current = onNeedDig
+  const levelNow = useRef(level)
+  levelNow.current = level
   useEffect(() => {
-    if (!menu || held) return
-    const onDown = (event: PointerEvent) => {
-      if (!box.current?.contains(event.target as Node)) setMenu(null)
-    }
-    window.addEventListener('pointerdown', onDown, true)
-    return () => window.removeEventListener('pointerdown', onDown, true)
-  }, [menu, held, setMenu])
+    if (held && levelNow.current !== 2) needDig.current()
+  }, [held])
 
   const tap = (slot: Slot) => {
     const use = SLOT_USE[slot]
-    if (slot === 'pickaxe') {
-      if (held) {
-        putDown()
-        play('click')
-        return
-      }
-      setMenu(menu === 'pickaxe' ? null : 'pickaxe')
+    // 拿着东西时点镐子、再点拿着的那格：放回去
+    if (held && (slot === 'pickaxe' || held === slot)) {
+      putDown()
+      play('click')
+      return
+    }
+    if (use === 'base' || use === 'passive') {
+      setDialog({ type: 'item', slot })
+      return
+    }
+    if (!playing || blocked) {
+      toast(blocked ?? '已经领取了，不能再用')
       return
     }
     if (isHeld(slot)) {
-      if (held === slot) {
-        putDown()
-        return
-      }
-      if (!playing || blocked) {
-        toast(blocked ?? '已经领取了，不能再用')
-        return
-      }
       putDown()
+      if (!isTaught(slot)) {
+        setDialog({ type: 'item', slot, teach: true })
+        return
+      }
       setHeld(slot)
       play('click')
-      if (level !== 2) onNeedDig()
       return
     }
     if (held) putDown()
-    if (use === 'dialog') {
-      if (!playing || blocked) {
-        toast(blocked ?? '已经领取了，不能再用')
-        return
-      }
-      setMenu(null)
-      setDialog({ type: slot === 'ender' ? 'ender' : 'table' })
-      return
-    }
-    setMenu(menu === slot ? null : slot)
+    if (use === 'dialog') setDialog({ type: slot === 'ender' ? 'ender' : 'table' })
+    else setDialog({ type: 'item', slot })
   }
   const tapRef = useRef(tap)
   tapRef.current = tap
@@ -180,19 +161,18 @@ export const Toolbar = memo(function Toolbar({ level, card, onNeedDig }: { level
   // 鼠标按住拖也能滚；拖过的那下不算点
   const drag = useRef<{ x: number; y: number; left: number; top: number; moved: boolean } | null>(null)
   const dragged = useRef(0)
-  // 新拿起、新出现的那格滚进来
+  // 新拿起的那格滚进来
   useEffect(() => {
-    const target = held ?? menu
-    const element = target ? slotRefs.current.get(target) : null
+    const element = held ? slotRefs.current.get(held) : null
     element?.scrollIntoView?.({ block: 'nearest', inline: 'nearest', behavior: reduced ? 'auto' : 'smooth' })
-  }, [held, menu, reduced])
+  }, [held, reduced])
 
   if (!me || !hasGame) return <div className="toolbar" ref={box} />
   const haste = Math.max(0, hasteUntil - Date.now())
 
   const slotView = (slot: Slot) => {
     const selected = slot === 'pickaxe' ? held === null : held === slot
-    const open = menu === slot && !held
+    const open = dialog?.type === 'item' && dialog.slot === slot
     const count = countOf(me, slot)
     const shape = isHeld(slot) ? shapeOf(slot) : null
     const craftFull = crafted && (slot === 'coal' || slot === 'stick')
@@ -211,7 +191,7 @@ export const Toolbar = memo(function Toolbar({ level, card, onNeedDig }: { level
       exit={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.3 }} transition={{ type: 'spring', stiffness: 520, damping: 30 }}>
       <button type="button"
         className={`tool-slot is-${slot}${selected ? ' is-selected' : ''}${open ? ' is-open' : ''}${fill === 1 ? ' is-full' : ''}${slot === 'pickaxe' && haste > 0 ? ' is-haste' : ''}`}
-        aria-label={label} aria-pressed={isHeld(slot) || slot === 'pickaxe' ? selected : undefined} aria-expanded={SLOT_USE[slot] === 'confirm' || SLOT_USE[slot] === 'passive' ? open : undefined}
+        aria-label={label} aria-pressed={isHeld(slot) || slot === 'pickaxe' ? selected : undefined} aria-haspopup={isHeld(slot) ? undefined : 'dialog'}
         title={SLOT_NAMES[slot]}
         onClick={() => {
           if (performance.now() - dragged.current < 200) return
@@ -223,7 +203,7 @@ export const Toolbar = memo(function Toolbar({ level, card, onNeedDig }: { level
         }}>
         {/* 中毒的动静：次数变了才动几下（一直动的话红包站外面的毛玻璃每一帧都要重新模糊） */}
         {slot === 'poison' ? <><span key={`glow-${count}`} className="poison-glow" aria-hidden="true" /><span key={`spider-${count}`} className="poison-spider" aria-hidden="true" /></> : null}
-        <ItemIcon kind={ICONS[slot]} size={30} />
+        <ItemIcon kind={SLOT_ICONS[slot]} size={30} />
         {shape ? <><span className="glint" aria-hidden="true" /><ShapeGlyph shape={shape} /></> : null}
         {slot === 'poison' ? <span key={`bubbles-${count}`} className="poison-bubbles" aria-hidden="true"><i /><i /><i /></span> : null}
         {slot === 'pickaxe' && cooling.seconds ? <span className="cooling-veil" style={{ transform: `scaleY(${cooling.left})` }} aria-hidden="true" /> : null}
@@ -235,7 +215,6 @@ export const Toolbar = memo(function Toolbar({ level, card, onNeedDig }: { level
     </motion.div>
   }
 
-  const tip = tipOf({ held, menu, me, level, card, aimSet: !!aim, interval, items, blocked })
   // 手里只有镐子：后面那一截不画（空着是一个小框）；量的东西还在，第一件道具来了照样长出来
   const alone = active.length + shownPassive.length === 0
   return <div className={`toolbar${playing ? '' : ' is-done'}${alone ? ' is-alone' : ''}`} ref={box} role="toolbar" aria-label="工具条">
@@ -282,49 +261,12 @@ export const Toolbar = memo(function Toolbar({ level, card, onNeedDig }: { level
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6l-6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
       </button> : null}
     </div>
-    <AnimatePresence>
-      {tip ? <motion.div key={tip.key} className="item-tip toolbar-tip" role={held ? 'status' : 'dialog'} aria-label={tip.title}
-        initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}>
-        <p><b className={tip.green ? 'is-green' : ''}>{tip.title}</b>{tip.words}</p>
-        <div className="item-tip-actions">
-          {/* 离工具条最近的是放下、取消、知道了：连点两下，第二下落不到别的上面 */}
-          <button type="button" onClick={putDown}>{held ? '放下' : tip.confirm ? '取消' : '知道了'}</button>
-          {held ? <button type="button" className="is-primary" disabled={!tip.ready} onClick={applyAtAim}>{tip.action}</button> : null}
-          {tip.confirm ? <button type="button" className="is-primary" onClick={() => void applyItem(tip.confirm!)}>{tip.action}</button> : null}
-        </div>
-      </motion.div> : null}
-    </AnimatePresence>
   </div>
 })
 
 /** 横屏时工具条是竖的（样式里只让它上下滚）。按样式判断，不按内容：格子长出来时会高出一两个像素。 */
 function isVertical(element: HTMLElement) {
   return getComputedStyle(element).overflowX === 'hidden'
-}
-
-/** 提示框说什么：拿着的道具怎么用，或者点开的那格是什么。 */
-function tipOf({ held, menu, me, level, card, aimSet, interval, items, blocked }: {
-  held: Held | null; menu: Slot | null; me: Me; level: Level; card: PublicCard | null; aimSet: boolean; interval: number; items: boolean; blocked: string | null
-}): { key: string; title: string; words: string; action?: string; ready?: boolean; confirm?: 'map' | 'potion'; green?: boolean } | null {
-  const touch = !window.matchMedia?.('(hover: hover) and (pointer: fine)').matches
-  if (held) {
-    const title = SLOT_NAMES[held]
-    const what = held === 'torch' ? '格子之间的缝（插在离得最近的角上）' : held === 'key' ? '一个宝库' : '一格'
-    const words = level !== 2 ? '放大到一张卡上，再点格子。'
-      : card?.finished && !(held === 'key' && vaultsLeft(card)) ? '这张卡挖完了，换一张没挖完的卡。'
-        : touch ? (aimSet ? `再点一次${shapeOf(held) ? '框的中间' : '同一处'}就用，点别处换位置；拖动还是挪地图。` : `点${what}，先放上去看看。`)
-          : `指到哪里预览到哪里，点一下就用；右键或 Esc 放下。`
-    const action = held === 'torch' ? '插上' : held === 'spyglass' ? '看' : held === 'key' ? '开' : '挖'
-    return { key: `held-${held}`, title, words, action, ready: aimSet && level === 2 }
-  }
-  if (!menu) return null
-  if (menu === 'pickaxe') return { key: 'pickaxe', title: '镐子', words: blocked ?? `点一格没挖开的格子就是挖，用 1 次机会，还剩 ${me.chances} 次${interval > 1 ? `；每次至少隔 ${interval} 秒` : ''}。` }
-  if (menu === 'map') return { key: 'map', title: '藏宝图', words: '随机标出地图上一格奖励（绿宝石常见，钻石少见），只有你看得见，镜头会飞过去。', action: '打开', confirm: 'map' }
-  if (menu === 'potion') return { key: 'potion', title: '急迫药水', words: '喝下以后 10 秒里，每次挖只要隔 1 秒。', action: '喝下', confirm: 'potion' }
-  if (menu === 'shield') return { key: 'shield', title: `盾牌 ${countOf(me, 'shield')}/${items ? SHIELD_CAP : 1}`, words: `踩到 TNT 或末影水晶时自动挡下一次，用掉一面。${items ? `最多带 ${SHIELD_CAP} 面，再挖到换成一份小奖。` : '再挖到就换成一份小奖。'}` }
-  if (menu === 'coal' || menu === 'stick') return { key: menu, title: `${SLOT_NAMES[menu]} ${countOf(me, menu)}/${CRAFT_NEED}`, words: `煤炭、木棍都攒满 ${CRAFT_NEED} 个，自动做成一个火把；满了再挖到不算。` }
-  if (menu === 'poison') return { key: 'poison', title: `中毒，还有 ${countOf(me, 'poison')} 次`, words: '接下来每挖一次，扣手上 5%，盾牌挡不住。', green: true }
-  return null
 }
 
 /** Minecraft 物品栏那种像素数字（带阴影），右下角。 */

@@ -1,5 +1,6 @@
 // 道具（docs/V3_ITEMS.md §3）：工具条上每一格是什么、怎么用，和对格子用的道具点到哪几格。
 // 纯数据和纯函数，网页和测试共用。
+import type { IconKind } from '../../src/game'
 import type { Me, PublicCard, Shape } from './types'
 
 /** 工具条上的一格。镐子固定在最前面；被动的排在一道线后面。 */
@@ -27,6 +28,36 @@ export const SLOT_NAMES: Record<Slot, string> = {
 }
 
 export const isHeld = (slot: Slot): slot is Held => ['box', 'cell', 'corner', 'vault'].includes(SLOT_USE[slot])
+
+/** 每一格画什么图标（附魔镐是镐子加形状小图） */
+export const SLOT_ICONS: Record<Slot, IconKind> = {
+  pickaxe: 'pickaxe', 'pick-h': 'pickaxe', 'pick-v': 'pickaxe', 'pick-x': 'pickaxe', spyglass: 'spyglass', torch: 'torch', key: 'key',
+  map: 'map', potion: 'potion', ender: 'ender', table: 'table', shield: 'shield', coal: 'coal', stick: 'stick', poison: 'spawner',
+}
+
+/**
+ * 对准格子用的道具第一次拿起来时弹窗教一次（docs/V3_ITEMS.md §5，用户选的 B）；之后点一下就拿起来。
+ * 三种附魔镐算一种。记在这台设备上（存不了就每次都教，不影响玩）。
+ */
+const TAUGHT_KEY = 'kddb:v3:taught'
+const teachGroup = (slot: Held) => (shapeOf(slot) ? 'pick' : slot)
+function taughtList(): string[] {
+  try {
+    const list: unknown = JSON.parse(localStorage.getItem(TAUGHT_KEY) ?? '[]')
+    return Array.isArray(list) ? list.filter((item): item is string => typeof item === 'string') : []
+  } catch {
+    return []
+  }
+}
+export const isTaught = (slot: Held) => taughtList().includes(teachGroup(slot))
+export function markTaught(slot: Held) {
+  try {
+    const list = taughtList()
+    if (!list.includes(teachGroup(slot))) localStorage.setItem(TAUGHT_KEY, JSON.stringify([...list, teachGroup(slot)]))
+  } catch {
+    // 存不了：下次再教一遍
+  }
+}
 
 /** 附魔镐的形状：相对中心的 [行, 列] */
 export const SHAPES: Record<Shape, [number, number][]> = {

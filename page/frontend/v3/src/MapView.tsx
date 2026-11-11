@@ -6,13 +6,13 @@ import type { Entrance } from './CardView'
 import { CardView } from './CardView'
 import { useGesture } from '@use-gesture/react'
 import type { Camera, Direction, Level, Viewport, WheelZoom } from './camera'
-import { BLOCK_PX, cameraAt, cardNear, cardToward, cellCenter, centerOf, edgeFacing, edgePointer, entryPoint, fullyOnScreen, nearestCard, nearestLevel, onScreen, overviewCamera, scaleOf, SLOT_PX, wheelZoom } from './camera'
+import { BLOCK_PX, withToolbar, cameraAt, cardNear, cardToward, cellCenter, centerOf, edgeFacing, edgePointer, entryPoint, fullyOnScreen, nearestCard, nearestLevel, onScreen, overviewCamera, scaleOf, SLOT_PX, wheelZoom } from './camera'
 import type { Flight, Point } from './PearlFlight'
 import { cardAt, MapCanvas } from './MapCanvas'
 import { landMs, PearlFlight } from './PearlFlight'
 import { isTreasure } from './eye'
 import { useCooling } from './Hud'
-import { aimAtom, blockedAtom, dig, focusRequestAtom, freshAtom, gameAtom, heldAtom, hongbaoAtom, meAtom, newCardAtom, peekedAtom, pendingAtom, putDown, settledAtom, slotMenuAtom, store, uidAtom } from './state'
+import { aimAtom, blockedAtom, dig, focusRequestAtom, freshAtom, gameAtom, heldAtom, hongbaoAtom, meAtom, newCardAtom, peekedAtom, pendingAtom, putDown, settledAtom, store, uidAtom } from './state'
 import { Toolbar } from './Toolbar'
 import { aimInfo, anchorFor, torchHoverAtom, applyAt } from './aim'
 import { shapeOf, vaultsLeft } from './items'
@@ -82,7 +82,6 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
   const reduced = useReducedMotion() ?? false
   const cooling = useCooling()
   const held = useAtomValue(heldAtom)
-  const slotMenu = useAtomValue(slotMenuAtom)
   const peeked = useAtomValue(peekedAtom)
   const aim = useAtomValue(aimAtom)
   const setAim = useSetAtom(aimAtom)
@@ -157,7 +156,7 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
   useLayoutEffect(() => {
     const element = box.current
     if (!element) return
-    const observer = new ResizeObserver(([entry]) => setView({ width: entry.contentRect.width, height: entry.contentRect.height }))
+    const observer = new ResizeObserver(([entry]) => setView(withToolbar(entry.contentRect.width, entry.contentRect.height)))
     observer.observe(element)
     return () => observer.disconnect()
   }, [])
@@ -502,9 +501,9 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
   if (jpPointer) jpLast.current = jpPointer
   const jpAt = jpPointer ?? jpLast.current
 
-  // 拿着道具时点右键是放下（电脑上）；收着说明时也收起
+  // 拿着道具时点右键是放下（电脑上）
   const onContextMenu = (event: React.MouseEvent) => {
-    if (!held && !slotMenu) return
+    if (!held) return
     event.preventDefault()
     putDown()
   }
@@ -605,7 +604,7 @@ export function MapView({ onFocus }: { onFocus: (card: PublicCard | null) => voi
     <ChestNote />
     <Creeper />
     </div>
-    <Toolbar level={level} card={focused} onNeedDig={needDig} />
+    <Toolbar level={level} onNeedDig={needDig} />
     </div>
   </div>
 }

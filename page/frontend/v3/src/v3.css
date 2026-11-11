@@ -40,9 +40,9 @@ body { overflow: hidden; overscroll-behavior: none; }
 .sound-button.is-muted .sound-cross { display: inline; }
 
 /* —— 地图 ——
- * 地图和工具条排在 .map-stage 里：地图区竖着（高比宽大）时工具条在下面，横着时在左边（按地图区本身的
- * 形状算，不按整个窗口）。工具条的位置一直留着，地图区的大小不随手里的道具变。 */
-/* 盖在 .bottom-bar（z-index 5）上面：竖着的画面里工具条的提示框往下盖住底栏，不挡卡的格子 */
+ * 工具条像右下角的缩放一样浮在地图上（.map-stage 里绝对定位）：地图区竖着（高比宽大）时在左下，横着时
+ * 在左边居中（按地图区本身的形状算，不按整个窗口）。地图区是整块，挖卡时镜头让开工具条那一条
+ * （camera.ts TOOLBAR_SPACE），大小不随手里的道具变。 */
 .map-view { position: relative; z-index: 6; display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; container: map / size; }
 .map-stage { position: relative; display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; min-height: 0; }
 .map-canvas { position: relative; flex: 1 1 auto; min-width: 0; min-height: 0; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; }
@@ -384,15 +384,17 @@ button.eye-status { cursor: pointer; }
 }
 
 /* —— 工具条（Toolbar.tsx，docs/V3_ITEMS.md §5）：镐子固定在最前面；后面的放不下时能滑，两头渐隐，有箭头 —— */
-.toolbar { position: relative; z-index: 6; display: flex; flex: none; align-items: center; gap: 0; max-width: 100%; height: 64px; margin: 0 auto; padding: 0 6px; }
-.toolbar > .tool-cell, .toolbar-scroll-wrap { background: #11171de6; }
+/* 右边留给缩放那一列（36 + 内边距 8 + 边框 2 + 离边 10，再隔 8） */
+.toolbar { position: absolute; left: 10px; bottom: 10px; z-index: 6; display: flex; align-items: center; gap: 0; max-width: calc(100% - 84px); }
+.toolbar > .tool-cell, .toolbar-scroll-wrap { background: #11171dcc; }
 .toolbar > .tool-cell { padding: 5px 4px 5px 5px; border: 1px solid #ffffff1f; border-right: 0; border-radius: 12px 0 0 12px; }
-.toolbar-scroll-wrap { position: relative; min-width: 0; padding: 5px 5px 5px 0; border: 1px solid #ffffff1f; border-left: 0; border-radius: 0 12px 12px 0; box-shadow: 0 6px 18px #0007; }
+.toolbar-scroll-wrap { position: relative; display: flex; min-width: 0; min-height: 0; padding: 5px 5px 5px 0; border: 1px solid #ffffff1f; border-left: 0; border-radius: 0 12px 12px 0; box-shadow: 0 6px 18px #0007; }
 .toolbar-divider { flex: none; width: 1px; height: 32px; margin: 0 6px; background: #ffffff2e; }
 .toolbar.is-alone > .tool-cell { border-right: 1px solid #ffffff1f; border-radius: 12px; box-shadow: 0 6px 18px #0007; }
 .toolbar.is-alone > .toolbar-divider.is-pin, .toolbar.is-alone > .toolbar-scroll-wrap { display: none; }
 .toolbar-divider.is-pin { height: 54px; margin: 0; background: #11171de6; border-top: 1px solid #ffffff1f; border-bottom: 1px solid #ffffff1f; box-shadow: inset 1px 0 0 #ffffff2e; width: 7px; }
-.toolbar-scroll { overflow: auto hidden; scrollbar-width: none; overscroll-behavior: contain; touch-action: pan-x; }
+/* 放不下时在自己那块里滚（外面的 .toolbar 限了最大宽、高，这里跟着收） */
+.toolbar-scroll { flex: 0 1 auto; min-width: 0; min-height: 0; overflow: auto hidden; scrollbar-width: none; overscroll-behavior: contain; touch-action: pan-x; }
 .toolbar-scroll::-webkit-scrollbar { display: none; }
 .toolbar-scroll.fade-start { -webkit-mask-image: linear-gradient(90deg, transparent, #000 36px); mask-image: linear-gradient(90deg, transparent, #000 36px); }
 .toolbar-scroll.fade-end { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); }
@@ -464,23 +466,17 @@ button.eye-status { cursor: pointer; }
 .item-tip b { margin-right: 6px; color: #ffe36e; font-weight: 600; }
 .item-tip b.is-green { color: #8ff09c; }
 .item-tip p { margin: 0; }
-.toolbar-tip { position: absolute; left: 50%; top: calc(100% - 4px); z-index: 7; display: flex; flex-direction: column; gap: 8px; width: max-content; max-width: min(340px, calc(100cqw - 24px)); padding: 9px 12px; translate: -50% 0; }
-.item-tip-actions { display: flex; justify-content: flex-end; gap: 8px; }
-.item-tip-actions button { padding: 6px 14px; color: var(--ink); background: #2a2234; border: 1px solid #5b4a75; border-radius: 8px; }
-.item-tip-actions button.is-primary { color: #1b1408; background: var(--gold); border-color: var(--gold); font-weight: 600; }
-.item-tip-actions button:disabled { opacity: .45; }
 .follow-tip { position: absolute; left: 0; top: 0; z-index: 8; max-width: 240px; padding: 4px 8px; color: #ece6da; font-size: 12px; line-height: 1.45; background: #14091cf7; border: 1px solid #07030b; border-radius: 6px; box-shadow: inset 0 0 0 1px #4d2c92; pointer-events: none; }
 .follow-tip[hidden] { display: none; }
 @media (hover: none), (pointer: coarse) { .follow-tip { display: none; } }
 
 @container map (orientation: landscape) {
-  .map-stage { flex-direction: row-reverse; }
-  .toolbar { flex-direction: column; width: 68px; height: auto; max-height: 100%; margin: auto 0; padding: 6px 0; }
+  .toolbar { top: 50%; bottom: auto; flex-direction: column; max-width: none; max-height: calc(100% - 20px); translate: 0 -50%; }
   .toolbar > .tool-cell { padding: 5px 5px 4px; border: 1px solid #ffffff1f; border-bottom: 0; border-radius: 12px 12px 0 0; }
   .toolbar.is-alone > .tool-cell { border-bottom: 1px solid #ffffff1f; border-radius: 12px; }
   .toolbar-divider.is-pin { width: 60px; height: 7px; border: 0; border-left: 1px solid #ffffff1f; border-right: 1px solid #ffffff1f; box-shadow: inset 0 1px 0 #ffffff2e; }
-  .toolbar-scroll-wrap { min-height: 0; padding: 0 5px 5px; border: 1px solid #ffffff1f; border-top: 0; border-radius: 0 0 12px 12px; }
-  .toolbar-scroll { max-height: 100%; overflow: hidden auto; touch-action: pan-y; }
+  .toolbar-scroll-wrap { flex-direction: column; padding: 0 5px 5px; border: 1px solid #ffffff1f; border-top: 0; border-radius: 0 0 12px 12px; }
+  .toolbar-scroll { overflow: hidden auto; touch-action: pan-y; }
   .toolbar-scroll.fade-start { -webkit-mask-image: linear-gradient(180deg, transparent, #000 36px); mask-image: linear-gradient(180deg, transparent, #000 36px); }
   .toolbar-scroll.fade-end { -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(180deg, #000 calc(100% - 36px), transparent); }
   .toolbar-scroll.fade-start.fade-end { -webkit-mask-image: linear-gradient(180deg, transparent, #000 36px, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(180deg, transparent, #000 36px, #000 calc(100% - 36px), transparent); }
@@ -490,8 +486,7 @@ button.eye-status { cursor: pointer; }
   .toolbar-arrow svg { transform: rotate(90deg); }
   .toolbar-arrow.is-start { top: -6px; }
   .toolbar-arrow.is-end { top: auto; bottom: -6px; }
-  .toolbar-tip { left: calc(100% + 12px); top: auto; bottom: 8px; translate: 0 0; max-width: max(170px, calc((100cqw - 68px - 360px) / 2 - 24px)); }
-}
+  }
 
 /* —— 地图上拿着道具：预览（附魔镐金框、望远镜青框、火把照亮 4 格、钥匙对着宝库），挖过的格子虚线跳过 —— */
 .map-card .map-cell.in-box { z-index: 1; border-color: #f3cc8f; box-shadow: inset 0 0 0 2px #f3cc8f, 0 0 12px #f3cc8f80; filter: brightness(1.15); }
@@ -569,6 +564,13 @@ button.eye-status { cursor: pointer; }
 .shape-choices small { color: #b9a6d9; font-size: 12px; }
 .shape-pick { position: relative; display: grid; place-items: center; width: 48px; height: 48px; }
 .vault-result { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+/* 工具条上点一格的弹窗：怎么用（小字）、附魔镐的形状和火把的小图 */
+.item-dialog .item-how { color: #b9a6d9; font-size: 12px; }
+.item-demo { display: flex; justify-content: center; margin: 2px 0 10px; }
+.torch-demo { position: relative; display: grid; grid-template-columns: repeat(3, 26px); gap: 3px; padding: 5px; background: #2b2318; border: 2px solid #6c5432; border-radius: 4px; }
+.torch-demo i { width: 26px; height: 26px; background: #4a5056; border-radius: 2px; box-shadow: inset 0 0 0 1px #ffffff1a; }
+.torch-demo i.on { background: #4a5056; box-shadow: inset 0 0 0 2px #ffe36e, inset 0 0 0 99px #ffe36e26; }
+.torch-demo .torch-demo-torch { position: absolute; left: calc(5px + 26px * 2 + 3px * 1.5); top: calc(5px + 26px + 3px * .5); translate: -50% -50%; filter: drop-shadow(0 0 4px #ffcc55); }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 .dialog-actions button { padding: 7px 16px; color: var(--ink); background: #2a2234; border: 1px solid #5b4a75; border-radius: 8px; }
 .dialog-actions button.is-primary { color: #1b1408; background: var(--gold); border-color: var(--gold); font-weight: 600; }

@@ -21,10 +21,30 @@ export const SLOT_PX = BLOCK_PX + BLOCK_GAP
 export const cellPx = (size: number) => (CARD_PX - (PAD + CARD_BORDER) * 2 - (size - 1) * GAP) / size
 
 export interface Camera { x: number; y: number; scale: number }
-export interface Viewport { width: number; height: number }
+/**
+ * 地图区的大小。left、bottom：浮在地图上的工具条占掉的那一条（竖着的画面在下面，横着的在左边）。
+ * 取景（缩放、居中、哪张卡在正中）只用剩下的那块，卡不会落到工具条下面；算在不在画面里还是整块。
+ */
+export interface Viewport { width: number; height: number; left?: number; bottom?: number }
+
+/** 取景用的那块：去掉工具条那一条以后的宽、高和正中。 */
+export function areaOf(view: Viewport) {
+  const left = Math.min(view.left ?? 0, view.width / 2)
+  const bottom = Math.min(view.bottom ?? 0, view.height / 2)
+  const width = view.width - left
+  const height = view.height - bottom
+  return { left, width, height, cx: left + width / 2, cy: height / 2 }
+}
 
 /** 三级缩放：0 总览，1 附近，2 挖卡。 */
 export type Level = 0 | 1 | 2
+
+/** 浮在地图上的工具条占掉的那一条有多宽（格子 48 + 内边距 10 + 边框 2 + 离地图边 10）。 */
+export const TOOLBAR_SPACE = 70
+/** 地图区这么大时工具条在哪边：竖着的画面在下面，横着的在左边（和样式里的 @container map 一致）。 */
+export function withToolbar(width: number, height: number): Viewport {
+  return width > height ? { width, height, left: TOOLBAR_SPACE } : { width, height, bottom: TOOLBAR_SPACE }
+}
 
 /** 挖卡这一级，卡和画面边之间至少留这么多。 */
 export const MARGIN = 16
@@ -36,21 +56,24 @@ export const MID_SCALE = 0.6
  * 放不下一张卡（加两边的留白）时才缩小。
  */
 export function digScale(view: Viewport) {
-  return Math.min(1, Math.max(0.5, (Math.min(view.width, view.height) - MARGIN * 2) / CARD_PX))
+  const area = areaOf(view)
+  return Math.min(1, Math.max(0.5, (Math.min(area.width, area.height) - MARGIN * 2) / CARD_PX))
 }
 
 /** 附近这一级：固定的缩放，画面大就多看到几块；画面小时缩到窄的那边放得下两块多。 */
 export function midScale(view: Viewport) {
-  return Math.min(MID_SCALE, digScale(view) * 0.8, Math.min(view.width, view.height) / (SLOT_PX * 2.2))
+  const area = areaOf(view)
+  return Math.min(MID_SCALE, digScale(view) * 0.8, Math.min(area.width, area.height) / (SLOT_PX * 2.2))
 }
 
 /** 总览：所有卡都放下、四周留安全距离；卡少时不比附近那一级更大。 */
 export function overviewScale(view: Viewport, cards: Pick<PublicCard, 'x' | 'y'>[]) {
   const box = bounds(cards)
   const margin = 48
+  const area = areaOf(view)
   const fit = Math.min(
-    (view.width - margin * 2) / ((box.maxX - box.minX + 1) * SLOT_PX),
-    (view.height - margin * 2) / ((box.maxY - box.minY + 1) * SLOT_PX),
+    (area.width - margin * 2) / ((box.maxX - box.minX + 1) * SLOT_PX),
+    (area.height - margin * 2) / ((box.maxY - box.minY + 1) * SLOT_PX),
   )
   return Math.max(0.04, Math.min(midScale(view), fit))
 }
@@ -82,7 +105,8 @@ export const centerOf = (card: Pick<PublicCard, 'x' | 'y'>) => ({ x: card.x * SL
 
 /** 让世界里的一点落在屏幕正中。 */
 export function cameraAt(point: { x: number; y: number }, scale: number, view: Viewport): Camera {
-  return { x: view.width / 2 - point.x * scale, y: view.height / 2 - point.y * scale, scale }
+  const area = areaOf(view)
+  return { x: area.cx - point.x * scale, y: area.cy - point.y * scale, scale }
 }
 
 /** 总览：把所有卡的中心放在屏幕正中。 */
@@ -93,7 +117,8 @@ export function overviewCamera(view: Viewport, cards: Pick<PublicCard, 'x' | 'y'
 
 /** 屏幕正中对着世界里的哪一点。 */
 export function worldCenter(camera: Camera, view: Viewport) {
-  return { x: (view.width / 2 - camera.x) / camera.scale, y: (view.height / 2 - camera.y) / camera.scale }
+  const area = areaOf(view)
+  return { x: (area.cx - camera.x) / camera.scale, y: (area.cy - camera.y) / camera.scale }
 }
 
 /** 屏幕上这一点下面（或离它最近）的卡：滚轮放大时朝指针那张。 */
@@ -114,7 +139,8 @@ export function cardNear<T extends Pick<PublicCard, 'x' | 'y'>>(cards: T[], came
 
 /** 离屏幕正中最近的卡（聚焦、松手吸附都用它）。 */
 export function nearestCard<T extends Pick<PublicCard, 'x' | 'y'>>(cards: T[], camera: Camera, view: Viewport): T | null {
-  return cardNear(cards, camera, { x: view.width / 2, y: view.height / 2 })
+  const area = areaOf(view)
+  return cardNear(cards, camera, { x: area.cx, y: area.cy })
 }
 
 export type Direction = 'up' | 'down' | 'left' | 'right'
@@ -154,22 +180,26 @@ export function onScreen(card: Pick<PublicCard, 'x' | 'y'>, camera: Camera, view
 
 /** 整张卡都在画面里（NEW 提醒用：只露出一部分也要提醒）。 */
 export function fullyOnScreen(card: Pick<PublicCard, 'x' | 'y'>, camera: Camera, view: Viewport) {
+  // 被工具条盖住一点也不算整张在画面里
+  const area = areaOf(view)
   const center = centerOf(card)
   const half = (CARD_PX / 2) * camera.scale
   const sx = center.x * camera.scale + camera.x
   const sy = center.y * camera.scale + camera.y
-  return sx - half >= 0 && sx + half <= view.width && sy - half >= 0 && sy + half <= view.height
+  return sx - half >= area.left && sx + half <= view.width && sy - half >= 0 && sy + half <= area.height
 }
 
 /** 屏幕外的卡在屏幕边上的哪个位置、箭头朝哪（NEW 标记用）。 */
 export function edgePointer(card: Pick<PublicCard, 'x' | 'y'>, camera: Camera, view: Viewport, inset = 44) {
+  // 贴在取景那块的边上，不落到工具条下面
+  const area = areaOf(view)
   const center = centerOf(card)
-  const sx = center.x * camera.scale + camera.x - view.width / 2
-  const sy = center.y * camera.scale + camera.y - view.height / 2
-  const halfW = view.width / 2 - inset
-  const halfH = view.height / 2 - inset
+  const sx = center.x * camera.scale + camera.x - area.cx
+  const sy = center.y * camera.scale + camera.y - area.cy
+  const halfW = area.width / 2 - inset
+  const halfH = area.height / 2 - inset
   const k = Math.min(halfW / Math.max(Math.abs(sx), 1e-6), halfH / Math.max(Math.abs(sy), 1e-6), 1)
-  return { x: view.width / 2 + sx * k, y: view.height / 2 + sy * k, angle: (Math.atan2(sy, sx) * 180) / Math.PI }
+  return { x: area.cx + sx * k, y: area.cy + sy * k, angle: (Math.atan2(sy, sx) * 180) / Math.PI }
 }
 
 /** 滚轮缩放：一下（中间停不到 200ms 的一串事件）的状态。 */
