@@ -168,7 +168,7 @@ test('第 2 版：煤炭、木棍排在火把后面；火把照 3×3（出界的
   c.cells[2] = { kind: 'diamond', uid: 0, name: '', at: 1, burn: 1 }
   assert.deepEqual([0, 1, 2, 3].map(index => items.dugCell(c, index)), [true, false, false, false])
   assert.equal(items.aimWhat('torch', 2), '点一个挖开的格子，照亮周围 9 格')
-  assert.equal(items.aimTarget('torch', 1), '角')
+  assert.equal(items.howToAim('torch', 1), '在地图上点四个格子相交的角预览，再点一下确认。')
   const about = items.aboutSlot('coal', me, true, 1, null, 2)
   assert.deepEqual(about.count, '3 个')
 })
@@ -282,8 +282,8 @@ test('火把一直在工具条上：没有时是 0，点开说怎么做出来（
   assert.equal(items.countOf(me, 'torch'), 0)
   const about = items.aboutSlot('torch', me, true, 1, null, 2)
   assert.equal(about.count, '还没有')
-  assert.match(about.words, /^还没有火把：煤炭、木棍各挖到一个，就自动做成一个。插在一个挖开的格子上/)
-  assert.match(items.aboutSlot('torch', { ...me, items: { ...me.items, torch: 2 } }, true, 1, null, 2).words, /^插在一个挖开的格子上/)
+  assert.match(about.words, /^还没有火把。煤炭和木棍各挖到一个，会自动做成一个。插在挖开的格子上/)
+  assert.match(items.aboutSlot('torch', { ...me, items: { ...me.items, torch: 2 } }, true, 1, null, 2).words, /^插在挖开的格子上/)
   // 没有道具栏的局没有火把
   assert.deepEqual(items.slotsOf({ ...me, items: undefined, coal: 0 }, false), { active: [], passive: [] })
 })
@@ -329,4 +329,76 @@ test('三方积分红包（docs/V3_ITEMS.md §11）：数是多少个最小单�
   } finally {
     types.setMoneyStep(undefined)
   }
+})
+
+// docs/V3_ITEMS.md §13（2026-11-12）：引导只弹一次、说明从玩家的角度写、最后一下先问一句
+test('道具说明只写玩家用得上的：不说机会、不说用掉几个，数在标题行；规矩最多一句小字', () => {
+  const me = {
+    uid: 1, name: 'a', chances: 5, shield: false, shields: 2, spyglasses: 1, peeks: [], points: 300, digs: 3, status: 'playing', lastResult: null,
+    items: { torch: 1, map: 1, potion: 1, ender: 1, table: 1, key: 1, pick: { h: 2, v: 1, x: 1 } }, coal: 1, stick: 0, poison: 2,
+  }
+  const slots = ['pickaxe', 'pick-h', 'pick-v', 'pick-x', 'spyglass', 'torch', 'key', 'map', 'potion', 'ender', 'table', 'shield', 'coal', 'stick', 'poison']
+  for (const version of [1, 2]) {
+    for (const slot of slots) {
+      const about = items.aboutSlot(slot, me, true, 3, null, version)
+      for (const text of [about.words, about.rule ?? '']) {
+        assert.doesNotMatch(text, /机会|不花|用掉|同一处/, `${slot} 第 ${version} 版：${text}`)
+      }
+      if (about.rule) assert.equal(about.rule.split('。').filter(Boolean).length, 1, `${slot} 的小字只有一句：${about.rule}`)
+    }
+  }
+  assert.deepEqual(items.aboutSlot('pickaxe', me, true, 3, null, 2), { count: '还剩 5 次', words: '点没挖开的格子就能挖。', rule: '两次之间至少隔 3 秒。' })
+  assert.equal(items.aboutSlot('pickaxe', me, true, 1, null, 2).rule, undefined)
+  assert.equal(items.aboutSlot('pick-x', me, true, 1, null, 2).words, '一下挖开十字形的 5 格。')
+  assert.equal(items.aboutSlot('stick', { ...me, coal: 0, stick: 1 }, true, 1, null, 2).words, '再挖到一块煤炭，就自动做成一个火把。')
+})
+
+test('怎么点：触屏“点…预览，再点一下确认”，鼠标“指着预览，点一下确认”；步骤条只接一句', () => {
+  assert.equal(items.howToAim('torch', 2), '在地图上点挖开的格子预览，再点一下确认。')
+  assert.equal(items.howToAim('key', 2), '在地图上点宝库预览，再点一下确认。')
+  assert.equal(items.howToAim('pick-h', 2), '在地图上点一格预览，再点一下确认。')
+  assert.equal(items.howToAim('spyglass', 2, true), '鼠标指着预览，点一下确认。')
+  assert.equal(items.confirmWords(false), '再点一下确认')
+  assert.equal(items.confirmWords(true), '点一下确认')
+})
+
+test('引导学过一次就记住（这台设备）；三种附魔镐算一种；存不了照旧弹', () => {
+  const saved = globalThis.localStorage
+  const data = new Map()
+  globalThis.localStorage = { getItem: key => data.get(key) ?? null, setItem: (key, value) => data.set(key, String(value)) }
+  try {
+    assert.equal(items.knowsGuide('torch'), false)
+    items.learnGuide('torch')
+    assert.equal(items.knowsGuide('torch'), true)
+    assert.equal(items.knowsGuide('spyglass'), false)
+    items.learnGuide('pick-h')
+    assert.equal(items.knowsGuide('pick-x'), true)
+    // 以前选过“不再提示”的记在同一个地方，算学过
+    data.set('kddb:v3:skip-guide', JSON.stringify(['key']))
+    assert.equal(items.knowsGuide('key'), true)
+    globalThis.localStorage = { getItem: () => { throw new Error('blocked') }, setItem: () => { throw new Error('blocked') } }
+    assert.equal(items.knowsGuide('torch'), false)
+    items.learnGuide('torch')
+  } finally {
+    globalThis.localStorage = saved
+  }
+})
+
+test('最后一下：镐子、附魔镐只剩这一下、没有附魔台才算；手里还有钥匙、望远镜、火把、藏宝图才问', () => {
+  const me = {
+    uid: 1, name: 'a', chances: 1, shield: false, shields: 0, spyglasses: 1, peeks: [], points: 300, digs: 3, status: 'playing', lastResult: null,
+    items: { torch: 0, map: 1, potion: 1, ender: 1, table: 0, key: 0, pick: { h: 0, v: 0, x: 0 } }, coal: 0, stick: 0,
+  }
+  assert.equal(items.isLastDig(me, 'pickaxe'), true)
+  assert.deepEqual(items.leftoversOf(me), ['spyglass', 'map'])
+  // 还有附魔镐、附魔台：镐子用完还能挖，不算最后一下
+  assert.equal(items.isLastDig({ ...me, items: { ...me.items, pick: { h: 1, v: 0, x: 0 } } }, 'pickaxe'), false)
+  assert.equal(items.isLastDig({ ...me, items: { ...me.items, table: 1 } }, 'pickaxe'), false)
+  assert.equal(items.isLastDig({ ...me, chances: 2 }, 'pickaxe'), false)
+  // 镐子用完了，最后一把附魔镐的最后一次
+  const picks = { ...me, chances: 0, items: { ...me.items, pick: { h: 0, v: 1, x: 0 } } }
+  assert.equal(items.isLastDig(picks, 'v'), true)
+  assert.equal(items.isLastDig({ ...picks, items: { ...picks.items, pick: { h: 1, v: 1, x: 0 } } }, 'v'), false)
+  // 药水、末影箱不提醒；什么都没有就不问
+  assert.deepEqual(items.leftoversOf({ ...me, spyglasses: 0, items: { ...me.items, map: 0 } }), [])
 })

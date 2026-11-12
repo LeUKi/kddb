@@ -7,7 +7,7 @@ import { play, soundOfResult } from './sound'
 import type { Merge } from './live'
 import { mergeCard, mergeLive, mergeState } from './live'
 import type { Held, Slot } from './items'
-import { outOfPicks } from './items'
+import { isLastDig, leftoversOf, outOfPicks } from './items'
 import type { DigResult, Kind, Live, LiveStep, Me, PublicGame, Shape, State } from './types'
 import { setMoneyStep } from './types'
 import { money } from './types'
@@ -67,6 +67,8 @@ export type Dialog = { type: 'ender' } | { type: 'table' } | { type: 'vault'; te
   | { type: 'item'; slot: Slot; mode?: 'enter' | 'help' }
   /** 卡上面区块名字旁边的问号：这个区块的说明（docs/V3_ITEMS.md §9） */
   | { type: 'region'; cardId: number }
+  /** 最后一下（docs/V3_ITEMS.md §13）：挖完这一局就结束了，手里还有没用的；go 是照样挖 */
+  | { type: 'last'; slots: Slot[]; go: () => void }
 export const dialogAtom = atom<Dialog | null>(null)
 /** 本机时间：苦力怕什么时候来（null 是不来）、急迫药水到什么时候 */
 export const creeperAtAtom = atom<number | null>(null)
@@ -347,10 +349,22 @@ function gameOver() {
 }
 
 /**
+ * 最后一下之前问一句（docs/V3_ITEMS.md §13）：这一下挖完这一局就挖不动了，手里还有钥匙、望远镜、火把、藏宝图
+ * 没用，就先弹“最后一下了”，选“这就是最后一舞”才挖。问了返回 true。
+ */
+function askLast(me: Me, by: 'pickaxe' | Shape, go: () => void) {
+  if (!isLastDig(me, by)) return false
+  const slots = leftoversOf(me)
+  if (slots.length === 0) return false
+  store.set(dialogAtom, { type: 'last', slots, go })
+  return true
+}
+
+/**
  * 挖一格。上一格还在挖（回答没到）时不发：两次至少隔 1 秒，发了也是被拒。间隔拉长了
  * （3 秒以上）没到时间就说还要等几秒；间隔 1 秒时差一点点就到点，镐子先挥着，到点再发。
  */
-export async function dig(cardId: number, index: number) {
+export async function dig(cardId: number, index: number, sure = false) {
   const cell = key(cardId, index)
   if (!api) return
   const pending = store.get(pendingAtom)
@@ -366,9 +380,10 @@ export async function dig(cardId: number, index: number) {
   }
   const me = store.get(meAtom)
   if (me && me.chances <= 0) {
-    toast('镐子的机会用完了，还能用附魔镐')
+    toast('镐子用完了，还能用附魔镐')
     return
   }
+  if (me && !sure && askLast(me, 'pickaxe', () => void dig(cardId, index, true))) return
   const wait = store.get(readyAtAtom) - Date.now()
   // 间隔拉长的局、被蜘蛛网缠着时：说还要等多久（间隔 1 秒的局平时悄悄等那一下）
   if (wait > 0 && ((store.get(gameAtom)?.rules.digInterval ?? 1) > 1 || store.get(slowUntilAtom) > 0)) {
@@ -422,7 +437,7 @@ export async function dig(cardId: number, index: number) {
  * 附魔台带上挑的形状。不花镐子的机会。用完（或者手里没有了）放下；没用成照旧拿着，换一处再点。
  */
 let using = false
-export async function applyItem(item: string, body: { cardId?: number; index?: number; choice?: Shape } = {}) {
+export async function applyItem(item: string, body: { cardId?: number; index?: number; choice?: Shape } = {}, sure = false) {
   if (!api || using) return false
   const blocked = store.get(blockedAtom)
   if (blocked) {
@@ -431,6 +446,8 @@ export async function applyItem(item: string, body: { cardId?: number; index?: n
     return false
   }
   const digs = item.startsWith('pick-')
+  const me = store.get(meAtom)
+  if (digs && me && !sure && askLast(me, item.slice(5) as Shape, () => void applyItem(item, body, true))) return false
   const wait = store.get(readyAtAtom) - Date.now()
   if (digs && wait > 0 && ((store.get(gameAtom)?.rules.digInterval ?? 1) > 1 || store.get(slowUntilAtom) > 0)) {
     toast(`还要等 ${Math.ceil(wait / 1000)} 秒才能再挖`)

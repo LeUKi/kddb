@@ -451,7 +451,7 @@ describe("道具栏（新局）", () => {
     const p = newPlayer(g, 10001, "小明");
     p.spyglasses = 2;
     p.chances = 0;
-    assert.match(useItem(g, p, { item: "spyglass", cardId: 1, index: 3, now: later() }).message, /机会用完了/);
+    assert.match(useItem(g, p, { item: "spyglass", cardId: 1, index: 3, now: later() }).message, /能挖的都用完了/);
     p.chances = 5;
     claim(g, p);
     assert.match(useItem(g, p, { item: "spyglass", cardId: 1, index: 3, now: later() }).message, /已经领取了/);
@@ -529,7 +529,7 @@ describe("收益卡", () => {
     const out = dig(g, p, { cardId: 1, index: 0, now: later() });
     assert.ok(out.ok);
     assert.equal(out.claimNow, false);
-    assert.equal(digBlocked(g, p, later()), "机会用完了");
+    assert.equal(digBlocked(g, p, later()), "能挖的都用完了");
   });
 });
 
@@ -557,7 +557,7 @@ describe("什么时候不能挖", () => {
     fresh.lastDigAt = now;
     assert.equal(digBlocked(g, fresh, now + MIN_INTERVAL_MS - 1), "挖得太快了，稍等一下");
     assert.equal(digBlocked(g, fresh, now + MIN_INTERVAL_MS - 1, { cooling: false }), null);
-    assert.equal(digBlocked(g, p, now + 5000), "机会用完了，请领取");
+    assert.equal(digBlocked(g, p, now + 5000), "能挖的都用完了，请领取");
     claim(g, p);
     assert.equal(digBlocked(g, p, now + 5000), "你已经领取了，这一局不能再挖了");
     const late = newPlayer(g, 10003, "小刚");
@@ -888,7 +888,7 @@ describe("新局的道具（docs/V3_ITEMS.md §3）", () => {
     p.chest = 30;
     const out = dig(g, p, { cardId: 1, index: 0, now: later() });
     assert.ok(out.ok && out.claimNow);
-    assert.equal(digBlocked(g, p, later()), "机会用完了，请领取");
+    assert.equal(digBlocked(g, p, later()), "能挖的都用完了，请领取");
   });
 
   it("急迫药水：10 秒里挖掘间隔变成 1 秒，过了就照旧", () => {
@@ -1134,16 +1134,16 @@ describe("新局的道具（docs/V3_ITEMS.md §3）", () => {
     assert.ok(first.ok);
     assert.equal(first.claimNow, false);
     assert.equal(digBlocked(g, p, later()), null);
-    assert.equal(dig(g, p, { cardId: 1, index: 5, now: later() }).message, "镐子的机会用完了，可以用附魔镐接着挖");
+    assert.equal(dig(g, p, { cardId: 1, index: 5, now: later() }).message, "镐子用完了，可以用附魔镐接着挖");
     const last = useItem(g, p, { item: "pick-h", cardId: 1, index: 11, now: later() });
     assert.ok(last.ok && last.claimNow);
-    assert.equal(digBlocked(g, p, later()), "机会用完了，请领取");
-    assert.match(useItem(g, p, { item: "potion", now: later() }).message, /机会用完了/);
+    assert.equal(digBlocked(g, p, later()), "能挖的都用完了，请领取");
+    assert.match(useItem(g, p, { item: "potion", now: later() }).message, /能挖的都用完了/);
     const q = newPlayer(g, 10002, "小红");
     q.chances = 0;
     q.items.table = 1;
     assert.equal(digBlocked(g, q, later()), null);
-    assert.equal(dig(g, q, { cardId: 1, index: 20, now: later() }).message, "镐子的机会用完了，打开附魔台换附魔镐接着挖");
+    assert.equal(dig(g, q, { cardId: 1, index: 20, now: later() }).message, "镐子用完了，打开附魔台换一把附魔镐接着挖");
   });
 
   it("下界：每挖 3 格岩浆往旁边流一格，被吞的格子翻开给大家看，之后挖不了；远古残骸吞不掉", () => {

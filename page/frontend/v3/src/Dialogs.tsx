@@ -1,11 +1,12 @@
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { motion } from 'motion/react'
 import type { ReactNode } from 'react'
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import type { IconKind } from '../../src/game'
 import { ItemIcon } from '../../src/ItemIcon'
-import type { Held } from './items'
-import { aboutSlot, aimTarget, hasMouse, isHeld, SHAPE_NAMES, SHAPES, shapeOf, skipGuide, SLOT_ICONS, SLOT_NAMES } from './items'
+import { flyIntoHelp, growFromHelp } from './guideFly'
+import { aboutSlot, countOf, hasMouse, howToAim, isHeld, learnGuide, SHAPE_NAMES, SHAPES, shapeOf, SLOT_ICONS, SLOT_NAMES } from './items'
+import type { Slot } from './items'
 import { regionAbout, regionIcon, regionName } from './regions'
 import { applyItem, blockedAtom, dialogAtom, digIntervalAtom, gameAtom, heldAtom, itemsGameAtom, itemsVersionAtom, meAtom } from './state'
 import type { Shape } from './types'
@@ -26,20 +27,29 @@ export function ItemDialogs() {
   const blocked = useAtomValue(blockedAtom)
   const setHeld = useSetAtom(heldAtom)
   const first = useRef<HTMLButtonElement>(null)
+  const panel = useRef<HTMLElement>(null)
+  /** 问号打开的说明（关掉回到选位置）：从问号里长出来，关掉时收回去 */
+  const fromHelp = dialog?.type === 'item' && dialog.mode === 'help'
+  const close = () => setDialog(null)
+  const dismiss = () => (fromHelp ? flyIntoHelp(panel.current, close, { first: false }) : close())
+  const dismissRef = useRef(dismiss)
+  dismissRef.current = dismiss
   useEffect(() => {
     if (!dialog) return
     first.current?.focus({ preventScroll: true })
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault()
-        setDialog(null)
+        dismissRef.current()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [dialog, setDialog])
+  }, [dialog])
+  useLayoutEffect(() => {
+    if (dialog?.type === 'item' && dialog.mode === 'help') growFromHelp(panel.current)
+  }, [dialog])
   if (!dialog || !me) return null
-  const close = () => setDialog(null)
   let body: ReactNode = null
   let title = ''
   let icon: IconKind = 'vault'
@@ -55,21 +65,19 @@ export function ItemDialogs() {
       {held && shapeOf(held) ? <div className="item-demo"><span className="shape-pick"><ShapeGlyph shape={shapeOf(held)!} big /><ItemIcon kind="pickaxe" size={32} /><span className="glint" /></span></div> : null}
       {held === 'torch' ? <TorchDemo version={version} /> : null}
       <p>{about.words}</p>
-      {held ? <p className="item-how">{howToAim(held, version)}</p> : null}
-      {/* 按钮（docs/ITEM_UX.md §3.2）：主按钮在最右；“不再提示”只在瞄准类进入前的引导里，靠左 */}
+      {about.rule ? <p className="item-rule">{about.rule}</p> : null}
+      {held && (dialog.mode === 'enter' || dialog.mode === 'help') ? <p className="item-how">{howToAim(held, version, hasMouse())}</p> : null}
+      {/* 按钮（docs/ITEM_UX.md §3.2）：主按钮在最右。“知道了”是看完了、接着做刚才要做的事，什么都不花掉 */}
       <div className="dialog-actions">
         {held && dialog.mode === 'enter' ? <>
-          <button type="button" className="is-quiet" onClick={() => {
-            skipGuide(held)
-            close()
+          <button type="button" onClick={close}>取消</button>
+          <button type="button" ref={first} className="is-primary" onClick={() => {
+            learnGuide(held)
             setHeld(held)
-          }}>不再提示</button>
-          <button type="button" ref={first} onClick={close}>取消</button>
-          <button type="button" className="is-primary" onClick={() => {
-            close()
-            setHeld(held)
-          }}>使用</button>
-        </> : slot === 'map' || slot === 'potion' ? <>
+            flyIntoHelp(panel.current, close, { first: true })
+          }}>知道了</button>
+        </> : dialog.mode === 'help' ? <button type="button" ref={first} className="is-primary" onClick={dismiss}>知道了</button>
+          : slot === 'map' || slot === 'potion' ? <>
           <button type="button" ref={first} onClick={close}>取消</button>
           <button type="button" className="is-primary" disabled={!!blocked} onClick={() => {
             close()
@@ -92,11 +100,8 @@ export function ItemDialogs() {
         <span className="chip is-green"><ItemIcon kind="ender" size={14} />存进 {money(half)}</span>
         <span className="chip is-gone">退回奖池 {money(me.points - half)}</span>
       </div>
-      <ul>
-        <li>存进去的奖励不会被 TNT、末影水晶、苦力怕炸掉，也不参与附魔金苹果翻倍，领取时一起加上。</li>
-        <li>另一半退回奖池，后面的人还能挖到。</li>
-        <li>待领取从 0 重新攒。一个末影箱只能用一次。</li>
-      </ul>
+      {/* 存多少、退多少上面一行画出来了，这里只说拿不准的那件事 */}
+      <p>存进去的不会被炸掉，也不会被金苹果翻倍，领取时一起算上。</p>
       <div className="dialog-actions">
         <button type="button" ref={first} onClick={close}>取消</button>
         <button type="button" className="is-primary" onClick={() => { close(); void applyItem('ender') }}>使用</button>
@@ -107,7 +112,7 @@ export function ItemDialogs() {
     icon = 'table'
     const choices = me.tableChoices ?? []
     body = <>
-      <p>随机给出两种附魔镐，挑一种，能用 2 次。用它不花镐子的机会，一次挖开形状里没挖开的格子。</p>
+      {/* 只留两张卡片（形状、一次挖几格）；标题行写着“二选一” */}
       <div className="shape-choices">
         {choices.map((shape: Shape) => <button key={shape} type="button" onClick={() => { close(); void applyItem('table', { choice: shape }) }}>
           <span className="shape-pick"><ShapeGlyph shape={shape} big /><ItemIcon kind="pickaxe" size={32} /><span className="glint" /></span>
@@ -125,6 +130,19 @@ export function ItemDialogs() {
       {card && game ? regionAbout(card, game.rules).map(text => <p key={text}>{text}</p>) : null}
       <div className="dialog-actions"><button type="button" ref={first} className="is-primary" onClick={close}>知道了</button></div>
     </>
+  } else if (dialog.type === 'last') {
+    // 最后一下（docs/V3_ITEMS.md §13）：挖完这一局就结束了，手里还有用得上的没用。取消、遮罩、Esc 都是“俺去瞅瞅”
+    title = '最后一下了'
+    icon = 'pickaxe'
+    const go = dialog.go
+    body = <>
+      <p>挖完这一下，这一局就结束了。手里还有：</p>
+      <p className="last-items">{dialog.slots.map(slot => <span key={slot}><ItemIcon kind={SLOT_ICONS[slot]} size={18} />{SLOT_NAMES[slot]} {countOf(me, slot)}</span>)}</p>
+      <div className="dialog-actions">
+        <button type="button" ref={first} onClick={() => { close(); nudge(dialog.slots) }}>俺去瞅瞅</button>
+        <button type="button" className="is-primary" onClick={() => { close(); go() }}>这就是最后一舞</button>
+      </div>
+    </>
   } else if (dialog.type === 'vault') {
     title = '宝库开了'
     body = <>
@@ -132,13 +150,26 @@ export function ItemDialogs() {
       <div className="dialog-actions"><button type="button" ref={first} className="is-primary" onClick={close}>知道了</button></div>
     </>
   }
-  return <div className="item-dialog-backdrop" onClick={close}>
-    <motion.section className="item-dialog" role="dialog" aria-modal="true" aria-label={title} onClick={event => event.stopPropagation()}
-      initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}>
+  return <div className="item-dialog-backdrop" onClick={dismiss}>
+    <motion.section ref={panel} className="item-dialog" role="dialog" aria-modal="true" aria-label={title} onClick={event => event.stopPropagation()}
+      initial={fromHelp ? false : { opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}>
       <h2><ItemIcon kind={icon} size={22} />{title}{dialog.type === 'ender' ? <small>只能用一次</small> : dialog.type === 'table' ? <small>二选一</small> : note ? <small>{note}</small> : null}</h2>
       {body}
     </motion.section>
   </div>
+}
+
+/** 俺去瞅瞅：工具条上没用的那几格扫一道光、弹一下，放不下时滚到第一格 */
+function nudge(slots: Slot[]) {
+  slots.forEach((slot, order) => {
+    const button = document.querySelector<HTMLElement>(`.tool-cell[data-slot="${slot}"] .tool-slot`)
+    if (!button) return
+    if (order === 0) button.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })
+    button.classList.remove('is-nudge')
+    void button.offsetWidth
+    button.classList.add('is-nudge')
+    button.addEventListener('animationend', () => button.classList.remove('is-nudge'), { once: true })
+  })
 }
 
 /** 附魔镐的形状：3×3 的小格子，亮的是会挖的。 */
@@ -147,14 +178,6 @@ export function ShapeGlyph({ shape, big = false }: { shape: Shape; big?: boolean
   return <span className={`shape-glyph${big ? ' is-big' : ''}`} aria-hidden="true">
     {[-1, 0, 1].flatMap(row => [-1, 0, 1].map(col => <i key={`${row},${col}`} className={on.has(`${row},${col}`) ? 'on' : ''} />))}
   </span>
-}
-
-/** 使用以后怎么选位置：触屏点两下（预览、确认），鼠标指着点一下（docs/ITEM_UX.md §4）。 */
-function howToAim(held: Held, version: number) {
-  const where = aimTarget(held, version)
-  return hasMouse()
-    ? `使用以后，鼠标移到哪里就预览哪里，点一下确认。地图顶上会一直显示提示和「取消」。`
-    : `使用以后，在地图上点${where}预览位置，同一处再点一次确认。地图顶上会一直显示提示和「取消」。`
 }
 
 /**

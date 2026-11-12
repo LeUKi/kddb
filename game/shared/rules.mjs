@@ -735,7 +735,7 @@ export function digBlocked(/** @type {Game} */ game, /** @type {Player} */ playe
   if (game.over) return `奖池已经分完，游戏结束了${ask}`;
   if (game.deadlineAt !== null && now >= game.deadlineAt - WRAP_UP_MS)
     return `快截止了，已经停止挖掘${ask}`;
-  if (!canDig(player)) return `机会用完了${ask}`;
+  if (!canDig(player)) return `能挖的都用完了${ask}`;
   const left = cooling ? coolingOf(game, player, now) : 0;
   if (left > 0) {
     if ((player.slow ?? 0) > 0) return `被蜘蛛网缠住了，还要等 ${Math.ceil(left / 1000)} 秒才能再挖`;
@@ -806,7 +806,7 @@ export function dig(
   if (blocked) return { ok: false, message: blocked };
   // 只剩附魔镐（新局）
   if (player.chances <= 0)
-    return { ok: false, message: picksOf(player) > 0 ? "镐子的机会用完了，可以用附魔镐接着挖" : "镐子的机会用完了，打开附魔台换附魔镐接着挖" };
+    return { ok: false, message: picksOf(player) > 0 ? "镐子用完了，可以用附魔镐接着挖" : "镐子用完了，打开附魔台换一把附魔镐接着挖" };
   const card = game.cards[cardId];
   const refused = cellRefused(card, index);
   if (refused) return { ok: false, message: refused };
@@ -874,8 +874,8 @@ function digCell(/** @type {Game} */ game, /** @type {Player} */ player, /** @ty
     }
     case "totem":
       player.chances += rules.totemBonus;
-      text = `双铁镐！机会 +${rules.totemBonus}`;
-      publicText = `双铁镐增加了 ${rules.totemBonus} 次机会`;
+      text = `双铁镐！镐子 +${rules.totemBonus} 次`;
+      publicText = `双铁镐让镐子多了 ${rules.totemBonus} 次`;
       break;
     case "tnt":
       if (shieldsOf(player) > 0) {

@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ItemIcon } from '../../src/ItemIcon'
 import { aimInfo, torchHoverAtom, torchWords } from './aim'
 import { useCooling } from './Hud'
-import { aimWhat, hasMouse, SLOT_ICONS, SLOT_NAMES } from './items'
+import { aimWhat, confirmWords, hasMouse, SLOT_ICONS, SLOT_NAMES } from './items'
 import { aimAtom, aimedCardAtom, creeperShownAtom, dialogAtom, heldAtom, itemsVersionAtom, meAtom, putDown } from './state'
 
 /**
@@ -73,7 +73,7 @@ export function StepBar() {
   let tone = ''
   if (aim && card) {
     const info = aimInfo(held, card, aim.index, me)
-    line = info.ok ? `${info.words}，${hasMouse() ? '点一下确认' : '同一处再点一次确认'}` : info.words
+    line = info.ok ? `${info.words}，${confirmWords(hasMouse())}` : info.words
     tone = info.ok ? ' is-ready' : ' is-bad'
   }
   return <motion.div key={held} className={`item-tip top-hint step-bar${tone}`} role="status"

@@ -1,4 +1,4 @@
-import { useAtom, useAtomValue } from 'jotai'
+import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react'
 import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
@@ -8,7 +8,7 @@ import { makeCursors } from './cursor'
 import { ShapeGlyph } from './Dialogs'
 import { useCooling } from './Hud'
 import type { Slot } from './items'
-import { classOf, CRAFT_NEED, countOf, edgesOf, isHeld, SHIELD_CAP, shapeOf, skipsGuide, SLOT_ICONS, SLOT_NAMES, slotsOf } from './items'
+import { classOf, CRAFT_NEED, countOf, edgesOf, isHeld, knowsGuide, SHIELD_CAP, shapeOf, SLOT_ICONS, SLOT_NAMES, slotsOf } from './items'
 import { play } from './sound'
 import { blockedAtom, dialogAtom, hasGameAtom, hasteUntilAtom, heldAtom, itemsGameAtom, itemsVersionAtom, meAtom, putDown, settledAtom, slowUntilAtom, store, toast } from './state'
 import type { Me } from './types'
@@ -33,7 +33,7 @@ export const Toolbar = memo(function Toolbar({ level, onNeedDig }: { level: Leve
   const blocked = useAtomValue(blockedAtom)
   const settled = useAtomValue(settledAtom)
   const [held, setHeld] = useAtom(heldAtom)
-  const [dialog, setDialog] = useAtom(dialogAtom)
+  const setDialog = useSetAtom(dialogAtom)
   const cooling = useCooling()
   const hasteUntil = useAtomValue(hasteUntilAtom)
   const slowUntil = useAtomValue(slowUntilAtom)
@@ -93,7 +93,7 @@ export const Toolbar = memo(function Toolbar({ level, onNeedDig }: { level: Leve
     }
     if (held) putDown()
     if (isHeld(slot)) {
-      if (!skipsGuide(slot)) {
+      if (!knowsGuide(slot)) {
         setDialog({ type: 'item', slot, mode: 'enter' })
         return
       }
@@ -192,20 +192,18 @@ export const Toolbar = memo(function Toolbar({ level, onNeedDig }: { level: Leve
   const webbed = slowUntil > 0 && cooling.seconds > 0
 
   const slotView = (slot: Slot) => {
+    /** 激活（docs/ITEM_UX.md §3.1）：手上拿着的那一件，金边、变大；什么都没拿时是镐子，一次只有一格 */
     const selected = slot === 'pickaxe' ? held === null : held === slot
-    const open = dialog?.type === 'item' && dialog.slot === slot
     const count = drop ? dropCount(slot, drop, countOf(me, slot)) : countOf(me, slot)
     const shape = isHeld(slot) ? shapeOf(slot) : null
     const craftFull = crafted && (slot === 'coal' || slot === 'stick')
     // 第 1 版的煤炭、木棍是进度条；第 2 版写个数（不封顶）
     const fill = version < 2 && (slot === 'coal' || slot === 'stick') ? Math.min(1, craftFull ? 1 : count / CRAFT_NEED) : null
-    const label = slot === 'pickaxe' ? `镐子，剩余机会 ${me.chances} 次${cooling.seconds ? `，还要等 ${cooling.seconds} 秒` : ''}`
+    const label = slot === 'pickaxe' ? `镐子，还能挖 ${me.chances} 次${cooling.seconds ? `，还要等 ${cooling.seconds} 秒` : ''}`
       : slot === 'shield' ? `盾牌 ${count}/${items ? SHIELD_CAP : 1} 面`
         : fill !== null ? `${SLOT_NAMES[slot]} ${count}/${CRAFT_NEED}` : `${SLOT_NAMES[slot]} ${count}`
     /** 一直摆着、现在没有（火把 0）：灰的，写 0 */
     const empty = slot !== 'pickaxe' && count === 0
-    /** 正在用：拿在手上选位置，或者开着它要确认、要挑的弹窗（变大一点，docs/V3_ITEMS.md §10） */
-    const using = slot !== 'pickaxe' && !empty && (selected || (open && classOf(slot) !== 'passive') || dialog?.type === slot)
     const number = slot === 'pickaxe' || shape || empty ? String(count) : slot === 'shield' ? `${count}/${items ? SHIELD_CAP : 1}`
       : fill !== null ? '' : count > 1 ? String(count) : ''
     return <motion.div key={slot} className={`tool-cell${slot === 'pickaxe' ? ' is-pinned' : ''}`} data-slot={slot}
@@ -216,7 +214,7 @@ export const Toolbar = memo(function Toolbar({ level, onNeedDig }: { level: Leve
       layout={!reduced} layoutDependency={orderKey} initial={slot === 'pickaxe' || reduced ? false : { opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }}
       exit={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.3 }} transition={{ type: 'spring', stiffness: 520, damping: 30 }}>
       <button type="button"
-        className={`tool-slot is-${slot}${selected ? ' is-selected' : ''}${open ? ' is-open' : ''}${using ? ' is-using' : ''}${empty ? ' is-empty' : ''}${fill === 1 ? ' is-full' : ''}${slot === 'pickaxe' && haste > 0 ? ' is-haste' : ''}${slot === 'pickaxe' && poisoned ? ' is-poisoned' : ''}${slot === 'pickaxe' && webbed ? ' is-webbed' : ''}`}
+        className={`tool-slot is-${slot}${selected ? ' is-selected' : ''}${empty ? ' is-empty' : ''}${fill === 1 ? ' is-full' : ''}${slot === 'pickaxe' && haste > 0 ? ' is-haste' : ''}${slot === 'pickaxe' && poisoned ? ' is-poisoned' : ''}${slot === 'pickaxe' && webbed ? ' is-webbed' : ''}`}
         aria-label={label} aria-pressed={isHeld(slot) || slot === 'pickaxe' ? selected : undefined} aria-haspopup={isHeld(slot) ? undefined : 'dialog'}
         title={SLOT_NAMES[slot]}
         onClick={() => {

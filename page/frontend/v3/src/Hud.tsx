@@ -113,7 +113,7 @@ export function TopBar({ onRules }: { onRules: () => void }) {
     </div>
     <SoundButton />
     <button type="button" className="rules-button" onClick={onRules} aria-label="怎么玩">?</button>
-    {confirming ? <ClaimConfirm points={totalOf(me)} chest={chest} chances={me.chances} unit={unit}
+    {confirming ? <ClaimConfirm points={totalOf(me)} chest={chest} unit={unit}
       onCancel={() => setConfirming(false)} onConfirm={() => {
         setConfirming(false)
         void claim()
@@ -125,7 +125,7 @@ export function TopBar({ onRules }: { onRules: () => void }) {
  * 见好就收的确认：领了就不能再挖，剩下的机会作废（有人误触过）。挂在顶栏下面，“领取”和原来的按钮
  * 不在一个位置，连点两下第二下落在遮罩上，只是关掉。点遮罩、按 Esc、点“继续挖”都是不领。
  */
-function ClaimConfirm({ points, chest, chances, unit, onCancel, onConfirm }: { points: number; chest: number; chances: number; unit: string; onCancel: () => void; onConfirm: () => void }) {
+function ClaimConfirm({ points, chest, unit, onCancel, onConfirm }: { points: number; chest: number; unit: string; onCancel: () => void; onConfirm: () => void }) {
   const stay = useRef<HTMLButtonElement>(null)
   const cancel = useRef(onCancel)
   cancel.current = onCancel
@@ -142,7 +142,7 @@ function ClaimConfirm({ points, chest, chances, unit, onCancel, onConfirm }: { p
     <motion.div className="claim-confirm" role="alertdialog" aria-modal="true" aria-labelledby="claim-confirm-title" aria-describedby="claim-confirm-text"
       initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}>
       <p id="claim-confirm-title" className="claim-confirm-title">领取 {money(points)} {unit}？</p>
-      <p id="claim-confirm-text">{chest > 0 ? `待领取 ${money(points - chest)}，加上末影箱里的 ${money(chest)}。` : ''}领取以后这一局就不能再挖了，剩下的{chances > 0 ? ` ${chances} 次机会` : '机会和附魔镐'}作废。</p>
+      <p id="claim-confirm-text">{chest > 0 ? `待领取 ${money(points - chest)}，加上末影箱里的 ${money(chest)}。` : ''}领取以后这一局就不能再挖了，没用完的镐子也作废。</p>
       <div className="claim-confirm-actions">
         <button ref={stay} type="button" onClick={onCancel}>继续挖</button>
         <button type="button" className="is-primary" onClick={onConfirm}>领取</button>
@@ -239,29 +239,29 @@ export function Rules({ onClose, onPractice }: { onClose: () => void; onPractice
     <section className="rules" role="dialog" aria-modal="true" aria-label="怎么玩" onClick={event => event.stopPropagation()}>
       <h2>怎么玩</h2>
       <ul>
-        <li>矿洞卡铺成一张地图，大家一起挖。放大到一张卡上才能挖，点一格用 1 次机会。</li>
-        <li>挖到的奖励先是待领取，点「见好就收」才算领到；机会用完、奖池分完会自动领取。</li>
+        <li>矿洞卡铺成一张地图，大家一起挖。放大到一张卡上才能挖。</li>
+        <li>挖到的奖励先是待领取，点「见好就收」才算领到；镐子和附魔镐都用完、奖池分完时，会自动领取。</li>
         <li><b>截止前要领取</b>：截止前 2 分钟停止挖掘，开着网页的人自动领取，没领的作废。</li>
         <li>末影珍珠会在这张卡旁边长出一张新卡；旧卡挖完以前一直能挖。</li>
       </ul>
-      {rules?.players ? <p className="rules-money">这个红包按大约 {rules.players} 人、每人 {rules.initialChances} 次机会算：绿宝石 {money(rules.smallReward)} {unit}，钻石 {money(rules.smallReward * rules.bigMultiplier)} {unit}。</p> : null}
+      {rules?.players ? <p className="rules-money">这个红包按大约 {rules.players} 人、每人挖 {rules.initialChances} 次算：绿宝石 {money(rules.smallReward)} {unit}，钻石 {money(rules.smallReward * rules.bigMultiplier)} {unit}。</p> : null}
       {rules && (rules.digInterval ?? 1) > 1 ? <p className="rules-money">每人两次挖掘至少隔 {rules.digInterval} 秒。</p> : null}
       {rules ? <dl className="rule-items">
         <dt><ItemIcon kind="emerald" size={18} /> 绿宝石</dt><dd>+{money(rules.smallReward)} {unit}</dd>
         <dt><ItemIcon kind="diamond" size={18} /> 钻石</dt><dd>+{money(rules.smallReward * rules.bigMultiplier)} {unit}</dd>
         <dt><ItemIcon kind="apple" size={18} /> 附魔金苹果</dt><dd>奖励翻倍{rules.appleCap > 0 ? `，一次最多加 ${money(rules.appleCap)}` : ''}；没有奖励时送一份小奖</dd>
-        <dt><ItemIcon kind="totem" size={18} /> 双铁镐</dt><dd>机会 +{rules.totemBonus}</dd>
+        <dt><ItemIcon kind="totem" size={18} /> 双铁镐</dt><dd>镐子 +{rules.totemBonus} 次</dd>
         <dt><ItemIcon kind="tnt" size={18} /> TNT</dt><dd>扣掉还没领的奖励的 {rules.tntPercent}%（盾牌能挡一次）</dd>
         {rules.items ? <><dt><ItemIcon kind="shield" size={18} /> 盾牌</dt><dd>自动挡下一次 TNT 或末影水晶；最多带 3 面，再挖到换成一份小奖</dd>
           <dt><ItemIcon kind="spyglass" size={18} /> 望远镜</dt><dd>看一格是什么，只有你看得见</dd>
           {(rules.items ?? 0) >= 2 ? <><dt><ItemIcon kind="coal" size={18} /> 煤炭、木棍</dt><dd>各有一个就自动做成一个火把，多的攒着</dd>
-            <dt><ItemIcon kind="torch" size={18} /> 火把</dt><dd>插在挖开的格子上，照亮周围 9 格，大家都看得见。颜色说这 9 格里一共有几个危险（TNT、末影水晶、刷怪笼，挖开的也算）：绿色没有，黄色 1～2 个，橙色 3～4 个，红色 5 个以上；插下去以后不变</dd></>
+            <dt><ItemIcon kind="torch" size={18} /> 火把</dt><dd>插在挖开的格子上，照亮周围 9 格，大家都看得见。颜色表示这 9 格里有几个 TNT、末影水晶和刷怪笼（挖开的也算）：绿色没有，黄色 1～2 个，橙色 3～4 个，红色 5 个以上</dd></>
             : <><dt><ItemIcon kind="coal" size={18} /> 煤炭、木棍</dt><dd>各攒满 2 个，自动做成一个火把；满了再挖到不算</dd>
               <dt><ItemIcon kind="torch" size={18} /> 火把</dt><dd>插在四个格子相交的角上，大家都看得见：绿色是这 4 格里没有危险，黄色 1～2 个，红色 3～4 个（TNT、末影水晶、刷怪笼）</dd></>}
           <dt><ItemIcon kind="map" size={18} /> 藏宝图</dt><dd>随机标出地图上一格奖励，只有你看得见；奖励越大越难标到</dd>
           <dt><ItemIcon kind="potion" size={18} /> 急迫药水</dt><dd>10 秒里每次挖只要隔 1 秒</dd>
           <dt><ItemIcon kind="key" size={18} /> 试炼钥匙</dt><dd>开试炼密室里的宝库：每个宝库每人一次，开出奖励或附魔台</dd>
-          <dt><ItemIcon kind="table" size={18} /> 附魔台</dt><dd>两种附魔镐挑一种（横三格、竖三格、十字），一次挖开一片，不花镐子的机会</dd>
+          <dt><ItemIcon kind="table" size={18} /> 附魔台</dt><dd>两种附魔镐挑一种（横三格、竖三格、十字），一次挖开一片</dd>
           <dt><ItemIcon kind="ender" size={18} /> 末影箱</dt><dd>末地宝藏里有；待领取的一半存进去（谁都炸不到，领取时一起算），另一半退回奖池</dd>
           <dt><ItemIcon kind="cobweb" size={18} /> 蜘蛛网、刷怪笼</dt><dd>废弃矿井里有：蜘蛛网让下一次多等 {(rules.items ?? 0) >= 2 ? 10 : 5} 秒；刷怪笼让你中毒，之后 3 次每挖一次扣待领取的 5%</dd>
           <dt><ItemIcon kind="lava" size={18} /> 下界、深暗之域</dt><dd>下界每挖 3 格岩浆流一格，吞掉的格子就没了，远古残骸烧不掉；深暗之域每挖一格噪音加一，噪音进了危险区（卡下面的噪音条）就随时可能惊醒监守者：挖出这一下的人，待领取的奖励扣掉一半，那张卡关掉。点卡上面区块名字旁边的问号能看说明</dd>
@@ -273,7 +273,7 @@ export function Rules({ onClose, onPractice }: { onClose: () => void; onPractice
           <dt><ItemIcon kind="crystal" size={18} /> 末影水晶</dt><dd>藏在末地宝藏里，一张{rules.endMix === 2 ? '一到两颗' : '一颗'}；踩中扣掉还没领的奖励的 {crystalPercent(rules)}%（TNT 的两倍，盾牌能挡）</dd></> : null}
       </dl> : null}
       <p className="rules-tip">拖动地图平移，滚轮或捏合缩放。点旁边的卡就能换过去，方向键也行；+/- 缩放。全图那一级能看到所有的卡，不能拖动。</p>
-      <p className="rules-tip">工具条浮在地图左下角（横屏在左边）：第 1 格是镐子，上面是剩下的机会；挖到的道具排在后面，放不下时可以滑。点一格弹出它的说明，点「使用」就用。望远镜、火把这类要选位置的道具，点「使用」以后地图顶上会一直显示提示和「取消」，去地图上点：手机上先点一下预览，同一处再点一次确认；电脑上鼠标移过去就能预览，点一下确认。说明弹窗里选「不再提示」就直接开始，顶上的问号能再看。取消也可以再点它、按 Esc 或点右键。拖动始终是移动地图。电脑上按 1–9 选。</p>
+      <p className="rules-tip">工具条浮在地图左下角（横屏在左边）：第 1 格是镐子，数字是还能挖几次；挖到的道具排在后面，放不下时可以滑。金边、大一点的那格是手上拿着的。点一格弹出它的说明。望远镜、火把这类要选位置的道具，第一次用会弹说明，以后点了直接开始；地图顶上会一直显示提示、问号和「取消」，问号能再看说明。手机上点一下预览，再点一下确认；电脑上鼠标指着预览，点一下确认。取消也可以再点它、按 Esc 或点右键。拖动始终是移动地图。电脑上按 1–9 选。</p>
       <div className="rules-actions">
         <button type="button" className="rules-practice" onClick={onPractice}>练习一下</button>
         <button type="button" onClick={onClose}>知道了</button>

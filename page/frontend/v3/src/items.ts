@@ -46,67 +46,74 @@ export function classOf(slot: Slot): ItemClass {
 }
 
 /**
- * 道具登记表（docs/ITEM_UX.md §6）：弹窗右上角的数量、一两句它做什么；瞄准类还有点什么、步骤条上的一句。
- * 新道具在这里加一行，工具条、弹窗、步骤条都照着它画。
+ * 道具登记表（docs/ITEM_UX.md §5、§6）：弹窗右上角的数量、一句它会怎样（words），玩家拿不准又影响决定的事
+ * 放在下面一行小字（rule，最多一句）。看得见的数（镐子还能挖几次、还有几个、几面盾）和它们怎么变不用字说；
+ * 弹窗里有图的、用了看得到的也不说。新道具在这里加一行，工具条、弹窗、步骤条都照着它画。
  */
-export function aboutSlot(slot: Slot, me: Me, items: boolean, interval: number, blocked: string | null, version = items ? 1 : 0): { count: string; words: string } {
+export function aboutSlot(slot: Slot, me: Me, items: boolean, interval: number, blocked: string | null, version = items ? 1 : 0): { count: string; words: string; rule?: string } {
   const count = countOf(me, slot)
   const v2 = version >= 2
   switch (slot) {
-    case 'pickaxe': return { count: `还剩 ${me.chances} 次`, words: blocked ?? `点一个没挖开的格子就能挖开，每次用掉 1 次机会${interval > 1 ? `；每次至少隔 ${interval} 秒` : ''}。` }
-    case 'pick-h': case 'pick-v': case 'pick-x': return { count: `还能用 ${count} 次`, words: `一次挖开${SHAPE_NAMES[shapeOf(slot)!]}里没挖开的格子，挖过的跳过；不花镐子的机会。` }
-    case 'spyglass': return { count: `还有 ${count} 个`, words: '看一格里是什么，只有你看得见，不花机会。' }
-    case 'torch': return {
-      count: count > 0 ? `还有 ${count} 个` : '还没有',
-      words: (count > 0 ? '' : v2 ? '还没有火把：煤炭、木棍各挖到一个，就自动做成一个。' : `还没有火把：煤炭、木棍都攒满 ${CRAFT_NEED} 个，就自动做成一个。`) + (v2 ? '插在一个挖开的格子上，照亮周围 9 格。颜色说这 9 格里一共有几个危险（TNT、末影水晶、刷怪笼，挖开的也算），插下去以后不变，大家都看得见。'
-        : '插在四个格子相交的角上，照亮旁边 4 格：绿色是没有危险，黄色 1～2 个，红色 3～4 个（TNT、末影水晶、刷怪笼）。大家都看得见。'),
-    }
-    case 'key': return { count: `还有 ${count} 把`, words: '用试炼钥匙点试炼密室里的宝库，可以打开一次，开出一样东西；每个宝库每人只能开一次。' }
-    case 'map': return { count: `还有 ${count} 张`, words: '随机标出地图上一格奖励（绿宝石常见，钻石少见），只有你看得见，镜头会飞过去。' }
+    case 'pickaxe': return { count: `还剩 ${me.chances} 次`, words: blocked ?? '点没挖开的格子就能挖。', rule: !blocked && interval > 1 ? `两次之间至少隔 ${interval} 秒。` : undefined }
+    case 'pick-h': case 'pick-v': case 'pick-x': return { count: `还能用 ${count} 次`, words: `一下挖开${SHAPE_WORDS[shapeOf(slot)!]}。` }
+    case 'spyglass': return { count: `还有 ${count} 个`, words: '看一格下面是什么，只有你看得见。' }
+    case 'torch': return v2
+      ? { count: count > 0 ? `还有 ${count} 个` : '还没有', words: `${count > 0 ? '' : '还没有火把。煤炭和木棍各挖到一个，会自动做成一个。'}插在挖开的格子上，照亮周围 9 格，大家都看得见。`,
+        rule: '颜色表示这 9 格里有几个 TNT、末影水晶和刷怪笼，挖开的也算。' }
+      : { count: count > 0 ? `还有 ${count} 个` : '还没有', words: `${count > 0 ? '' : `还没有火把。煤炭和木棍各攒满 ${CRAFT_NEED} 个，会自动做成一个。`}插在四个格子相交的角上，照亮旁边 4 格，大家都看得见。`,
+        rule: '绿色是这 4 格里没有 TNT、末影水晶和刷怪笼，黄色有 1～2 个，红色有 3～4 个。' }
+    case 'key': return { count: `还有 ${count} 把`, words: '打开试炼密室里的一个宝库，开出一样东西。', rule: '每个宝库你只能开一次。' }
+    case 'map': return { count: `还有 ${count} 张`, words: '标出地图上一格奖励，只有你看得见。', rule: '多半是绿宝石，偶尔是钻石。' }
     case 'potion': return { count: `还有 ${count} 瓶`, words: '用了以后 10 秒里，每次挖只要隔 1 秒。' }
-    case 'ender': return { count: `还有 ${count} 个`, words: '待领取的奖励一半存进末影箱（炸不到），另一半退回奖池。' }
-    case 'table': return { count: `还有 ${count} 个`, words: '随机给出两种附魔镐，挑一种。' }
-    case 'shield': return { count: `${count}/${items ? SHIELD_CAP : 1} 面`, words: `踩到 TNT 或末影水晶时自动挡下一次，用掉一面。${items ? `最多带 ${SHIELD_CAP} 面，再挖到换成一份小奖。` : '再挖到就换成一份小奖。'}` }
+    case 'ender': return { count: `还有 ${count} 个`, words: '把待领取的一半存进去，不会被炸掉；另一半退回奖池。' }
+    case 'table': return { count: `还有 ${count} 个`, words: '两把附魔镐挑一把。' }
+    case 'shield': return { count: `${count}/${items ? SHIELD_CAP : 1} 面`, words: '挖到 TNT 或末影水晶时，自动挡下一次。', rule: '带满以后再挖到，换成一份小奖。' }
     case 'coal': case 'stick': return v2
-      ? { count: `${count} 个`, words: `煤炭、木棍各有一个就自动做成一个火把。现在有 ${count} 个${SLOT_NAMES[slot]}，再挖到${slot === 'coal' ? '木棍' : '煤炭'}就做。` }
-      : { count: `${count}/${CRAFT_NEED}`, words: `煤炭、木棍都攒满 ${CRAFT_NEED} 个，自动做成一个火把；满了再挖到不算。` }
-    case 'poison': return { count: `还有 ${count} 次`, words: '接下来每挖一次，扣待领取的 5%，盾牌挡不住。' }
+      ? { count: `${count} 个`, words: `再挖到${slot === 'coal' ? '一根木棍' : '一块煤炭'}，就自动做成一个火把。` }
+      : { count: `${count}/${CRAFT_NEED}`, words: `煤炭和木棍各攒满 ${CRAFT_NEED} 个，就自动做成一个火把。`, rule: '攒满以后再挖到不算。' }
+    case 'poison': return { count: `还有 ${count} 次`, words: '接下来每挖一次，扣掉待领取的 5%。' }
   }
 }
+/** 附魔镐一下挖开哪些格（说明里的说法） */
+const SHAPE_WORDS: Record<Shape, string> = { h: '横着的 3 格', v: '竖着的 3 格', x: '十字形的 5 格' }
 
 /** 瞄准类：在地图上点什么（步骤条上没预览时的那一句）；version 是 rules.items（第 2 版火把插在挖开的格子上）。 */
 export function aimWhat(held: Held, version = 1) {
   if (held === 'torch') return version >= 2 ? '点一个挖开的格子，照亮周围 9 格' : '点四个格子相交的角，照亮旁边 4 格'
   return held === 'spyglass' ? '点一格，看看里面是什么' : held === 'key' ? '点试炼密室里的宝库' : '点一格，框住的格子一起挖开'
 }
-/** 瞄准类：点的是什么（引导弹窗里“怎么用”那句） */
-export function aimTarget(held: Held, version = 1) {
-  if (held === 'torch') return version >= 2 ? '挖开的格子' : '角'
-  return held === 'key' ? '宝库' : '格子'
+/** 瞄准类的引导弹窗里“怎么点”那一句；mouse 是有鼠标（指着就预览） */
+export function howToAim(held: Held, version = 1, mouse = false) {
+  if (mouse) return '鼠标指着预览，点一下确认。'
+  const where = held === 'torch' ? (version >= 2 ? '挖开的格子' : '四个格子相交的角') : held === 'key' ? '宝库' : '一格'
+  return `在地图上点${where}预览，再点一下确认。`
 }
+/** 预览以后步骤条上接的那一句 */
+export const confirmWords = (mouse: boolean) => (mouse ? '点一下确认' : '再点一下确认')
 
 /** 有鼠标（指着就能预览）还是触屏（点一下预览） */
 export const hasMouse = () => typeof window !== 'undefined' && !!window.matchMedia?.('(hover: hover) and (pointer: fine)').matches
 
 /**
- * 瞄准类的引导弹窗（docs/ITEM_UX.md §4）：每次使用都先弹，选了“不再提示”就直接进入选位置；
- * 步骤条上的问号随时能再打开。三种附魔镐算一种。记在这台设备上（存不了就照旧弹，不影响玩）。
+ * 瞄准类的引导弹窗（docs/ITEM_UX.md §4）：只在第一次弹，点“知道了”就记住、进入选位置，说明收进步骤条的问号；
+ * 问号随时能再打开。三种附魔镐算一种。记在这台设备上（存不了就照旧弹，不影响玩）。以前选过“不再提示”的
+ * 记在同一个地方，算学过。
  */
-const SKIP_KEY = 'kddb:v3:skip-guide'
+const LEARNED_KEY = 'kddb:v3:skip-guide'
 const guideGroup = (slot: Held) => (shapeOf(slot) ? 'pick' : slot)
-function skipList(): string[] {
+function learnedList(): string[] {
   try {
-    const list: unknown = JSON.parse(localStorage.getItem(SKIP_KEY) ?? '[]')
+    const list: unknown = JSON.parse(localStorage.getItem(LEARNED_KEY) ?? '[]')
     return Array.isArray(list) ? list.filter((item): item is string => typeof item === 'string') : []
   } catch {
     return []
   }
 }
-export const skipsGuide = (slot: Held) => skipList().includes(guideGroup(slot))
-export function skipGuide(slot: Held) {
+export const knowsGuide = (slot: Held) => learnedList().includes(guideGroup(slot))
+export function learnGuide(slot: Held) {
   try {
-    const list = skipList()
-    if (!list.includes(guideGroup(slot))) localStorage.setItem(SKIP_KEY, JSON.stringify([...list, guideGroup(slot)]))
+    const list = learnedList()
+    if (!list.includes(guideGroup(slot))) localStorage.setItem(LEARNED_KEY, JSON.stringify([...list, guideGroup(slot)]))
   } catch {
     // 存不了：下次照旧弹引导
   }
@@ -242,6 +249,20 @@ export function countOf(me: Me, slot: Slot): number {
     default: return owned?.[slot] ?? 0
   }
 }
+
+/**
+ * 这一下挖完，这一局就挖不动了吗（docs/V3_ITEMS.md §13 最后一下）：镐子、附魔镐只剩这一下，手里也没有附魔台。
+ * by 是用什么挖：镐子，或者某一种附魔镐。
+ */
+export function isLastDig(me: Me, by: 'pickaxe' | Shape) {
+  const pick = me.items?.pick
+  const picks = pick ? pick.h + pick.v + pick.x : 0
+  if ((me.items?.table ?? 0) > 0) return false
+  return by === 'pickaxe' ? me.chances === 1 && picks === 0 : me.chances <= 0 && picks === 1
+}
+/** 最后一下之前还没用、还用得上的：钥匙开宝库，望远镜、火把、藏宝图帮着挑这最后一格。 */
+export const LEFTOVER_SLOTS: Slot[] = ['key', 'spyglass', 'torch', 'map']
+export const leftoversOf = (me: Me) => LEFTOVER_SLOTS.filter(slot => countOf(me, slot) > 0)
 
 /** 镐子和附魔镐都用完了、手里也没有附魔台（换得到附魔镐）：这一局挖不动了（游戏站的 canDig）。 */
 export function outOfPicks(me: Me) {

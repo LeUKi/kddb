@@ -432,23 +432,26 @@ button.eye-status { cursor: pointer; }
 .toolbar-arrow.is-end { right: -6px; }
 .tool-cell { flex: none; }
 .tool-slot { position: relative; display: grid; place-items: center; width: 48px; height: 48px; padding: 0; overflow: hidden; background: linear-gradient(#2a333b, #20282e); border: 2px solid #4a565e; border-radius: 8px; box-shadow: inset 0 2px 0 #ffffff12, inset 0 -3px 0 #0005; cursor: pointer; transition: border-color .15s var(--ease-out), box-shadow .15s var(--ease-out), transform .1s, width .22s var(--ease-out), height .22s var(--ease-out); }
-/* 正在用的那一格大一点，贴着工具条靠边的那一侧长（竖屏往上、横屏往右），旁边的跟着让开（docs/V3_ITEMS.md §10） */
-.tool-slot.is-using { width: 58px; height: 58px; }
+/* 激活（docs/ITEM_UX.md §3.1）：手上拿着的那一件，什么都没拿时是镐子，一次只有一格。金边、大一点，
+   贴着工具条靠边的那一侧长（竖屏往上、横屏往右），旁边的跟着让开 */
+.tool-slot.is-selected { width: 58px; height: 58px; border-color: #f3cc8f; box-shadow: inset 0 2px 0 #ffffff12, inset 0 -3px 0 #0005, 0 0 0 2px #e9b56b40; }
 .tool-slot > .item-icon { transition: transform .22s var(--ease-out); }
-.tool-slot.is-using > .item-icon { transform: scale(1.18); }
+.tool-slot.is-selected > .item-icon { transform: scale(1.18); }
 /* 一直摆着、现在没有的（火把 0）：灰的 */
 .tool-slot.is-empty > .item-icon { filter: grayscale(1) brightness(.85); opacity: .45; }
 .tool-slot.is-empty { background: linear-gradient(#232a30, #1c2227); border-color: #3a444b; }
 @media (hover: hover) { .tool-slot:hover { border-color: #7a8890; } }
 .tool-slot:active { transform: scale(.94); }
-.tool-slot.is-selected { border-color: #f3cc8f; box-shadow: inset 0 2px 0 #ffffff12, inset 0 -3px 0 #0005, 0 0 0 2px #e9b56b40; }
-.tool-slot.is-spyglass.is-selected, .tool-slot.is-key.is-selected { border-color: #8fe3f0; box-shadow: inset 0 2px 0 #ffffff12, inset 0 -3px 0 #0005, 0 0 0 2px #8fe3f040; }
-.tool-slot.is-open { border-color: #b8c4cc; }
 .tool-slot > .item-icon { position: relative; }
 .toolbar.is-done .tool-slot { opacity: .5; }
 /* 新出现的那格带一道扫光（和网页里加载时那道一样） */
 .tool-cell .tool-slot::after { content: ''; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 30%, #ffffff8c 50%, transparent 70%) 0 0 / 250% 100%; pointer-events: none; animation: slot-sheen .7s ease-out .05s both; }
 @keyframes slot-sheen { from { background-position: 120% 0; opacity: 1; } to { background-position: -60% 0; opacity: 0; } }
+/* 最后一下选“俺去瞅瞅”：没用的那几格再扫一道光、弹一下 */
+.tool-cell .tool-slot.is-nudge::after { animation: slot-sheen-again .7s ease-out both; }
+.tool-slot.is-nudge { animation: slot-nudge .34s ease-out; }
+@keyframes slot-sheen-again { from { background-position: 120% 0; opacity: 1; } to { background-position: -60% 0; opacity: 0; } }
+@keyframes slot-nudge { 0% { transform: scale(1.18, .82); } 40% { transform: scale(.93, 1.07); } 72% { transform: scale(1.03, .97); } 100% { transform: none; } }
 /* 右下角的数：Minecraft 物品栏那种像素字，白字深影 */
 .tool-count { position: absolute; right: 3px; bottom: 2px; z-index: 2; pointer-events: none; animation: count-bump .3s var(--ease-out); }
 .tool-count path { fill: #fff; }
@@ -651,6 +654,12 @@ button.effect-body { cursor: pointer; }
 .step-bar.is-ready p { color: #ffe9a8; }
 .step-bar.is-bad p { color: #ffb4a8; }
 .step-bar > .step-help { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; font-weight: 700; border-radius: 50%; }
+/* 引导收进问号以后，问号金边亮一会儿（guideFly.ts） */
+.step-bar > .step-help.is-fresh { animation: help-fresh 1.4s ease-out; }
+@keyframes help-fresh { 0%, 55% { border-color: #ffe36e; box-shadow: 0 0 0 3px #e9b56b66, 0 0 14px #ffe36e66; } 100% { border-color: #5b4a75; box-shadow: none; } }
+/* 飞进问号的影子和淡掉的遮罩：不接收点击，真的弹窗当场就关了 */
+.item-dialog.guide-ghost { position: fixed; z-index: 40; margin: 0; pointer-events: none; will-change: transform, opacity; }
+.guide-shade { position: fixed; inset: 0; z-index: 29; background: #000a; pointer-events: none; }
 
 /* —— 弹窗：末影箱、附魔台、宝库开出的东西 —— */
 .item-dialog-backdrop { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 16px; background: #000a; }
@@ -670,7 +679,11 @@ button.effect-body { cursor: pointer; }
 .shape-pick { position: relative; display: grid; place-items: center; width: 48px; height: 48px; }
 .vault-result { display: flex; align-items: center; gap: 10px; font-size: 14px; }
 /* 工具条上点一格的弹窗：怎么用（小字）、附魔镐的形状和火把的小图 */
-.item-dialog .item-how { color: #b9a6d9; font-size: 12px; }
+.item-dialog .item-how, .item-dialog .item-rule { color: #b9a6d9; font-size: 12px; }
+.item-dialog .item-rule { margin-top: -4px; }
+/* 最后一下：手里还有什么 */
+.item-dialog .last-items { display: flex; flex-wrap: wrap; gap: 6px; }
+.item-dialog .last-items span { display: inline-flex; align-items: center; gap: 5px; padding: 2px 10px 2px 6px; white-space: nowrap; background: #2a2f35; border-radius: 999px; }
 .item-demo { display: flex; justify-content: center; margin: 2px 0 10px; }
 .torch-demo { position: relative; display: grid; grid-template-columns: repeat(3, 26px); gap: 3px; padding: 5px; background: #2b2318; border: 2px solid #6c5432; border-radius: 4px; }
 .torch-demo i { width: 26px; height: 26px; background: #4a5056; border-radius: 2px; box-shadow: inset 0 0 0 1px #ffffff1a; }
