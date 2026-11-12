@@ -20,7 +20,7 @@ export function regionIcon(card: Pick<PublicCard, 'kind'>): IconKind {
 }
 
 /** 点区块名字旁边的问号看的说明（一两段，大白话）。 */
-export function regionAbout(card: Pick<PublicCard, 'kind'>, rules: Pick<Rules, 'items' | 'tntPercent'>): string[] {
+export function regionAbout(card: Pick<PublicCard, 'kind'>, rules: Pick<Rules, 'items' | 'tntPercent' | 'special'>): string[] {
   const cobweb = (rules.items ?? 0) >= 2 ? 10 : 5
   switch (card.kind) {
     case 'trial': return [
@@ -34,7 +34,10 @@ export function regionAbout(card: Pick<PublicCard, 'kind'>, rules: Pick<Rules, '
       '岩浆开局就看得见，不能挖。这张卡上每挖开 3 格，岩浆往旁边流一格，吞掉的格子就没了，里面的奖励留在奖池里。',
       '远古残骸烧不掉，一个值 10 份小奖。',
     ]
-    case 'deep': return [
+    case 'deep': return (rules.special ?? 0) >= 2 ? [
+      '钻石最多（8 颗）。谁挖一格噪音都加一，大家共用一条噪音条；一会儿没人挖，噪音慢慢退下去。',
+      '噪音过了前面安静的那一段，每挖一格都可能吵醒监守者，越吵越容易醒。吵醒它的人，待领取的奖励被抢走一半（盾牌挡不住，末影箱里的不算），这张卡关掉，剩下的格子谁也挖不了。挖慢一点、等噪音退一退再挖，就有机会整张挖完。',
+    ] : [
       '钻石最多（8 颗）。每挖开一格，噪音加一，大家共用一个数。',
       '噪音进了危险区，每挖一格都可能惊醒监守者：挖出这一下的人，待领取的奖励扣掉一半（盾牌挡不住，末影箱里的不算），这张卡关掉，剩下的格子谁也挖不了。',
     ]
@@ -42,7 +45,7 @@ export function regionAbout(card: Pick<PublicCard, 'kind'>, rules: Pick<Rules, '
       '末影之眼开出来的宝藏，3×3。钻石多，也藏着末影水晶：踩中扣掉待领取的两倍 TNT 的比例。这里不会再长新卡。',
     ]
     default: return [
-      `普通的卡：绿宝石、钻石、附魔金苹果，也有 TNT（扣待领取的 ${rules.tntPercent}%）。挖到末影珍珠，旁边会长出一张新卡。`,
+      `普通的卡：绿宝石、钻石、附魔金苹果，也有 TNT（扣待领取的 ${rules.tntPercent}%）。挖到末影珍珠，旁边会长出一张新卡${(rules.special ?? 0) >= 2 ? '（普通的卡、废弃矿井或试炼密室）；挖到末影之眼，远处会开出末地宝藏、深暗之域或下界' : ''}。`,
     ]
   }
 }
@@ -154,13 +157,55 @@ export function richnessOf(cards: PublicCard[], rules: Pick<Rules, 'smallReward'
 }
 
 /**
- * 深暗之域的噪音条：危险区是这张卡格子数的 45%–75%（监守者在这中间某一下醒来，开局由种子定，
- * 不公开）。safe：还没进危险区，再挖几格进；cells：能挖的格子数。
+ * 深暗之域的噪音条，旧局（2026-11-12 以前开的）：危险区是这张卡格子数的 45%–75%（监守者在这中间某一下醒来，
+ * 开局由种子定，不公开）。toDanger：还没进危险区，再挖几格进；cells：能挖的格子数。
  */
 export function noiseOf(card: Pick<PublicCard, 'cells' | 'fixed' | 'noise' | 'closed'>) {
-  const cells = card.cells.length - Object.keys(card.fixed ?? {}).length
+  const cells = cellsOf(card)
   const low = Math.ceil(cells * 0.45)
   const high = Math.floor(cells * 0.75)
   const noise = card.noise ?? 0
   return { noise, low, high, cells, danger: noise >= low, closed: !!card.closed, toDanger: Math.max(0, low - noise) }
+}
+
+const cellsOf = (card: Pick<PublicCard, 'cells' | 'fixed'>) => card.cells.length - Object.keys(card.fixed ?? {}).length
+
+// 噪音会退的局（rules.special: 2，docs/V3_ITEMS.md §16），和 game/shared/rules.mjs 一样：谁挖一格噪音加一，
+// 没人挖时每 noiseDecayMs 退一；噪音过了格子数的 WARDEN_FROM 以后，每挖一格按当时的噪音有一点机会醒，满了是 WARDEN_MAX
+export const NOISE_DECAY_MS = 15_000
+export const WARDEN_FROM = 0.25
+export const WARDEN_MAX = 0.1
+export const WARDEN_CURVE = 0.8
+export const noiseDecayMs = (rules: Pick<Rules, 'digInterval'>) => Math.max(NOISE_DECAY_MS, (rules.digInterval ?? 1) * 5000)
+export function wardenChance(noise: number, cells: number) {
+  const from = cells * WARDEN_FROM
+  if (noise <= from) return 0
+  return WARDEN_MAX * Math.min(1, (noise - from) / (cells - from)) ** WARDEN_CURVE
+}
+/** 噪音会退的卡：now 这一刻的噪音 */
+export function noiseNow(card: Pick<PublicCard, 'noise' | 'noiseAt'>, rules: Pick<Rules, 'digInterval'>, now: number) {
+  if (card.noiseAt === undefined) return card.noise ?? 0
+  return Math.max(0, (card.noise ?? 0) - Math.max(0, now - card.noiseAt) / noiseDecayMs(rules))
+}
+
+/**
+ * 噪音会退的卡此刻的噪音条：noise 是现在的噪音，from 是开始有危险的那一点（都按格子数算）；
+ * chance 是再挖一格吵醒监守者的可能（挖的那一下先加一再看）；safe 是不算噪音往下退、再挖几格都不会醒；
+ * next 是过多久这些字会变（毫秒；不会再变是 null）。
+ */
+export function decayingNoiseOf(card: Pick<PublicCard, 'cells' | 'fixed' | 'noise' | 'noiseAt' | 'closed'>, rules: Pick<Rules, 'digInterval'>, now: number) {
+  const cells = cellsOf(card)
+  const from = cells * WARDEN_FROM
+  const noise = noiseNow(card, rules, now)
+  const chance = wardenChance(noise + 1, cells)
+  const safe = Math.max(0, Math.floor(from - noise))
+  const decay = noiseDecayMs(rules)
+  // 危险时可能每一下都在变，一秒看一次；安全时等到“还能挖几格”多一格那一刻
+  const next = card.closed || noise <= 0 ? null : chance > 0 ? 1000 : from - safe - 1 < 0 ? null : Math.ceil((noise - (from - safe - 1)) * decay) + 50
+  return { noise, cells, from, chance, safe, closed: !!card.closed, next, decay }
+}
+
+/** 这一下吵醒监守者的可能，说给人看的 */
+export function chanceWords(chance: number) {
+  return chance < 0.01 ? '这一下有一点可能吵醒监守者' : `这一下约 ${Math.round(chance * 100)}% 会吵醒监守者`
 }

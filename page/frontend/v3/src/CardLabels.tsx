@@ -1,13 +1,14 @@
 import { useAtomValue, useSetAtom } from 'jotai'
 import { motion } from 'motion/react'
 import type { CSSProperties } from 'react'
+import { useEffect, useState } from 'react'
 import { ItemIcon } from '../../src/ItemIcon'
 import { CARD_PX, SLOT_PX } from './camera'
 import { McText } from './McText'
-import { aboutMoney, leftoversOf, noiseOf, PLENTY, regionName, richestOf, tellOf } from './regions'
-import { dialogAtom, focusRequestAtom, gameAtom, hongbaoAtom } from './state'
-import type { Kind, PublicCard } from './types'
-import { KIND_NAMES } from './types'
+import { aboutMoney, chanceWords, decayingNoiseOf, leftoversOf, noiseOf, PLENTY, regionName, richestOf, tellOf } from './regions'
+import { dialogAtom, digIntervalAtom, focusRequestAtom, gameAtom, hongbaoAtom, uidAtom } from './state'
+import type { Kind, PublicCard, WokeBy } from './types'
+import { KIND_NAMES, money } from './types'
 
 /**
  * 卡周围的说明（docs/V3_ITEMS.md §9，2026-11-11 用户：区块本身要有说明，底栏那些不用了，都放在卡周围）：
@@ -34,7 +35,7 @@ export function CardLabels({ card }: { card: PublicCard }) {
         {regionName(card)}<i aria-hidden="true">?</i>
       </button>
       {deep ? <Leftovers card={card} /> : <span className="card-progress">
-        {card.closed ? '监守者醒了，这张卡关了' : card.finished ? '挖完了' : `已挖 ${dug}/${card.cells.length - fixed}`}
+        {card.finished ? '挖完了' : `已挖 ${dug}/${card.cells.length - fixed}`}
       </span>}
     </div>
     <div className="card-foot">
@@ -85,10 +86,12 @@ function Leftovers({ card }: { card: PublicCard }) {
 /** 余量里乱码的那几样：不管几个都画两个字，照真实位数写会露出是一位数还是两位数（2026-11-12 用户：两位数的还会更长） */
 const HIDDEN_COUNT = '00'
 
-/** 深暗之域的噪音条：前面一段安全，斜纹那段是危险区，点是现在的噪音。 */
+/** 深暗之域的噪音条：旧局前面一段安全、斜纹那段是危险区；新局噪音会退，从安静到很吵一条颜色（NoiseDecaying）。 */
 function Noise({ card }: { card: PublicCard }) {
+  const uid = useAtomValue(uidAtom)
+  if (card.closed) return <span className="noise-line is-closed"><ItemIcon kind="sculk" size={16} />{wokeWords(card.wokeBy, uid)}</span>
+  if (card.noiseAt !== undefined) return <NoiseDecaying card={card} />
   const noise = noiseOf(card)
-  if (noise.closed) return <span className="noise-line is-closed"><ItemIcon kind="sculk" size={16} />监守者醒了，这张卡关了</span>
   const at = (value: number) => `${Math.min(100, (value / noise.cells) * 100)}%`
   return <span className={`noise-line${noise.danger ? ' is-danger' : ''}`} role="status">
     <ItemIcon kind="sculk" size={16} />
@@ -96,4 +99,55 @@ function Noise({ card }: { card: PublicCard }) {
     <span className="noise-track" style={{ '--a': at(noise.low), '--b': at(noise.high), '--n': at(noise.noise) } as CSSProperties} aria-hidden="true"><i /></span>
     <span className="noise-words">{noise.danger ? '随时可能惊醒监守者' : `再挖 ${noise.toDanger} 格进入危险区`}</span>
   </span>
+}
+
+/**
+ * 监守者醒了以后卡下面那一行：谁吵醒的、待领取的被抢走一半（旧的游戏站没记谁）。卡关了不用再说，
+ * 卡上已经暗下来、写着监守者醒了（2026-11-12 用户）。
+ */
+export function wokeWords(woke: WokeBy | undefined, uid: number | null) {
+  if (!woke) return '监守者醒了，吵醒它的人待领取的被抢走一半'
+  const who = woke.uid === uid ? '你' : woke.name
+  return woke.amount > 0 ? `${who}吵醒了监守者，待领取的被抢走一半（-${money(woke.amount)}）` : `${who}吵醒了监守者，好在手上没有待领取的`
+}
+
+/**
+ * 会退的噪音（docs/V3_ITEMS.md §16）：条上的点自己往回走（NoiseRail，不重画网页）；字只在变的那一刻重画
+ * （安全时“还能安全挖几格”多一格的那一刻，危险时每秒看一次这一下的可能）。
+ */
+function NoiseDecaying({ card }: { card: PublicCard }) {
+  const digInterval = useAtomValue(digIntervalAtom)
+  const rules = { digInterval }
+  const [now, setNow] = useState(() => hb.now())
+  const noise = decayingNoiseOf(card, rules, now)
+  useEffect(() => {
+    if (noise.next === null) return
+    const timer = window.setTimeout(() => setNow(hb.now()), noise.next)
+    return () => window.clearTimeout(timer)
+  }, [noise.next, now])
+  // 卡变了（有人挖了）就按这一刻重算
+  useEffect(() => setNow(hb.now()), [card.noise, card.noiseAt])
+  const danger = noise.chance > 0
+  return <span className={`noise-line${danger ? ' is-danger' : ''}`} role="status">
+    <ItemIcon kind="sculk" size={16} />
+    <b>噪音</b>
+    <span className="noise-track is-v2" style={{ '--from': `${(noise.from / noise.cells) * 100}%` } as CSSProperties} aria-hidden="true">
+      <NoiseRail card={card} cells={noise.cells} decay={noise.decay} />
+    </span>
+    <span className="noise-words">{danger ? chanceWords(noise.chance) : `还能安全挖 ${noise.safe} 格`}</span>
+  </span>
+}
+
+/**
+ * 噪音条上的点：从 noiseAt 那一刻的噪音照着退的速度一直走回 0，用 CSS 动画在合成层上走，网页不用每帧重画。
+ * 新的噪音来了（noiseAt 变了）就换一个重新走。
+ */
+export function NoiseRail({ card, cells, decay }: { card: Pick<PublicCard, 'noise' | 'noiseAt'>; cells: number; decay: number }) {
+  const peak = Math.min(1, (card.noise ?? 0) / Math.max(1, cells))
+  const style = {
+    '--n0': `${peak * 100}%`,
+    animationDuration: `${Math.max(1, (card.noise ?? 0) * decay)}ms`,
+    animationDelay: `${-Math.max(0, hb.now() - (card.noiseAt ?? 0))}ms`,
+  } as CSSProperties
+  return <span key={card.noiseAt} className="noise-rail" style={style}><i /></span>
 }

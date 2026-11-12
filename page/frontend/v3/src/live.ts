@@ -41,7 +41,19 @@ export function finishedOf(card: Pick<PublicCard, 'fixed' | 'closed'>, cells: Pu
 
 /** 火把、宝库、噪音、关没关：整局里这些变了也要换成新的那一份（card 推送没有序号，漏了只能靠整局补）。 */
 function sameExtras(a: PublicCard, b: PublicCard) {
-  return JSON.stringify([a.torches ?? null, a.vaults ?? null, a.noise ?? null, !!a.closed]) === JSON.stringify([b.torches ?? null, b.vaults ?? null, b.noise ?? null, !!b.closed])
+  const extras = (card: PublicCard) => JSON.stringify([card.torches ?? null, card.vaults ?? null, card.noise ?? null, card.noiseAt ?? null, !!card.closed, card.wokeBy ?? null])
+  return extras(a) === extras(b)
+}
+
+/**
+ * 两份噪音取新的那份：会退的（有 noiseAt）按 noiseAt 取后来的，不能取大的；旧局的噪音只增不减，取大的。
+ * 两份都没有（不是深暗之域）就什么也不给。
+ */
+export function newerNoise(before: Pick<PublicCard, 'noise' | 'noiseAt'>, after: Pick<PublicCard, 'noise' | 'noiseAt'>): Pick<PublicCard, 'noise' | 'noiseAt'> {
+  if (after.noiseAt !== undefined || before.noiseAt !== undefined)
+    return (after.noiseAt ?? -1) >= (before.noiseAt ?? -1) ? { noise: after.noise, noiseAt: after.noiseAt } : { noise: before.noise, noiseAt: before.noiseAt }
+  if (after.noise === undefined && before.noise === undefined) return {}
+  return { noise: Math.max(before.noise ?? 0, after.noise ?? 0) }
 }
 
 /** 两份同一张卡开的是不是同样那些格子。 */
@@ -122,8 +134,9 @@ export function mergeLive(game: PublicGame, ahead: Map<number, LiveStep>, messag
         ...card, cells, left,
         ...(step.torches ? { torches: step.torches } : {}),
         ...(step.vaults ? { vaults: step.vaults } : {}),
-        ...(step.noise !== undefined ? { noise: Math.max(card.noise ?? 0, step.noise) } : {}),
+        ...(step.noise !== undefined ? newerNoise(card, step) : {}),
         ...(step.closed ? { closed: true } : {}),
+        ...(step.wokeBy ? { wokeBy: step.wokeBy } : {}),
       }
       put({ ...next, finished: finishedOf(next, cells) })
     }
@@ -195,7 +208,7 @@ export function unionCard(before: PublicCard, card: PublicCard): PublicCard {
     const key = kind as keyof typeof left
     if (count !== undefined && (left[key] === undefined || count < (left[key] as number))) left[key] = count
   }
-  const next = { ...card, cells, left, noise: Math.max(before.noise ?? 0, card.noise ?? 0) || card.noise, closed: before.closed || card.closed }
+  const next = { ...card, cells, left, ...newerNoise(before, card), closed: before.closed || card.closed, ...(card.wokeBy ?? before.wokeBy ? { wokeBy: card.wokeBy ?? before.wokeBy } : {}) }
   return { ...next, finished: card.finished || finishedOf(next, cells) }
 }
 

@@ -10,12 +10,12 @@ import type { Camera, Direction, Level, Viewport, WheelZoom } from './camera'
 import { BLOCK_PX, withToolbar, cameraAt, cardNear, cardToward, cellCenter, centerOf, edgeFacing, edgePointer, entryPoint, fullyOnScreen, nearestCard, nearestLevel, onScreen, overviewCamera, overviewScale, scaleOf, SLOT_PX, wheelZoom } from './camera'
 import type { Flight, Point } from './PearlFlight'
 import { cardAt, MapCanvas } from './MapCanvas'
-import { richnessOf } from './regions'
+import { regionName, richnessOf } from './regions'
 import { landMs, PearlFlight } from './PearlFlight'
-import { isTreasure } from './eye'
+import { isSpecial, nearestSpecial } from './eye'
 import { useCooling } from './Hud'
 import {
-  aimAtom, blockedAtom, dig, focusRequestAtom, freshAtom, gameAtom, heldAtom, hongbaoAtom, itemsVersionAtom, meAtom, newCardAtom, peekedAtom, pendingAtom, putDown, settledAtom, store, uidAtom,
+  aimAtom, blockedAtom, dig, focusRequestAtom, freshAtom, gameAtom, jpTargetAtom, heldAtom, hongbaoAtom, itemsVersionAtom, meAtom, newCardAtom, peekedAtom, pendingAtom, putDown, settledAtom, store, uidAtom,
 } from './state'
 import { Toolbar } from './Toolbar'
 import { aimInfo, anchorFor, torchHoverAtom, applyAt } from './aim'
@@ -270,8 +270,8 @@ export function MapView() {
     // 每张都进出一次网页，拖动时会顿一下）。NEW 提醒照旧
     const near = !overview && !!card && onScreen(card, camera(), view, 400)
     const edge = card && source ? edgeFacing(card, source) : null
-    // 末地宝藏是末影之眼开出来的：眼浮起来转一圈，金色的尾巴，飞得更远
-    const variant: Flight = card && isTreasure(card) ? 'eye' : 'pearl'
+    // 特殊区块是末影之眼开出来的：眼浮起来转一圈，金色的尾巴，飞得更远
+    const variant: Flight = card && isSpecial(card) ? 'eye' : 'pearl'
     entranceKept.current = {
       at: newCard.at,
       value: card && source && edge && (near || flies) ? {
@@ -287,13 +287,13 @@ export function MapView() {
   // 没有整张在画面里时，落地后画面边上闪几下“NEW + 箭头”指着它，点一下过去；
   // 移过去了就不再提醒
   const [marker, setMarker] = useState<number | null>(null)
-  // 末地宝藏开出来时，眼落地以前先不亮 JP
+  // 特殊区块开出来时，眼落地以前先不亮 JP
   const [jpHold, setJpHold] = useState<number | null>(null)
   useEffect(() => {
     if (!newCard) return
     const card = cards.find(item => item.id === newCard.cardId)
     const land = entranceKept.current?.value?.land ?? 0
-    const treasure = !!card && isTreasure(card)
+    const treasure = !!card && isSpecial(card)
     if (treasure) setJpHold(card.id)
     // 宝藏卡不闪 NEW，它有一直亮着的 JP
     const shown = window.setTimeout(() => {
@@ -532,8 +532,13 @@ export function MapView() {
   }, [peeked])
   const markerCard = marker === null ? null : cards.find(card => card.id === marker) ?? null
   const pointer = markerCard && !fullyOnScreen(markerCard, settled, view) ? edgePointer(markerCard, settled, view) : null
-  // JP：末地宝藏还有没挖的格子、又没整张在画面里时，画面边上一直亮着金色的 JP 指着它
-  const jpCard = useMemo(() => [...cards].reverse().find(card => isTreasure(card) && !card.finished) ?? null, [cards])
+  // JP：还开着的特殊区块（末影之眼开的）没有整张在画面里时，画面边上一直亮着金色的 JP 指着离你最近的那个，
+  // 写着区块名（docs/V3_ITEMS.md §17）。“你”是你在的那张卡，没有就是画面正中
+  const hereX = focused?.x ?? Math.round((view.width / 2 - settled.x) / settled.scale / SLOT_PX)
+  const hereY = focused?.y ?? Math.round((view.height / 2 - settled.y) / settled.scale / SLOT_PX)
+  const jpCard = useMemo(() => nearestSpecial(cards, hereX, hereY), [cards, hereX, hereY])
+  const setJpTarget = useSetAtom(jpTargetAtom)
+  useEffect(() => setJpTarget(jpCard?.id ?? null), [jpCard?.id, setJpTarget])
   const jpPointer = jpCard && jpCard.id !== jpHold && !fullyOnScreen(jpCard, settled, view) ? edgePointer(jpCard, settled, view) : null
   // JP 一直挂在页面上，不指的时候只是藏起来：以前每次藏起再出来都重新建一个，光又从头扫一遍，
   // 别人一直在挖、新的宝藏卡一张张长出来时它就一直在动（2026-11-11 量过）
@@ -634,8 +639,8 @@ export function MapView() {
       <span>NEW</span>
     </button> : null}
     {jpAt && jpCard ? <button type="button" className={`jp-marker${jpPointer ? '' : ' is-hidden'}`} style={{ left: jpAt.x, top: jpAt.y }}
-      onClick={() => goToCard(jpCard, 2)} aria-label="末地宝藏开着，点一下过去" aria-hidden={!jpPointer} tabIndex={jpPointer ? 0 : -1}>
-      <span>JP</span>
+      onClick={() => goToCard(jpCard, 2)} aria-label={`${regionName(jpCard)}开着，点一下过去`} aria-hidden={!jpPointer} tabIndex={jpPointer ? 0 : -1}>
+      <span className="jp-text"><span>JP</span><small className="jp-where">{regionName(jpCard)}</small></span>
       <span className="new-arrow" style={{ transform: `rotate(${jpAt.angle}deg)` }}>➜</span>
     </button> : null}
     {/* 缩放：地图右下角竖着一列，半透明 */}

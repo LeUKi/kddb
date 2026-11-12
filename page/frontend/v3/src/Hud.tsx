@@ -3,10 +3,11 @@ import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 
 import { memo, useEffect, useRef, useState } from 'react'
 import { ItemIcon } from '../../src/ItemIcon'
 import { mutedAtom, play, setMuted } from './sound'
-import { blockedAtom, chestNoteAtom, claim, claimingAtom, creeperShownAtom, digIntervalAtom, heldAtom, focusRequestAtom, gameAtom, hongbaoAtom, itemsVersionAtom, meAtom, readyAtAtom, settledAtom, slowUntilAtom, summaryOpenAtom, totalOf } from './state'
+import { blockedAtom, chestNoteAtom, claim, claimingAtom, creeperShownAtom, digIntervalAtom, heldAtom, focusRequestAtom, gameAtom, hongbaoAtom, jpTargetAtom, itemsVersionAtom, meAtom, readyAtAtom, settledAtom, slowUntilAtom, summaryOpenAtom, totalOf } from './state'
 import { outOfPicks } from './items'
 import { money, unitsOf } from './types'
-import { crystalPercent, eyeStatus } from './eye'
+import { crystalPercent, eyeStatus, openSpecial } from './eye'
+import { regionName } from './regions'
 
 /**
  * 数字变了从旧的滚到新的；减少动画时直接到位。滚动直接改这一小段文字（motion 值），
@@ -178,9 +179,13 @@ export function BottomBar() {
   const hongbao = useAtomValue(hongbaoAtom)
   const setFocus = useSetAtom(focusRequestAtom)
   const setSummary = useSetAtom(summaryOpenAtom)
+  const jpTarget = useAtomValue(jpTargetAtom)
   if (!game) return null
   const unit = hongbao?.unit ?? 'LDC'
-  const eye = eyeStatus(game.cards, game.rules.eyeEvery)
+  const status = eyeStatus(game.cards, game.rules.eyeEvery)
+  // 开着好几个特殊区块时，说 JP 指着的那个（离你最近的）
+  const pointed = status.kind === 'special' ? game.cards.find(card => card.id === jpTarget && openSpecial(card)) : undefined
+  const eye = pointed ? { kind: 'special' as const, card: pointed } : status
   return <footer className="bottom-bar">
     {/* 手机上排成固定的几行（奖池和人数、截止和收益、末影之眼），文字变长变短、提示换成按钮都不换行：底栏一变高，地图就跟着改大小、重新对准 */}
     <div className="game-info">
@@ -189,7 +194,7 @@ export function BottomBar() {
         <span className="info-people">{game.stats.players} 人在挖 · {game.stats.claimed} 人已领</span>
       </span>
       <Deadline deadlineAt={game.deadlineAt} wrapUpAt={game.wrapUpAt} over={game.over} />
-      {eye.kind === 'treasure' ? <button type="button" className="eye-status is-treasure" onClick={() => setFocus({ cardId: eye.card.id, at: Date.now() })}><ItemIcon kind="eye" size={14} />末地宝藏开了，点这里过去</button>
+      {eye.kind === 'special' ? <button type="button" className="eye-status is-treasure" onClick={() => setFocus({ cardId: eye.card.id, at: Date.now() })}><ItemIcon kind="eye" size={14} />{regionName(eye.card)}开了，点这里过去</button>
         : eye.kind === 'eye' ? <button type="button" className="eye-status" onClick={() => setFocus({ cardId: eye.card.id, at: Date.now() })}><ItemIcon kind="eye" size={14} />末影之眼藏在第 {eye.card.id} 张卡里</button>
           : eye.kind === 'coming' ? <span className="eye-status"><ItemIcon kind="eye" size={14} />{eye.cards === 1 ? '下一张新卡里藏着末影之眼' : `往后第 ${eye.cards} 张新卡里藏着末影之眼`}</span> : null}
       <button type="button" className="summary-toggle" onClick={() => setSummary('button')}>
@@ -264,12 +269,14 @@ export function Rules({ onClose, onPractice }: { onClose: () => void; onPractice
           <dt><ItemIcon kind="table" size={18} /> 附魔台</dt><dd>两种附魔镐挑一种（横三格、竖三格、十字），一次挖开一片</dd>
           <dt><ItemIcon kind="ender" size={18} /> 末影箱</dt><dd>末地宝藏里有；待领取的一半存进去（谁都炸不到，领取时一起算），另一半退回奖池</dd>
           <dt><ItemIcon kind="cobweb" size={18} /> 蜘蛛网、刷怪笼</dt><dd>废弃矿井里有：蜘蛛网让下一次多等 {(rules.items ?? 0) >= 2 ? 10 : 5} 秒；刷怪笼让你中毒，之后 3 次每挖一次扣待领取的 5%</dd>
-          <dt><ItemIcon kind="lava" size={18} /> 下界、深暗之域</dt><dd>下界每挖 3 格岩浆流一格，吞掉的格子就没了，远古残骸烧不掉；深暗之域每挖一格噪音加一，噪音进了危险区（卡下面的噪音条）就随时可能惊醒监守者：挖出这一下的人，待领取的奖励扣掉一半，那张卡关掉。点卡上面区块名字旁边的问号能看说明</dd>
+          <dt><ItemIcon kind="lava" size={18} /> 下界、深暗之域</dt><dd>下界每挖 3 格岩浆流一格，吞掉的格子就没了，远古残骸烧不掉；{(rules.special ?? 0) >= 2
+            ? '深暗之域谁挖一格噪音都加一，没人挖时慢慢退；噪音过了安静的那一段，每挖一格都可能吵醒监守者，越吵越容易醒：吵醒它的人，待领取的奖励被抢走一半，那张卡关掉'
+            : '深暗之域每挖一格噪音加一，噪音进了危险区（卡下面的噪音条）就随时可能惊醒监守者：挖出这一下的人，待领取的奖励扣掉一半，那张卡关掉'}。点卡上面区块名字旁边的问号能看说明</dd>
           {rules.creeper !== 0 ? <><dt><ItemIcon kind="spawner" size={18} /> 苦力怕</dt><dd>有待领取的奖励、开着网页却 {rules.creeper ?? 60} 秒没挖也没用道具，苦力怕会来，10 秒内不挖就炸掉待领取的 20%{(rules.items ?? 0) >= 2 ? `（至少 ${money(1)}）。关了网页、离开 5 分钟以上又没领取的，苦力怕每分钟来一次，直到炸完` : ''}</dd></> : null}</>
           : <><dt><ItemIcon kind="shield" size={18} /> 盾牌</dt><dd>挡下一次 TNT；已经有了就转成一份小奖</dd>
             <dt><ItemIcon kind="spyglass" size={18} /> 望远镜</dt><dd>看到这张卡上一个没开的格子，只有你看得见</dd></>}
-        <dt><ItemIcon kind="pearl" size={18} /> 末影珍珠</dt><dd>旁边长出一张新卡</dd>
-        {rules.eyeEvery ? <><dt><ItemIcon kind="eye" size={18} /> 末影之眼</dt><dd>每 {rules.eyeEvery} 张卡有一颗，那张卡发紫光；挖到它，远处开出末地宝藏（3×3{rules.endMix === 2 ? '，每张随机：钻石 3–5 颗、双铁镐 1–2 把、附魔金苹果 0–1 个，其余是绿宝石' : ''}），没领奖的人都能挖</dd>
+        <dt><ItemIcon kind="pearl" size={18} /> 末影珍珠</dt><dd>旁边长出一张新卡{(rules.special ?? 0) >= 2 ? '：普通的卡、废弃矿井或试炼密室' : ''}</dd>
+        {rules.eyeEvery ? <><dt><ItemIcon kind="eye" size={18} /> 末影之眼</dt><dd>每 {rules.eyeEvery} 张卡有一颗，那张卡发紫光；挖到它，远处开出{(rules.special ?? 0) >= 2 ? '一个特殊区块：末地宝藏（一半的机会）、深暗之域或下界。画面边上的 JP 指着离你最近的那个' : `末地宝藏（3×3${rules.endMix === 2 ? '，每张随机：钻石 3–5 颗、双铁镐 1–2 把、附魔金苹果 0–1 个，其余是绿宝石' : ''}），没领奖的人都能挖`}</dd>
           <dt><ItemIcon kind="crystal" size={18} /> 末影水晶</dt><dd>藏在末地宝藏里，一张{rules.endMix === 2 ? '一到两颗' : '一颗'}；踩中扣掉还没领的奖励的 {crystalPercent(rules)}%（TNT 的两倍，盾牌能挡）</dd></> : null}
       </dl> : null}
       <p className="rules-tip">拖动地图平移，滚轮或捏合缩放。点旁边的卡就能换过去，方向键也行；+/- 缩放。全图那一级能看到所有的卡，不能拖动。</p>

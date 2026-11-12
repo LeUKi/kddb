@@ -115,6 +115,20 @@ test('监守者醒了：卡关了就算挖完', () => {
   assert.equal(after.finished, true)
 })
 
+test('会退的噪音：按 noiseAt 取新的那份（不取大的）；谁吵醒的跟着来（docs/V3_ITEMS.md §16）', () => {
+  const deep = card(2, { kind: 'deep', noise: 5, noiseAt: 1000 })
+  const step = { type: 'cell', seq: 1, cardId: 1, index: 0, cell: { kind: 'emerald', uid: 7, name: 'b', at: 5 }, newCard: null, text: '', left: 990, over: false, stats, noise: 3.2, noiseAt: 40000 }
+  const after = live.mergeLive(game([deep]), new Map(), [step]).game.cards[0]
+  assert.deepEqual([after.noise, after.noiseAt], [3.2, 40000])
+  // 晚到的旧一份不盖掉新的
+  assert.deepEqual(live.newerNoise({ noise: 3.2, noiseAt: 40000 }, { noise: 5, noiseAt: 1000 }), { noise: 3.2, noiseAt: 40000 })
+  assert.deepEqual(live.newerNoise({ noise: 2 }, { noise: 3 }), { noise: 3 })
+  assert.deepEqual(live.newerNoise({}, {}), {})
+  const woke = { ...step, seq: 2, index: 1, closed: true, wokeBy: { uid: 7, name: 'b', amount: 255, at: 41000 } }
+  const shut = live.mergeLive(game([deep]), new Map(), [step, woke]).game.cards[0]
+  assert.deepEqual([shut.closed, shut.finished, shut.wokeBy?.name], [true, true, 'b'])
+})
+
 test('整局补回来时：开的格子没变，但火把、宝库变了，也换成新的那一份（card 推送漏了靠这个补）', () => {
   const mine = card(2, { vaults: { 1: 4 } })
   const fresh = card(2, { vaults: { 1: 3 }, torches: [{ at: 3, level: 0, name: 'b' }] })
@@ -173,7 +187,7 @@ test('第 2 版：煤炭、木棍排在火把后面；火把照 3×3（出界的
   assert.deepEqual(about.count, '3 个')
 })
 
-test('卡周围的说明：余量报还藏着多少钱、有哪几样宝贝，挖得差不多了指去最富的那张；深暗之域的危险区是格子数的 45%–75%', () => {
+test('卡周围的说明：余量报还藏着多少钱、有哪几样宝贝，挖得差不多了指去最富的那张；深暗之域的危险区是格子数的 45%–75%', async () => {
   const rules = { smallReward: 10, bigMultiplier: 5 }
   // 9 绿宝石 + 3 钻石 ×5 + 1 箱子矿车 ×1.5 = 25.5 份小奖 → 255（2.55），宝贝按先后最多 4 样
   const plain = { id: 1, left: { emerald: 9, diamond: 3, apple: 0, tnt: 6, pearl: 1, minecart: 1, shield: 2, coal: 3 }, finished: false }
@@ -200,6 +214,26 @@ test('卡周围的说明：余量报还藏着多少钱、有哪几样宝贝，�
   const deep = { cells: Array(49).fill(null), fixed: {}, noise: 18, closed: false }
   assert.deepEqual(regions.noiseOf(deep), { noise: 18, low: 23, high: 36, cells: 49, danger: false, closed: false, toDanger: 5 })
   assert.equal(regions.noiseOf({ ...deep, noise: 23 }).danger, true)
+  // 会退的噪音（rules.special: 2）：49 格，过了 12.25 才有危险；每 15 秒退一
+  const loud = { cells: Array(49).fill(null), fixed: {}, noise: 10, noiseAt: 0, closed: false }
+  const calm = regions.decayingNoiseOf(loud, {}, 0)
+  assert.deepEqual([calm.noise, calm.chance, calm.safe], [10, 0, 2])
+  // 9.25 以下才多一格：再过 0.75 × 15 秒
+  assert.equal(calm.next, 11250 + 50)
+  assert.deepEqual([regions.decayingNoiseOf(loud, {}, 15000).noise, regions.decayingNoiseOf(loud, {}, 15000).safe], [9, 3])
+  const danger = regions.decayingNoiseOf({ ...loud, noise: 30 }, {}, 0)
+  assert.deepEqual([danger.safe, danger.next], [0, 1000])
+  assert.ok(danger.chance > 0.04 && danger.chance < 0.07)
+  assert.equal(regions.chanceWords(danger.chance), `这一下约 ${Math.round(danger.chance * 100)}% 会吵醒监守者`)
+  assert.equal(regions.chanceWords(0.004), '这一下有一点可能吵醒监守者')
+  // 挖掘间隔 5 秒的局退得慢：每 25 秒退一
+  assert.equal(regions.decayingNoiseOf(loud, { digInterval: 5 }, 25000).noise, 9)
+  assert.equal(regions.decayingNoiseOf({ ...loud, closed: true }, {}, 0).next, null)
+  assert.match(regions.regionAbout({ kind: 'deep' }, { tntPercent: 25, special: 2 })[0], /慢慢退/)
+  // 和游戏站算的一样
+  const game = await import('../../../game/shared/rules.mjs')
+  for (const [noise, cells] of [[13, 49], [30, 49], [49, 49], [20, 32]]) assert.equal(regions.wardenChance(noise, cells), game.wardenChance(noise, cells))
+  for (const digInterval of [1, 3, 5, 10]) assert.equal(regions.noiseDecayMs({ digInterval }), game.noiseDecayMs({ digInterval }))
   assert.equal(regions.regionName({ id: 7 }), '第 7 张卡')
   assert.equal(regions.regionName({ id: 7, kind: 'deep' }), '深暗之域')
   assert.match(regions.regionAbout({ kind: 'mine' }, { items: 2, tntPercent: 25 })[0], /多等 10 秒/)

@@ -8,9 +8,12 @@ import { BLOCK_PX, CARD_BORDER, CARD_PX, cellPx, entranceWave, GAP, PAD, SLOT_PX
 import { drawThumb, THUMB_PX, whenImages } from './thumb'
 import { isBulb, RAIL_TEXTURE, railOf, sculkOf } from './layout'
 import { torchWords } from './aim'
-import { toast } from './state'
+import { digIntervalAtom, toast } from './state'
 import type { DigResult, Peek, PublicCard, Torch } from './types'
 import { BIOME_NAMES, KIND_NAMES, money } from './types'
+import { useAtomValue } from 'jotai'
+import { NoiseRail } from './CardLabels'
+import { noiseDecayMs, WARDEN_FROM } from './regions'
 import { torchArea } from './items'
 
 const ROWS = 'ABCDEFG'
@@ -135,9 +138,7 @@ export const CardView = memo(function CardView({ card, focused, diggable, detail
   const sculks = sculkOf(card)
   return <div className={blockClass} style={blockStyle} onClick={pick} data-card={card.id}>
     {/* 挖卡这一级的当前卡：噪音在卡下面的噪音条里（CardLabels），这里不再写 */}
-    {card.kind === 'deep' && !names ? <div className="card-noise" aria-label={`噪音 ${card.noise ?? 0}${card.closed ? '，监守者醒了，这张卡关了' : ''}`}>
-      <ItemIcon kind="sculk" size={22} /><span>噪音 {card.noise ?? 0}</span>{card.closed ? <b>监守者醒了</b> : null}
-    </div> : null}
+    {card.kind === 'deep' && !names ? <NoiseBadge card={card} /> : null}
     <div className={className} style={style} {...(card.torches?.length ? {
       // 火把不挡格子（手机上点它旁边的格子要点得到）：电脑上指针离哪个火把近，就说哪个火把
       onPointerMove: (event: ReactPointerEvent) => {
@@ -223,7 +224,7 @@ export const CardView = memo(function CardView({ card, focused, diggable, detail
       </span>)}
     {torch2 && preview ? <span className={`torch-frame${preview.ok ? '' : ' is-bad'}`} style={areaOf(preview.cells)} aria-hidden="true" /> : null}
     {ghost ? <span className={`torch torch-ghost${torch2 ? ' is-v2' : ''}`} style={ghost} aria-hidden="true"><ItemIcon kind="torch" size={Math.round(side * 0.85)} /></span> : null}
-    {card.closed ? <div className="card-closed" aria-hidden="true"><span>监守者醒了</span></div> : null}
+    {card.closed ? <WardenWoke card={card} /> : null}
     </div>
   </div>
 })
@@ -264,4 +265,32 @@ function floatText(result: DigResult) {
   }
   if (result.kind === 'coal' || result.kind === 'stick') return result.text.includes('已经够了') ? '够了，不算' : got[result.kind] ?? ''
   return got[result.kind] ?? ''
+}
+
+/**
+ * 深暗之域卡角上的噪音（不是挖卡这一级的当前卡）：旧局写数；新局噪音会退，画一小段条，自己往回走（不重画网页）。
+ */
+function NoiseBadge({ card }: { card: PublicCard }) {
+  const digInterval = useAtomValue(digIntervalAtom)
+  if (card.closed) return <div className="card-noise" aria-label="监守者醒了"><ItemIcon kind="sculk" size={22} /><b>监守者醒了</b></div>
+  if (card.noiseAt === undefined) return <div className="card-noise" aria-label={`噪音 ${card.noise ?? 0}`}><ItemIcon kind="sculk" size={22} /><span>噪音 {card.noise ?? 0}</span></div>
+  const cells = card.cells.length - Object.keys(card.fixed ?? {}).length
+  return <div className="card-noise" aria-label="噪音">
+    <ItemIcon kind="sculk" size={22} /><span>噪音</span>
+    <span className="noise-track is-v2 is-small" style={{ '--from': `${WARDEN_FROM * 100}%` } as CSSProperties} aria-hidden="true">
+      <NoiseRail card={card} cells={cells} decay={noiseDecayMs({ digInterval })} />
+    </span>
+  </div>
+}
+
+/**
+ * 监守者醒了：卡暗下来，监守者的脸浮在中间。刚醒（4 秒内）的那一下像原版的“黑暗”效果一明一暗几下，脸从下面升上来；
+ * 打开网页时早就关了的卡直接是暗的（docs/V3_ITEMS.md §16）。
+ */
+function WardenWoke({ card }: { card: PublicCard }) {
+  const fresh = !!card.wokeBy?.at && hb.now() - card.wokeBy.at < 4000
+  return <div className={`card-closed${fresh ? ' is-fresh' : ''}`} aria-hidden="true">
+    <span className="warden-face" />
+    <span className="warden-words">监守者醒了</span>
+  </div>
 }

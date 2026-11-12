@@ -40,6 +40,8 @@ export const freshAtom = atom<Record<string, { mine: boolean; at: number; result
 export const newCardAtom = atom<{ cardId: number; at: number; from: { cardId: number; index: number } } | null>(null)
 /** 请地图把镜头移到一张卡（动态、NEW 标记、自己的珍珠） */
 export const focusRequestAtom = atom<{ cardId: number; at: number; dig?: boolean } | null>(null)
+/** JP 指着的特殊区块（离你最近的、还开着的；MapView 算），底栏那一行说同一个 */
+export const jpTargetAtom = atom<number | null>(null)
 export const toastAtom = atom<{ text: string; tone: 'info' | 'good' | 'bad'; id: number } | null>(null)
 export type Claiming = 'idle' | 'working' | 'filled' | 'done'
 export const claimingAtom = atom<Claiming>('idle')

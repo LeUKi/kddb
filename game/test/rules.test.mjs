@@ -5,18 +5,20 @@ import {
   amountOf, budgetLeft, claim, createGame, creeperBlast, crystalPercent, dig, digBlocked, formatPoints,
   averageUnits, coolingOf, MIN_INTERVAL_MS, newCard, newEndCard, newPlayer, placeFor, POOL_TARGET, privatePlayer, publicCard, publicGame,
   publicTorches, randomOf, rewardFor, rulesOf, SHIELD_CAP, shieldsOf, summaryOf, tableChoicesOf, topWith, useItem, usePick, WRAP_UP_MS,
-  drainIdle, idleNextAt, IDLE_MS, IDLE_EVERY_MS,
+  drainIdle, idleNextAt, IDLE_MS, IDLE_EVERY_MS, noiseNow, wardenChance, NOISE_DECAY_MS,
 } from "../shared/rules.mjs";
 
 const T0 = Date.parse("2026-11-06T12:00:00+08:00");
 const DAY = 24 * 3600 * 1000;
 
-/** @param {Partial<{ pool: number, params: Record<string, unknown>, seed: string, layout: boolean }>} [options] */
-function game({ pool = 10000, params = {}, seed = "seed-a", layout = false } = {}) {
+/** @param {Partial<{ pool: number, params: Record<string, unknown>, seed: string, layout: boolean, special: boolean }>} [options] */
+function game({ pool = 10000, params = {}, seed = "seed-a", layout = false, special = false } = {}) {
   // 绿宝石按 10 分写死（新判定器是按奖池和人数算的，见“参数”那一组）
   const rules = rulesOf({ boardSpec: "5", smallReward: 10, ...params });
   // 区块的新摆法（rules.layout: 2）单独测（“区块的新摆法”那一组）；别的测试按以前的摆法写的固定格子位置
   if (!layout) delete rules.layout;
+  // 末影之眼开特殊区块、深暗之域噪音会退（rules.special: 2）单独测（“特殊区块和监守者”那一组）
+  if (!special) delete rules.special;
   return createGame({ seed, rules, pool, openedAt: T0, deadlineAt: T0 + DAY });
 }
 
@@ -1190,13 +1192,14 @@ describe("新局的道具（docs/V3_ITEMS.md §3）", () => {
     const loud = dig(g, p, { cardId: card.id, index: 22, now: later() });
     assert.ok(loud.ok);
     assert.equal(loud.result.warden, 15);
-    assert.match(loud.result.text, /噪音惊醒了监守者，待领取的奖励被扣掉一半（-0\.15），这张卡关闭了/);
-    assert.match(loud.feed.text, /惊醒了监守者/);
+    assert.match(loud.result.text, /监守者被你吵醒了！它抢走了你待领取的一半（-0\.15）$/);
+    assert.match(loud.feed.text, /吵醒了监守者，待领取的被抢走一半（-0\.15）$/);
     assert.deepEqual([p.points, p.chest, p.shields, g.used, card.closed, card.finished], [15, 7, 2, 15, true, true]);
     assert.deepEqual(p.trail.at(-1), { k: "warden", a: -15, p: 22 });
     assert.match(dig(g, p, { cardId: card.id, index: 23, now: later() }).message, /监守者醒了，这张卡已经关闭/);
     const shown = publicCard(card);
     assert.deepEqual([shown.noise, shown.closed, shown.finished, shown.torches], [3, true, true, []]);
+    assert.deepEqual(shown.wokeBy, { uid: 10001, name: "小明", amount: 15, at: loud.feed.at });
   });
 
   it("以前开的局：盾牌挡一次就用掉（新局才叠）", () => {
@@ -1503,3 +1506,118 @@ describe("区块的新摆法（rules.layout: 2，docs/V3_ITEMS.md §10）", () =
 function torchAt(card, at) {
   return publicTorches(card).find((torch) => torch.at === at);
 }
+
+describe("特殊区块和监守者（rules.special: 2，docs/V3_ITEMS.md §16、§17）", () => {
+  it("末影珍珠长的卡只有普通、废弃矿井、试炼密室，大约 50 / 40 / 10", () => {
+    const g = game({ special: true });
+    const seen = { normal: 0, mine: 0, trial: 0 };
+    for (let id = 2; id < 1002; id++) {
+      const kind = newCard(g, id, id, 0).kind ?? "normal";
+      assert.ok(kind in seen, kind);
+      seen[kind] += 1;
+    }
+    assert.ok(Math.abs(seen.normal - 500) < 80 && Math.abs(seen.mine - 400) < 80 && Math.abs(seen.trial - 100) < 50, JSON.stringify(seen));
+  });
+
+  it("末影之眼在远处开特殊区块：末地宝藏、深暗之域、下界，大约 50 / 25 / 25；开出来的卡记着 fromEye、不藏眼、不算进“每几张一颗眼”", () => {
+    const seen = { end: 0, deep: 0, nether: 0 };
+    for (let n = 0; n < 200; n++) {
+      const g = game({ special: true, seed: `eye-${n}`, params: { eyeEvery: 0 } });
+      stack(g, 1, { 7: "eye" });
+      const p = newPlayer(g, 10001, "小明");
+      const out = dig(g, p, { cardId: 1, index: 7, now: later() });
+      assert.ok(out.ok);
+      const grown = g.cards[out.feed.newCardId];
+      assert.ok(grown.kind in seen, grown.kind);
+      seen[grown.kind] += 1;
+      assert.equal(grown.fromEye, true);
+      assert.equal(publicCard(grown).fromEye, true);
+      assert.equal(grown.composition.eye ?? 0, 0);
+      const name = { end: "末地宝藏", deep: "深暗之域", nether: "下界" }[grown.kind];
+      assert.equal(out.result.text.includes(`远处开出了${name}`), true, out.result.text);
+      assert.match(out.feed.text, new RegExp(`挖到末影之眼，${name}开了`));
+    }
+    assert.ok(seen.end > 70 && seen.end < 130 && seen.deep > 25 && seen.nether > 25, JSON.stringify(seen));
+    // 眼开的特殊区块不算张数：第 3 张珍珠长的卡才藏眼
+    const g = game({ special: true, params: { eyeEvery: 3 } });
+    g.cards[2] = newCard(g, 2, 2, 0, "deep"); g.slots["2,0"] = 2;
+    assert.equal(g.cards[2].composition.eye ?? 0, 0);
+    const third = newCard(g, 3, 3, 0);
+    assert.equal(third.composition.eye ?? 0, 0, "第 2 张珍珠卡不藏眼");
+    g.cards[3] = third; g.slots["3,0"] = 3;
+    assert.equal(newCard(g, 4, 4, 0).composition.eye, 1, "第 3 张珍珠卡藏眼");
+  });
+
+  it("深暗之域第 2 版：噪音谁挖都加一、没人挖时每 15 秒退一；两成五以前不会醒，越吵越容易醒，最吵约一成", () => {
+    const g = game({ special: true });
+    const card = newCard(g, 2, 2, 0, "deep");
+    g.cards[2] = card; g.slots["2,0"] = 2;
+    lay(card, {}, undefined);
+    assert.deepEqual([card.noise, card.noiseAt, card.wardenAt], [0, 0, undefined]);
+    const p = newPlayer(g, 10001, "小明");
+    const q = newPlayer(g, 10002, "小红");
+    let now = T0 + 1000;
+    dig(g, p, { cardId: 2, index: 0, now });
+    dig(g, q, { cardId: 2, index: 1, now: now + 100 });
+    // 第二下隔了 0.1 秒，前一下的噪音退了一点点
+    assert.ok(Math.abs(card.noise - 2) < 0.01, String(card.noise));
+    // 30 秒没人挖：退两格
+    assert.equal(noiseNow(card, g.rules, now + 100 + 2 * NOISE_DECAY_MS), 0);
+    assert.ok(Math.abs(noiseNow(card, g.rules, now + 100 + NOISE_DECAY_MS) - 1) < 0.01);
+    const shown = publicCard(card);
+    assert.deepEqual([Math.round(shown.noise), shown.noiseAt], [2, now + 100]);
+    // 机会：49 格的卡，噪音 12 以前是 0，满了 10%
+    assert.equal(wardenChance(12, 49), 0);
+    assert.ok(wardenChance(20, 49) > 0 && wardenChance(20, 49) < wardenChance(40, 49));
+    assert.ok(Math.abs(wardenChance(49, 49) - 0.1) < 1e-9);
+  });
+
+  it("挖得快迟早吵醒监守者：吵醒的人扣一半、大家看得见是谁；慢慢挖（噪音退干净）能把整张挖完", () => {
+    // 快：一秒一格，噪音一路涨
+    let woke = 0, cleared = 0;
+    for (let n = 0; n < 40; n++) {
+      const g = game({ special: true, seed: `deep-${n}` });
+      const card = newCard(g, 2, 2, 0, "deep");
+      g.cards[2] = card; g.slots["2,0"] = 2;
+      lay(card, {}, undefined);
+      const p = newPlayer(g, 10001, "小明");
+      p.chances = 99;
+      let now = T0;
+      for (let index = 0; index < 49 && !card.closed; index++) {
+        now += 1500;
+        const out = dig(g, p, { cardId: 2, index, now });
+        if (card.closed) {
+          woke += 1;
+          assert.ok(index >= 12, `两成五以前不会醒：第 ${index + 1} 格`);
+          assert.deepEqual(card.wokeBy, { uid: 10001, name: "小明", amount: out.result.warden ?? 0, at: now });
+          assert.match(out.result.text, /监守者被你吵醒了！/);
+          assert.match(out.feed.text, /吵醒了监守者/);
+        }
+      }
+      if (!card.closed) cleared += 1;
+    }
+    assert.ok(woke > 25, `大多数被吵醒：${woke}/40`);
+    // 慢：每格等 30 秒（噪音退回 0 再挖），一直在两成五以下，挖得完
+    const g = game({ special: true, seed: "deep-slow" });
+    const card = newCard(g, 2, 2, 0, "deep");
+    g.cards[2] = card; g.slots["2,0"] = 2;
+    lay(card, {}, undefined);
+    const p = newPlayer(g, 10001, "小明");
+    p.chances = 99;
+    let now = T0;
+    for (let index = 0; index < 49; index++) { now += 30_000; dig(g, p, { cardId: 2, index, now }); }
+    assert.equal(card.closed, false);
+    assert.equal(card.finished, true);
+  });
+
+  it("以前开的局照旧：珍珠也长深暗之域、下界；深暗之域还是先定一个数", () => {
+    const g = game();
+    const kinds = new Set();
+    for (let id = 2; id < 400; id++) kinds.add(newCard(g, id, id, 0).kind ?? "normal");
+    assert.ok(kinds.has("deep") && kinds.has("nether"));
+    const deep = biomeCard(g, "deep");
+    assert.equal(typeof deep.wardenAt, "number");
+    assert.equal(deep.noiseAt, undefined);
+  });
+});
+

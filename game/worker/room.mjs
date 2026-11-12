@@ -5,8 +5,8 @@
 // storage 那几个方法，测试里用一个 Map 顶替。
 
 import {
-  amountOf, claim, createGame, creeperBlast, dig, digBlocked, drainIdle, dugOf, IDLE_EVERY_MS, idleDelayOf, idleNextAt,
-  newPlayer, privatePlayer, publicCard, publicGame, publicTorches, rulesOf, summaryOf, topWith, totalOf, useItem,
+  amountOf, claim, createGame, creeperBlast, dig, digBlocked, drainIdle, IDLE_EVERY_MS, idleDelayOf, idleNextAt,
+  newPlayer, privatePlayer, publicCard, publicGame, publicNoise, publicTorches, rulesOf, summaryOf, topWith, totalOf, useItem,
 } from "../shared/rules.mjs";
 import { BOT_BASE, BOT_COUNT, pickCell } from "./bots.mjs";
 
@@ -37,14 +37,16 @@ import { BOT_BASE, BOT_COUNT, pickCell } from "./bots.mjs";
  * 推送第 2 版：只说变了的那一格（网页自己把它放到卡上、减掉剩下的数、看挖完没有），
  * 一条两百字节左右；第 1 版每条带整张卡（谁挖的名字每格一份），挖满的 7×7 卡一条一千五。
  * 新局另有（docs/V3_ITEMS.md §4）：torches（这张卡插过火把时，亮着的那些，颜色按现在算）、
- * burned（这一挖让岩浆吞掉的格子）、noise 和 closed（深暗之域的卡）、vaults（试炼密室的宝库还能开几次）。
+ * burned（这一挖让岩浆吞掉的格子）、noise / noiseAt / closed / wokeBy（深暗之域的卡，publicNoise）、
+ * vaults（试炼密室的宝库还能开几次）。
  * @typedef {{
  *   type: "cell", seq: number, cardId: number, index: number,
  *   cell: { kind: string, uid: number, name: string, at: number },
  *   newCard: ReturnType<typeof publicCard>|null, text: string,
  *   left: number, over: boolean, stats: Game["stats"],
  *   torches?: ReturnType<typeof publicTorches>, burned?: CellOut["burned"],
- *   noise?: number, closed?: boolean, vaults?: Record<string, number>,
+ *   noise?: number, noiseAt?: number, closed?: boolean, wokeBy?: { uid: number, name: string, amount: number, at: number },
+ *   vaults?: Record<string, number>,
  * }} CellMessage
  */
 /** 内存里留最近这么多条第 2 版推送，网页漏了几条时按序号补（GET /since），不用重读整局。 */
@@ -386,7 +388,7 @@ export class MineRoom {
       stats,
       ...(card.torches && card.torches.length > 0 ? { torches: publicTorches(card) } : {}),
       ...(out.burned.length > 0 ? { burned: out.burned } : {}),
-      ...(card.kind === "deep" ? { noise: dugOf(card), closed: Boolean(card.closed) } : {}),
+      ...publicNoise(card),
       // 宝库还能开几次：card 推送没有序号，漏了补不回来；这张卡上再挖一格就跟着改过来
       ...(card.vaults ? { vaults: { ...card.vaults } } : {}),
     };

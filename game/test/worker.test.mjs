@@ -288,10 +288,10 @@ describe("道具和区块（docs/V3_ITEMS.md §4）", () => {
     const me = await one.playerOf(game, 10001, "xiaoming");
     return { one, storage, game, me };
   }
-  /** 放进一张这种区块的卡，牌全换成绿宝石（固定的格子照旧）。 */
+  /** 放进一张这种区块的卡，牌全换成绿宝石（固定的格子照旧）。新局（rules.special: 2）珍珠不长下界、深暗之域，直接点名要。 */
   function biome(/** @type {any} */ game, /** @type {string} */ kind) {
     for (let id = 2; ; id++) {
-      const card = newCard(game, id, id, 0);
+      const card = newCard(game, id, id, 0, /** @type {any} */ (id > 400 ? kind : null));
       if (card.kind !== kind) continue;
       card.deck = card.deck.map((each, index) => (card.fixed?.[index] ? each : "emerald"));
       game.cards[id] = card;
@@ -378,15 +378,24 @@ describe("道具和区块（docs/V3_ITEMS.md §4）", () => {
     const burned = /** @type {any} */ (last?.cell?.burned)[0];
     assert.deepEqual(/** @type {any} */ (last?.answer.update).burned, last?.cell?.burned);
     assert.deepEqual(publicBurn(last?.broadcast, burned.index), { kind: burned.kind, uid: 0, name: "", at: NOW, burn: 1 });
+    // 2026-11-12 前的局：噪音就是挖了几格，到 wardenAt 醒
     const deep = biome(game, "deep");
+    delete deep.noise;
+    delete deep.noiseAt;
     deep.wardenAt = 2;
     const quiet = await one.dig(info, 10020, "a", { cardId: deep.id, index: 0 }, NOW, { compact: true });
-    assert.deepEqual([quiet.cell?.noise, quiet.cell?.closed], [1, false]);
+    assert.deepEqual([quiet.cell?.noise, quiet.cell?.closed, quiet.cell?.noiseAt], [1, false, undefined]);
     const loud = await one.dig(info, 10021, "b", { cardId: deep.id, index: 1 }, NOW, { compact: true });
-    assert.deepEqual([loud.cell?.noise, loud.cell?.closed], [2, true]);
-    assert.match(String(loud.cell?.text), /惊醒了监守者/);
+    assert.deepEqual([loud.cell?.noise, loud.cell?.closed, loud.cell?.wokeBy?.name], [2, true, "b"]);
+    assert.match(String(loud.cell?.text), /吵醒了监守者/);
     const shut = await one.dig(info, 10022, "c", { cardId: deep.id, index: 2 }, NOW, { compact: true });
     assert.equal(shut.answer.message, "监守者醒了，这张卡已经关闭，不能再挖");
+    // 新局：噪音会退，推送带挖的那一刻的 noise 和 noiseAt，网页接着往下退
+    const loudish = biome(game, "deep");
+    const first = await one.dig(info, 10023, "d", { cardId: loudish.id, index: 0 }, NOW, { compact: true });
+    assert.deepEqual([first.cell?.noise, first.cell?.noiseAt, first.cell?.closed], [1, NOW, false]);
+    const later = await one.dig(info, 10024, "e", { cardId: loudish.id, index: 1 }, NOW + 7500, { compact: true });
+    assert.deepEqual([later.cell?.noise, later.cell?.noiseAt], [1.5, NOW + 7500]);
   });
 
   it("末影箱：领的是手上加箱子，凭证上的分也是；箱子改了预算要存", async () => {

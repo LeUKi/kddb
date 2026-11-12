@@ -8,6 +8,11 @@
 import { budgetLeft, claim, createGame, dig, newPlayer, rulesOf, totalOf, useItem } from "../shared/rules.mjs";
 
 const RUNS = Number(process.argv[2] ?? 40);
+/**
+ * 每挖一下（轮到下一个人）过去多久。深暗之域的噪音会退（rules.special: 2，§16），时间走得太快噪音永远起不来；
+ * 3 秒一下大约是十几二十个人一起挖时一张卡上的节奏。STEP_MS=60000 是 2026-11-11 以前的算法。
+ */
+const STEP_MS = Number(process.env.STEP_MS ?? 3000);
 
 /** 一条小随机流（模拟的人怎么挑格子），和游戏的种子分开。 */
 function rng(seed) {
@@ -27,6 +32,8 @@ function play({ seed, items, players, chances = 20, level = "normal", interval =
   const pool = budget ?? 1e12;
   const rules = rulesOf(params, pool);
   if (!items) delete rules.items;
+  // OLD_SPECIAL=1：按 2026-11-12 以前的局算（珍珠什么区块都长、末影之眼只开末地、监守者到数就醒），和新的比
+  if (process.env.OLD_SPECIAL) delete rules.special;
   if (budget === undefined) {
     rules.smallReward = 100;
     rules.appleCap = 1000;
@@ -81,7 +88,7 @@ function play({ seed, items, players, chances = 20, level = "normal", interval =
     let moved = false;
     for (const player of people) {
       if (player.status !== "playing" || game.over) continue;
-      now += 60_000;
+      now += STEP_MS;
       if (items) useItems(player);
       const shape = ["h", "v", "x"].find((key) => (player.items?.pick[key] ?? 0) > 0);
       const at = pickCell();
@@ -133,6 +140,7 @@ if (process.argv[3] === "stall") {
 const median = (list) => list[Math.floor(list.length / 2)];
 const mean = (list) => list.reduce((a, b) => a + b, 0) / list.length;
 
+// node game/scripts/sim-items.mjs 60 units：只跑第 1 段（校准 ITEMS_UNITS 用），另外数一数各种区块和监守者
 // 1. 每次机会平均几份小奖（奖池不封顶），旧局和新局比
 console.log("== 每次机会平均几份小奖（奖池很大、每人把机会挖完）==");
 for (const level of ["easy", "normal", "tough"]) {
@@ -145,8 +153,19 @@ for (const level of ["easy", "normal", "tough"]) {
       extras.push(stats.extra / 20);
     }
     console.log(`${level.padEnd(6)} ${items ? "新局" : "旧局"}  ${mean(units).toFixed(3)} 份/次${items ? `，附魔镐多挖 ${mean(extras).toFixed(2)} 格/人` : ""}`);
+    if (items && process.argv[3] === "units") {
+      const biomes = {};
+      let deep = 0, woke = 0;
+      for (let seed = 1; seed <= RUNS; seed++) {
+        const { stats, game } = play({ seed, items, players: 20, level });
+        for (const [key, count] of Object.entries(stats.biomes)) biomes[key] = (biomes[key] ?? 0) + count / RUNS;
+        for (const card of Object.values(game.cards)) if (card.kind === "deep") { deep += 1; if (card.closed) woke += 1; }
+      }
+      console.log(`       每局的卡：${Object.entries(biomes).map(([key, value]) => `${key} ${value.toFixed(1)}`).join("，")}；深暗之域 ${deep} 张，监守者醒了 ${woke} 张`);
+    }
   }
 }
+if (process.argv[3] === "units") process.exit(0);
 
 // 2. 按预计人数算的奖池：真的发出去多少、多早分完、人和人差多少
 console.log("\n== 奖池 100.00、按预计人数算 ==");

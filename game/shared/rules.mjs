@@ -48,6 +48,7 @@ import { lavaOf, railsOf, trialLayout } from "./layouts.mjs";
  *   items?: 1|2,
  *   creeper?: number,
  *   layout?: 2,
+ *   special?: 2,
  *   step?: string,
  * }} Rules
  */
@@ -60,13 +61,16 @@ import { lavaOf, railsOf, trialLayout } from "./layouts.mjs";
  */
 /**
  * 新局的卡另有：fixed（固定格子）、vaults（宝库还能开几次）、torches（插过的火把，灭了的也留着）、
- * wardenAt（深暗之域：噪音到这个数唤醒监守者，不公开）、closed（监守者醒了，卡关闭）。
+ * wardenAt（深暗之域：噪音到这个数唤醒监守者，不公开）、closed（监守者醒了，卡关闭）。2026-11-12 起的局
+ * （rules.special: 2，docs/V3_ITEMS.md §16、§17）：fromEye（末影之眼开的特殊区块）；深暗之域不再有 wardenAt，
+ * 改成 noise / noiseAt（噪音会随时间退）和 wokeBy（谁吵醒了监守者、被抢走多少）。
  * @typedef {{
  *   id: number, x: number, y: number, size: Size, kind?: 'end'|Biome,
  *   composition: Composition, deck: Kind[], opened: (OpenCell|null)[],
  *   finished: boolean,
  *   fixed?: Record<string, FixedKind>, vaults?: Record<string, number>, torches?: Torch[],
  *   wardenAt?: number, closed?: boolean, rails?: Record<string, import('./layouts.mjs').RailShape>,
+ *   fromEye?: true, noise?: number, noiseAt?: number, wokeBy?: { uid: number, name: string, amount: number, at: number },
  * }} Card
  */
 /** @typedef {{ cardId: number, index: number, kind: Kind }} Peek */
@@ -195,6 +199,34 @@ export const DANGER = /** @type {ReadonlySet<Kind>} */ (new Set(["tnt", "crystal
 export const MAP_WEIGHTS = /** @type {const} */ ({ emerald: 30, apple: 10, diamond: 6, debris: 3 });
 /** 长出来的卡抽区块（百分比的累计上限）：普通 55，试炼密室 12，废弃矿井 12，下界 11，深暗之域 10。 */
 const BIOME_ODDS = /** @type {const} */ ([["normal", 55], ["trial", 67], ["mine", 79], ["nether", 90], ["deep", 100]]);
+/**
+ * 2026-11-12 起的局（rules.special: 2，docs/V3_ITEMS.md §17，权重用户定的）：末影珍珠长的卡只抽普通、废弃矿井、试炼密室；
+ * 末影之眼在远处开特殊区块：末地宝藏、深暗之域、下界（容易得大奖、风险也大）。
+ */
+/** 区块的名字（说给人听的） */
+export const BIOME_NAMES = /** @type {Record<Biome, string>} */ ({ trial: "试炼密室", mine: "废弃矿井", nether: "下界", deep: "深暗之域" });
+const PEARL_ODDS = /** @type {const} */ ([["normal", 50], ["mine", 90], ["trial", 100]]);
+const EYE_ODDS = /** @type {const} */ ([["end", 50], ["deep", 75], ["nether", 100]]);
+/**
+ * 深暗之域第 2 版（docs/V3_ITEMS.md §16）：噪音谁挖都加一，没人挖时慢慢退（每 NOISE_DECAY_MS 退一，挖掘间隔长的局按
+ * 间隔的 5 倍）；过了格子数的 WARDEN_FROM 以后，每挖一格都有机会惊醒监守者，越吵越大，最吵时 WARDEN_MAX。
+ */
+export const NOISE_DECAY_MS = 15_000;
+export const WARDEN_FROM = 0.25;
+export const WARDEN_MAX = 0.1;
+export const WARDEN_CURVE = 0.8;
+export const noiseDecayMs = (/** @type {Pick<Rules, 'digInterval'>} */ rules) => Math.max(NOISE_DECAY_MS, (rules.digInterval ?? 1) * 5000);
+/** 深暗之域现在的噪音（第 2 版会退；第 1 版就是挖开的格子数） */
+export function noiseNow(/** @type {Card} */ card, /** @type {Rules} */ rules, /** @type {number} */ now) {
+  if (card.noiseAt === undefined) return dugOf(card);
+  return Math.max(0, (card.noise ?? 0) - Math.max(0, now - card.noiseAt) / noiseDecayMs(rules));
+}
+/** 噪音到 noise 时，再挖一格惊醒监守者的机会（0–WARDEN_MAX）；cells 是这张卡能挖的格子数 */
+export function wardenChance(/** @type {number} */ noise, /** @type {number} */ cells) {
+  const from = cells * WARDEN_FROM;
+  if (noise <= from) return 0;
+  return WARDEN_MAX * Math.min(1, (noise - from) / (cells - from)) ** WARDEN_CURVE;
+}
 /** 新局普通卡的煤炭、木棍各几块。 */
 const SCRAP_COUNTS = /** @type {const} */ ({ 5: 2, 6: 3, 7: 4 });
 /** 末影之眼默认每 3 张普通卡一颗；参数可改，0 是不开末地宝藏。 */
@@ -293,6 +325,8 @@ export function rulesOf(/** @type {Record<string, unknown>} */ params, /** @type
     // 区块里固定格子的新摆法（2026-11-11 晚起，docs/V3_ITEMS.md §10）：铁轨随机铺、试炼密室 5 种摆法、
     // 下界岩浆一半挨在一起（layouts.mjs）；以前开的局没有这一项，照旧
     layout: 2,
+    // 末影之眼开特殊区块、末影珍珠只长普通的几种、深暗之域的噪音会退（2026-11-12 起，docs/V3_ITEMS.md §16、§17）；以前开的局没有这一项，照旧
+    special: 2,
   });
 }
 
@@ -323,9 +357,11 @@ export function averageUnits(/** @type {Difficulty} */ difficulty, items = false
  * 有道具栏的局每次机会平均发出去的，是旧局的几成（docs/V3_ITEMS.md §7，game/scripts/sim-items.mjs
  * 2026-11-11 每种难度 60 局，地图不会长不动以后：简单 1.459/1.936、普通 1.179/1.752、困难 0.624/1.435
  * 份小奖）。垃圾格、道具占了绿宝石的位置，困难的 TNT 又扣得多；绿宝石按这个比例变贵，同样的奖池、
- * 同样的人数，发出去的和旧局差不多。
+ * 同样的人数，发出去的和旧局差不多。2026-11-12 特殊区块都从末影之眼开（rules.special: 2，§17）：珍珠长的多是
+ * 普通和废弃矿井，下界、深暗之域少了，sim-items.mjs 60 局（3 秒一下）每次机会发出去的是以前的 0.824 / 0.828 / 0.825
+ * （简单 1.193/1.447、普通 0.959/1.158、困难 0.517/0.627），上面的几成都乘 0.825。
  */
-export const ITEMS_UNITS = /** @type {const} */ ({ easy: 0.75, normal: 0.67, tough: 0.43, hard: 0.67, hell: 0.43 });
+export const ITEMS_UNITS = /** @type {const} */ ({ easy: 0.62, normal: 0.55, tough: 0.355, hard: 0.55, hell: 0.355 });
 
 /** 绿宝石值多少分：大约 POOL_TARGET 的奖池够预计人数每人把机会挖完；至少 1 分。items：有道具栏的局。 */
 export function rewardFor(/** @type {number} */ pool, /** @type {number} */ players, /** @type {number} */ chances, /** @type {Difficulty} */ difficulty, items = false) {
@@ -408,8 +444,8 @@ function shuffledDeck(int, composition) {
 }
 
 /** 第 id 张卡，放在 (x, y)；规格、配比和牌序都由种子和卡号定。 */
-export function newCard(/** @type {Game} */ game, /** @type {number} */ id, /** @type {number} */ x, /** @type {number} */ y) {
-  if (game.rules.items) return newItemsCard(game, id, x, y);
+export function newCard(/** @type {Game} */ game, /** @type {number} */ id, /** @type {number} */ x, /** @type {number} */ y, /** @type {Biome|null} */ biome = null) {
+  if (game.rules.items) return newItemsCard(game, id, x, y, biome);
   const int = randomOf(game.seed, `card:${id}`);
   const { rules } = game;
   const size = /** @type {5|6|7} */ (rules.boardSpec === "random" ? int(5, 7) : Number(rules.boardSpec));
@@ -439,15 +475,17 @@ export function newCard(/** @type {Game} */ game, /** @type {number} */ id, /** 
  * 3 秒以上的局才有）、试炼钥匙，望远镜少一些；末影之眼照旧每第 eyeEvery 张卡一颗（区块卡也算，
  * 占一颗绿宝石的位置）。
  */
-function newItemsCard(/** @type {Game} */ game, /** @type {number} */ id, /** @type {number} */ x, /** @type {number} */ y) {
+function newItemsCard(/** @type {Game} */ game, /** @type {number} */ id, /** @type {number} */ x, /** @type {number} */ y, /** @type {Biome|null} */ forced = null) {
   const int = randomOf(game.seed, `card:${id}`);
   const { rules } = game;
-  const nth = Object.values(game.cards).filter((other) => other.kind !== "end").length + 1;
+  // 第几张：末地宝藏和末影之眼开的特殊区块不算（“每几张卡一颗眼”只数珍珠长的）
+  const nth = Object.values(game.cards).filter((other) => other.kind !== "end" && !other.fromEye).length + 1;
   /** @type {'normal'|Biome} */
-  let biome = "normal";
-  if (nth > 1) {
+  let biome = forced ?? "normal";
+  if (!forced && nth > 1) {
     const roll = int(0, 99);
-    biome = /** @type {(typeof BIOME_ODDS)[number]} */ (BIOME_ODDS.find(([, upTo]) => roll < upTo))[0];
+    const odds = (rules.special ?? 0) >= 2 ? PEARL_ODDS : BIOME_ODDS;
+    biome = /** @type {'normal'|Biome} */ (odds.find(([, upTo]) => roll < upTo)?.[0] ?? "normal");
   }
   const tnt = (/** @type {5|6|7} */ size) => TNT_COUNTS[rules.difficulty][size];
   /** 新摆法（rules.layout: 2，layouts.mjs） */
@@ -515,7 +553,8 @@ function newItemsCard(/** @type {Game} */ game, /** @type {number} */ id, /** @t
       counts.key = int(0, 99) < 30 ? 1 : 0;
     }
   }
-  if (rules.eyeEvery > 0 && nth % rules.eyeEvery === 0) counts.eye = 1;
+  // 末影之眼开的特殊区块里不藏眼（不会一个接一个开）
+  if (!forced && rules.eyeEvery > 0 && nth % rules.eyeEvery === 0) counts.eye = 1;
   const cells = size * size - Object.keys(fixed).length;
   const sum = () => Object.values(counts).reduce((total, count) => total + (count ?? 0), 0);
   // 放不下时（难度高的 5×5）依次少放这几样
@@ -539,9 +578,14 @@ function newItemsCard(/** @type {Game} */ game, /** @type {number} */ id, /** @t
   if (biome === "trial") card.vaults = Object.fromEntries(vaultCells.map((index) => [index, VAULT_OPENS]));
   if (rails) card.rails = rails;
   if (biome === "deep") {
-    card.wardenAt = int(Math.ceil(cells * WARDEN_RANGE[0]), Math.floor(cells * WARDEN_RANGE[1]));
+    // 第 2 版：噪音会退、每挖一格都可能醒（§16），不再先定一个数
+    if ((rules.special ?? 0) >= 2) {
+      card.noise = 0;
+      card.noiseAt = 0;
+    } else card.wardenAt = int(Math.ceil(cells * WARDEN_RANGE[0]), Math.floor(cells * WARDEN_RANGE[1]));
     card.closed = false;
   }
+  if (forced) card.fromEye = true;
   return card;
 }
 
@@ -592,8 +636,9 @@ export function newEndCard(/** @type {Game} */ game, /** @type {number} */ id, /
   });
 }
 
-function addCard(/** @type {Game} */ game, /** @type {number} */ x, /** @type {number} */ y, end = false) {
-  const card = end ? newEndCard(game, game.nextCardId, x, y) : newCard(game, game.nextCardId, x, y);
+function addCard(/** @type {Game} */ game, /** @type {number} */ x, /** @type {number} */ y, end = false, /** @type {Biome|null} */ biome = null) {
+  const card = end ? newEndCard(game, game.nextCardId, x, y) : newCard(game, game.nextCardId, x, y, biome);
+  if (end && biome === null && game.rules.items && (game.rules.special ?? 0) >= 2) card.fromEye = true;
   game.cards[card.id] = card;
   game.slots[slotKey(x, y)] = card.id;
   game.nextCardId += 1;
@@ -909,9 +954,16 @@ function digCell(/** @type {Game} */ game, /** @type {Player} */ player, /** @ty
     }
     case "eye": {
       const place = placeFar(game, card);
-      grown = addCard(game, place.x, place.y, true);
-      text = "末影之眼！远处开出了末地宝藏";
-      publicText = "挖到末影之眼，末地宝藏开了！";
+      // 新局（§17，有道具栏的）：远处开一张特殊区块，按权重抽末地宝藏、深暗之域、下界；以前的局只开末地宝藏
+      let opens = /** @type {'end'|Biome} */ ("end");
+      if (rules.items && (rules.special ?? 0) >= 2) {
+        const roll = randomOf(game.seed, `eye:${card.id}:${index}`)(0, 99);
+        opens = /** @type {'end'|Biome} */ (EYE_ODDS.find(([, upTo]) => roll < upTo)?.[0] ?? "end");
+      }
+      grown = opens === "end" ? addCard(game, place.x, place.y, true) : addCard(game, place.x, place.y, false, opens);
+      const where = opens === "end" ? "末地宝藏" : BIOME_NAMES[opens];
+      text = `末影之眼！远处开出了${where}`;
+      publicText = `挖到末影之眼，${where}开了！`;
       break;
     }
     case "shield":
@@ -1058,16 +1110,30 @@ function digCell(/** @type {Game} */ game, /** @type {Player} */ player, /** @ty
       publicText += `；岩浆流过来，吞掉了一格${KIND_NAMES[flowed.kind]}`;
     }
   }
-  if (rules.items && card.kind === "deep" && !card.closed && dugOf(card) >= (card.wardenAt ?? Infinity)) {
-    // 监守者：挖响最后一下的人手上扣一半（盾牌挡不住，末影箱里的不算），卡关闭
-    warden = percentOf(player.points, WARDEN_PERCENT);
-    player.points -= warden;
-    game.used -= warden;
-    card.closed = true;
-    card.finished = true;
-    if (warden > 0) player.trail?.push({ k: "warden", a: -warden, p: totalOf(player) });
-    text += `${text ? "。" : ""}噪音惊醒了监守者，${warden > 0 ? `待领取的奖励被扣掉一半（-${formatPoints(warden, game.rules.step)}），` : ""}这张卡关闭了`;
-    publicText += "，惊醒了监守者，这张卡关闭了";
+  if (rules.items && card.kind === "deep" && !card.closed) {
+    let wakes = false;
+    if (card.noiseAt !== undefined) {
+      // 第 2 版（§16）：先按没人挖的时间退，再加这一格；过了两成五以后按噪音抽一次（种子 + 这张卡挖开的格数，谁都能核对）
+      const noise = noiseNow(card, rules, now) + 1;
+      card.noise = noise;
+      card.noiseAt = now;
+      const cells = card.size * card.size - Object.keys(card.fixed ?? {}).length;
+      wakes = randomOf(game.seed, `warden:${card.id}:${dugOf(card)}`)(0, 9999) < wardenChance(noise, cells) * 10000;
+    } else wakes = dugOf(card) >= (card.wardenAt ?? Infinity);
+    if (wakes) {
+      // 监守者：吵醒它的人待领取的扣一半（盾牌挡不住，末影箱里的不算），卡关闭；大家看得见是谁、被抢走多少
+      warden = percentOf(player.points, WARDEN_PERCENT);
+      player.points -= warden;
+      game.used -= warden;
+      card.closed = true;
+      card.finished = true;
+      card.wokeBy = { uid: player.uid, name: player.name, amount: warden, at: now };
+      if (warden > 0) player.trail?.push({ k: "warden", a: -warden, p: totalOf(player) });
+      const lost = formatPoints(warden, game.rules.step);
+      // 卡关了不用再说：卡上暗下来、写着监守者醒了（2026-11-12 用户）
+      text += `${text ? "。" : ""}监守者被你吵醒了！${warden > 0 ? `它抢走了你待领取的一半（-${lost}）` : "好在你手上没有待领取的"}`;
+      publicText += `，吵醒了监守者${warden > 0 ? `，待领取的被抢走一半（-${lost}）` : ""}`;
+    }
   }
   // 地图不能长不动：监守者关掉的卡、岩浆里都可能把最后几颗珍珠带走；还能挖的卡上一颗都不剩时，
   // 在这张卡旁边长一张新卡（有珍珠），大家还有地方挖（2026-11-11 模拟里人多的局有一成停住）
@@ -1595,7 +1661,23 @@ export function publicCard(/** @type {Card} */ card) {
     ...(card.vaults ? { vaults: { ...card.vaults } } : {}),
     ...(card.rails ? { rails: { ...card.rails } } : {}),
     ...(card.torches ? { torches: publicTorches(card) } : {}),
-    ...(card.kind === "deep" ? { noise: dugOf(card), closed: Boolean(card.closed) } : {}),
+    ...publicNoise(card),
+    ...(card.fromEye ? { fromEye: true } : {}),
+  };
+}
+
+/**
+ * 深暗之域的卡给大家看的噪音：noise 和 closed；第 2 版的噪音会退，noise 是 noiseAt 那一刻的，
+ * 网页按 noiseDecayMs 接着往下退；wokeBy 是谁吵醒了监守者、被抢走多少。别的卡什么也没有。
+ * @returns {{ noise?: number, noiseAt?: number, closed?: boolean, wokeBy?: { uid: number, name: string, amount: number, at: number } }}
+ */
+export function publicNoise(/** @type {Card} */ card) {
+  if (card.kind !== "deep") return {};
+  return {
+    noise: card.noiseAt === undefined ? dugOf(card) : Math.round((card.noise ?? 0) * 1000) / 1000,
+    closed: Boolean(card.closed),
+    ...(card.noiseAt !== undefined ? { noiseAt: card.noiseAt } : {}),
+    ...(card.wokeBy ? { wokeBy: { ...card.wokeBy } } : {}),
   };
 }
 

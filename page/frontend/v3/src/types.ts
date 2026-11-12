@@ -22,6 +22,8 @@ export interface Torch { at: number; level: 0 | 1 | 2 | 3; name: string; v?: 2 }
 /** 附魔镐的形状 */
 export type Shape = 'h' | 'v' | 'x'
 
+/** 谁吵醒了深暗之域的监守者、被抢走多少（at：什么时候，新的游戏站才有） */
+export interface WokeBy { uid: number; name: string; amount: number; at?: number }
 /** burn：被岩浆吞掉的格子（uid 0），翻开给大家看一下，之后就是岩浆 */
 export interface OpenCell { kind: Kind; uid: number; name: string; at: number; burn?: 1 }
 export interface PublicCard {
@@ -36,9 +38,16 @@ export interface PublicCard {
   rails?: Record<string, RailShape>
   /** 亮着的火把 */
   torches?: Torch[]
-  /** 深暗之域的噪音；closed：监守者醒了，这张卡关了 */
+  /**
+   * 深暗之域的噪音；closed：监守者醒了，这张卡关了。2026-11-12 起开的局（rules.special: 2）噪音会退：
+   * noise 是 noiseAt 那一刻的，之后按 noiseDecayMs 往下退（regions.ts noiseOf）；wokeBy 是谁吵醒了监守者、被抢走多少
+   */
   noise?: number
+  noiseAt?: number
   closed?: boolean
+  wokeBy?: WokeBy
+  /** 末影之眼开出来的特殊区块（rules.special: 2 的局；末地宝藏、深暗之域、下界） */
+  fromEye?: true
   cells: (OpenCell | null)[]
   /** 旧局的卡没有 eye 这一项 */
   left: Partial<Record<Kind, number>>
@@ -66,6 +75,8 @@ export interface Rules {
   creeper?: number
   /** 2：区块里固定格子的新摆法（docs/V3_ITEMS.md §10）；旧局没有 */
   layout?: 2
+  /** 2：特殊区块都从末影之眼开、深暗之域的噪音会退（docs/V3_ITEMS.md §16、§17）；旧局没有 */
+  special?: 2
   /** 三方积分红包的最小单位（"1"、"0.5"、"100"…），所有的数都是多少个最小单位；LDC 和🐟红包没有（就是 0.01） */
   step?: string
 }
@@ -126,7 +137,7 @@ export interface LiveCell {
   type: 'cell'; seq: number; cardId: number; index: number; cell: OpenCell
   newCard: PublicCard | null; text: string; left: number; over: boolean; stats: Stats
   /** 有道具栏的局：这张卡的火把（变了颜色、灭了）、被岩浆吞掉的格子、噪音、监守者醒了 */
-  torches?: Torch[]; burned?: { index: number; kind: Kind }[]; noise?: number; closed?: boolean
+  torches?: Torch[]; burned?: { index: number; kind: Kind }[]; noise?: number; noiseAt?: number; closed?: boolean; wokeBy?: WokeBy
   vaults?: Record<string, number>
 }
 /** 火把插上、宝库开了：整张卡换一下（不带序号） */
