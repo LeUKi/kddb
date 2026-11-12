@@ -69,9 +69,13 @@ function Leftovers({ card }: { card: PublicCard }) {
     <span className="leftovers-label">还藏着约</span>
     <b className="leftovers-worth">{aboutMoney(worth)}</b>
     <span className="leftovers-label">{unit}</span>
-    {kinds.map(kind => <span key={kind} className="leftover"><ItemIcon kind={kind} size={18} /><McText text={String(card.left[kind] ?? 0)} color="#ffaa00" obfuscate /></span>)}
+    {/* 个数一律两个乱码字：照真实位数写会露出是一位数还是两位数（2026-11-12 用户：两位数的还会更长）；一张卡最多 49 格，两个字够 */}
+    {kinds.map(kind => <span key={kind} className="leftover"><ItemIcon kind={kind} size={18} /><McText text={HIDDEN_COUNT} color="#ffaa00" obfuscate /></span>)}
   </span>
 }
+
+/** 余量里每样宝贝的个数：不管几个，都画成这么宽的乱码 */
+const HIDDEN_COUNT = '00'
 
 /** 深暗之域的噪音条：前面一段安全，斜纹那段是危险区，点是现在的噪音。 */
 function Noise({ card }: { card: PublicCard }) {
