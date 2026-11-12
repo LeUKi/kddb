@@ -13,16 +13,29 @@ export const meta = {
 };
 
 /**
- * v3 的参数（docs/V3_MAP.md §5，2026-11-06 用户定）：只留发红包的人心里有数的几样。
- * 绿宝石值多少按奖池、预计人数和每人挖几次算；TNT 扣多少跟着难度；卡的规格每张随机、
- * 配比小幅浮动、金苹果一次最多加 10 颗绿宝石，都不用填。
+ * v3 的参数（docs/V3_MAP.md §5，2026-11-06 用户定；第 11 版按 docs/V3_ITEMS.md §14，2026-11-12 用户定）：
+ * 只留发红包的人心里有数的几样，能选的不让填数。“玩法”一选就顺手填好难度、末影之眼、苦力怕，之后还能改；
+ * 特殊区块（末地宝藏、深暗之域、下界）一直都有，不能改。绿宝石值多少按奖池、预计人数、每人挖几次和
+ * 末影之眼的档位算；键名和以前一样，游戏站照旧读，以前开的局不变。
  * @type {import("./judge").ParamDeclaration[]}
  */
 export const params = [
   {
+    key: "style",
+    label: "玩法",
+    hint: "选一个，下面的难度、末影之眼、苦力怕自动填好，之后还能改",
+    type: "choice",
+    options: [
+      { value: "relaxed", label: "轻松", hint: "TNT 少、扣得少，没有苦力怕，适合慢慢挖", set: { level: "easy", eyeEvery: "3", creeper: "0" } },
+      { value: "standard", label: "标准", hint: "TNT 和末影之眼都适中，有苦力怕催着挖", set: { level: "normal", eyeEvery: "3", creeper: "60" } },
+      { value: "thrilling", label: "刺激", hint: "TNT 多、踩中扣一半，末影之眼多，特殊区块更多", set: { level: "tough", eyeEvery: "2", creeper: "60" } },
+    ],
+    default: "standard",
+  },
+  {
     key: "players",
     label: "预计人数",
-    hint: "大概多少人来挖。每颗绿宝石值多少按奖池、人数和每人挖几次算出来，大约八成奖池能发出去；钻石是绿宝石的 5 倍",
+    hint: "大概多少人来挖。绿宝石值多少按奖池、人数和每人挖几次算，大约八成奖池能发出去",
     type: "integer",
     default: 20,
     min: 1,
@@ -40,12 +53,12 @@ export const params = [
   {
     key: "level",
     label: "难度",
-    hint: "TNT 有多少、踩中扣掉多少还没领的奖励",
+    hint: "TNT 和末影水晶有多少、踩中扣掉多少待领取的奖励",
     type: "choice",
     options: [
-      { value: "easy", label: "简单", hint: "TNT 少，踩中扣 15%" },
-      { value: "normal", label: "普通", hint: "TNT 中等，踩中扣 25%" },
-      { value: "tough", label: "困难", hint: "TNT 多，踩中扣 50%" },
+      { value: "easy", label: "简单", hint: "TNT 少，踩中扣待领取的 15%；末影水晶扣 30%" },
+      { value: "normal", label: "普通", hint: "TNT 中等，踩中扣待领取的 25%；末影水晶扣一半" },
+      { value: "tough", label: "困难", hint: "TNT 多，踩中扣待领取的一半；末影水晶全部扣光" },
     ],
     default: "normal",
   },
@@ -63,24 +76,30 @@ export const params = [
     default: "1",
   },
   {
+    // docs/V3_ITEMS.md §14、§17：以前填数（0–20），第 11 版三档；末影之眼开的是末地宝藏 50、深暗之域 25、下界 25
     key: "eyeEvery",
-    // docs/V3_ITEMS.md §17：2026-11-12 起开的局，末影之眼开的是特殊区块（末地宝藏 50、深暗之域 25、下界 25）
     label: "末影之眼",
-    hint: "每几张卡藏一颗末影之眼；挖到它，远处开出一个特殊区块：末地宝藏、深暗之域或下界（末地宝藏占一半）。填 0 不开",
-    type: "integer",
-    default: 3,
-    min: 0,
-    max: 20,
+    hint: "挖到末影之眼，远处开出一个特殊区块：末地宝藏、深暗之域或下界",
+    type: "choice",
+    options: [
+      { value: "5", label: "少", hint: "每 5 张卡藏一颗眼；挖到它，远处开出末地宝藏（占一半）、深暗之域或下界" },
+      { value: "3", label: "正常", hint: "每 3 张卡藏一颗眼；挖到它，远处开出末地宝藏（占一半）、深暗之域或下界" },
+      { value: "2", label: "多", hint: "每 2 张卡藏一颗眼；挖到它，远处开出末地宝藏（占一半）、深暗之域或下界" },
+    ],
+    default: "3",
   },
   {
-    // docs/V3_ITEMS.md §3：防蹲守。游戏站把它收到至少是挖掘间隔的两倍；没有这一项的旧判定器按 60
+    // docs/V3_ITEMS.md §3、§14：防蹲守。以前填秒数，第 11 版三档；游戏站把它收到至少是挖掘间隔的两倍
     key: "creeper",
     label: "苦力怕",
-    hint: "手上有奖励、这么多秒没挖也没用道具时，苦力怕会来炸掉手上的 20%。填 0 不开",
-    type: "integer",
-    default: 60,
-    min: 0,
-    max: 600,
+    hint: "手上有待领取的奖励、一直不挖时，苦力怕会来炸掉待领取的 20%",
+    type: "choice",
+    options: [
+      { value: "0", label: "不开", hint: "不会有苦力怕" },
+      { value: "60", label: "1 分钟", hint: "有待领取的奖励、1 分钟没挖也没用道具，苦力怕来炸掉待领取的 20%" },
+      { value: "180", label: "3 分钟", hint: "有待领取的奖励、3 分钟没挖也没用道具，苦力怕来炸掉待领取的 20%" },
+    ],
+    default: "60",
   },
 ];
 

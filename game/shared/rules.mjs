@@ -297,8 +297,10 @@ export function rulesOf(/** @type {Record<string, unknown>} */ params, /** @type
   );
   const players = Math.min(2000, integer(params.players, PLAYERS));
   const initialChances = Math.min(99, integer(params.initialChances, 20));
+  const eyeEvery = params.eyeEvery == null || params.eyeEvery === "" || !Number.isSafeInteger(Number(params.eyeEvery))
+    ? EYE_EVERY : Math.min(20, Math.max(0, Number(params.eyeEvery)));
   const smallReward = params.smallReward == null
-    ? rewardFor(pool, players, initialChances, difficulty, true)
+    ? rewardFor(pool, players, initialChances, difficulty, true, eyeEvery)
     : integer(params.smallReward, 10);
   const digInterval = DIG_INTERVALS.includes(/** @type {1} */ (Number(params.interval))) ? Number(params.interval) : 1;
   return /** @type {Rules} */ ({
@@ -312,8 +314,7 @@ export function rulesOf(/** @type {Record<string, unknown>} */ params, /** @type
     initialChances,
     // 旧判定器的金苹果上限：没填（null）是不限；新判定器一次最多加 10 颗绿宝石
     appleCap: "appleCap" in params ? (params.appleCap == null ? 0 : integer(params.appleCap, 0)) : smallReward * 10,
-    eyeEvery: params.eyeEvery == null || params.eyeEvery === "" || !Number.isSafeInteger(Number(params.eyeEvery))
-      ? EYE_EVERY : Math.min(20, Math.max(0, Number(params.eyeEvery))),
+    eyeEvery,
     ...(params.smallReward == null ? { players } : {}),
     digInterval,
     // 末地宝藏的牌按新的随机范围配（开局时定下，存在局里；以前开的局没有这一项，照旧）
@@ -363,9 +364,20 @@ export function averageUnits(/** @type {Difficulty} */ difficulty, items = false
  */
 export const ITEMS_UNITS = /** @type {const} */ ({ easy: 0.62, normal: 0.55, tough: 0.355, hard: 0.55, hell: 0.355 });
 
-/** 绿宝石值多少分：大约 POOL_TARGET 的奖池够预计人数每人把机会挖完；至少 1 分。items：有道具栏的局。 */
-export function rewardFor(/** @type {number} */ pool, /** @type {number} */ players, /** @type {number} */ chances, /** @type {Difficulty} */ difficulty, items = false) {
-  return Math.max(1, Math.floor((pool * POOL_TARGET) / (players * chances * averageUnits(difficulty, items))));
+/**
+ * 末影之眼的三档（判定器第 11 版的少 / 正常 / 多 = 每 5 / 3 / 2 张卡一颗，docs/V3_ITEMS.md §14）：眼多，
+ * 特殊区块多，每次挖平均发出去的也多一点。sim-items.mjs 每档 120 局、三种难度，和每 3 张一颗比：
+ * 每 2 张 1.048 / 1.027 / 1.052，每 5 张 0.970 / 0.958 / 0.950。别的数（旧判定器能填 0–20）按 1 算。
+ */
+export const EYE_UNITS = /** @type {Readonly<Record<number, number>>} */ ({ 2: 1.04, 3: 1, 5: 0.96 });
+
+/**
+ * 绿宝石值多少分：大约 POOL_TARGET 的奖池够预计人数每人把镐子挖完；至少 1 分。items：有道具栏的局；
+ * eyeEvery：每几张卡一颗末影之眼（有道具栏的局按 EYE_UNITS 调）。
+ */
+export function rewardFor(/** @type {number} */ pool, /** @type {number} */ players, /** @type {number} */ chances, /** @type {Difficulty} */ difficulty, items = false, eyeEvery = EYE_EVERY) {
+  const units = averageUnits(difficulty, items) * (items ? EYE_UNITS[eyeEvery] ?? 1 : 1);
+  return Math.max(1, Math.floor((pool * POOL_TARGET) / (players * chances * units)));
 }
 
 /** "100.00" → 10000；红包信息的金额是两位小数的字符串。 */

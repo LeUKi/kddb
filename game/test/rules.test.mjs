@@ -95,6 +95,14 @@ describe("规则和金额", () => {
       assert.ok(averageUnits(level, true) < averageUnits(level) * 0.8, level);
     assert.ok(rewardFor(100000, 20, 20, "normal", true) > rewardFor(100000, 20, 20, "normal") * 1.4);
     assert.equal(rulesOf({}, 100000).smallReward, rewardFor(100000, 20, 20, "normal", true));
+    // 末影之眼多（每 2 张一颗）每次挖发出去的多一点，绿宝石便宜一点；少（每 5 张）贵一点；判定器的选项是字符串
+    const many = rulesOf({ eyeEvery: "2" }, 100000);
+    const few = rulesOf({ eyeEvery: "5" }, 100000);
+    assert.deepEqual([many.eyeEvery, few.eyeEvery], [2, 5]);
+    assert.ok(many.smallReward < rulesOf({}, 100000).smallReward && rulesOf({}, 100000).smallReward < few.smallReward);
+    assert.equal(rulesOf({ eyeEvery: 7 }, 100000).smallReward, rulesOf({}, 100000).smallReward);
+    assert.equal(rulesOf({ creeper: "180" }, 100000).creeper, 180);
+    assert.equal(rulesOf({ creeper: "0" }, 100000).creeper, 0);
   });
   it("旧判定器的参数照旧用：difficulty、smallReward、tntPercent、appleCap（null 不限）", () => {
     const old = rulesOf({ difficulty: "hard", smallReward: 10, tntPercent: 25, appleCap: null, boardSpec: "random", compositionVariation: "slight", initialChances: 7 }, 2000);
