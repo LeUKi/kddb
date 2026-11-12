@@ -4,9 +4,9 @@ import type { CSSProperties } from 'react'
 import { ItemIcon } from '../../src/ItemIcon'
 import { CARD_PX, SLOT_PX } from './camera'
 import { McText } from './McText'
-import { aboutMoney, leftoversOf, noiseOf, regionName, richestOf } from './regions'
+import { aboutMoney, leftoversOf, noiseOf, PLENTY, regionName, richestOf, tellOf } from './regions'
 import { dialogAtom, focusRequestAtom, gameAtom, hongbaoAtom } from './state'
-import type { PublicCard } from './types'
+import type { Kind, PublicCard } from './types'
 import { KIND_NAMES } from './types'
 
 /**
@@ -65,16 +65,24 @@ function Leftovers({ card }: { card: PublicCard }) {
       </button>
     </span>
   }
-  return <span className="leftovers" aria-label={`还藏着约 ${aboutMoney(worth)} ${unit}${kinds.length ? `，有${kinds.map(kind => KIND_NAMES[kind]).join('、')}` : ''}`}>
+  // 余量怎么说（docs/V3_ITEMS.md §15）：乱码、模糊、准数，一张卡只用一种
+  const { tell, covered } = tellOf(card)
+  const countOf = (kind: Kind) => card.left[kind] ?? 0
+  const said = kinds.map(kind => tell === 'exact' ? `${KIND_NAMES[kind]} ${countOf(kind)} 个` : tell === 'fuzzy' && countOf(kind) >= PLENTY ? `${KIND_NAMES[kind]}不少` : KIND_NAMES[kind]).join('、')
+  return <span className={`leftovers is-${tell}`} aria-label={`还藏着约 ${aboutMoney(worth)} ${unit}${kinds.length ? `${tell === 'exact' ? `，最后 ${covered} 格里有` : '，有'}${said}` : ''}`}>
     <span className="leftovers-label">还藏着约</span>
     <b className="leftovers-worth">{aboutMoney(worth)}</b>
     <span className="leftovers-label">{unit}</span>
-    {/* 个数一律两个乱码字：照真实位数写会露出是一位数还是两位数（2026-11-12 用户：两位数的还会更长）；一张卡最多 49 格，两个字够 */}
-    {kinds.map(kind => <span key={kind} className="leftover"><ItemIcon kind={kind} size={18} /><McText text={HIDDEN_COUNT} color="#ffaa00" obfuscate /></span>)}
+    {tell === 'exact' && kinds.length ? <span className="leftovers-label">最后 {covered} 格</span> : null}
+    {kinds.map(kind => <span key={kind} className="leftover"><ItemIcon kind={kind} size={18} />
+      {tell === 'garble' ? <McText text={HIDDEN_COUNT} color="#ffaa00" obfuscate />
+        : tell === 'exact' ? <McText text={String(countOf(kind))} color="#ffaa00" />
+          : countOf(kind) >= PLENTY ? <span className="leftover-plenty">不少</span> : null}
+    </span>)}
   </span>
 }
 
-/** 余量里每样宝贝的个数：不管几个，都画成这么宽的乱码 */
+/** 余量里乱码的那几样：不管几个都画两个字，照真实位数写会露出是一位数还是两位数（2026-11-12 用户：两位数的还会更长） */
 const HIDDEN_COUNT = '00'
 
 /** 深暗之域的噪音条：前面一段安全，斜纹那段是危险区，点是现在的噪音。 */

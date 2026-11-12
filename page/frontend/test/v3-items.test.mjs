@@ -402,3 +402,28 @@ test('最后一下：镐子、附魔镐只剩这一下、没有附魔台才算�
   // 药水、末影箱不提醒；什么都没有就不问
   assert.deepEqual(items.leftoversOf({ ...me, spyglasses: 0, items: { ...me.items, map: 0 } }), [])
 })
+
+// docs/V3_ITEMS.md §15（2026-11-12）：余量按区块和挖到哪一段，用乱码、模糊、准数之一说
+test('余量怎么说：开头、中段、收尾三段，各区块不一样；固定的格子不算没挖开', () => {
+  const at = (kind, size, dug, fixed = {}) => {
+    const cells = Array.from({ length: size * size }, (_, index) => index < dug ? { kind: 'stone', uid: 1, name: 'a', at: 1 } : null)
+    return { kind, cells, fixed }
+  }
+  // 普通 5×5：挖开 5 格（两成）是开头，挖开 10 格是中段，剩 6 格是收尾
+  assert.deepEqual(regions.tellOf(at(undefined, 5, 5)), { tell: 'garble', covered: 20 })
+  assert.deepEqual(regions.tellOf(at(undefined, 5, 10)), { tell: 'fuzzy', covered: 15 })
+  assert.deepEqual(regions.tellOf(at(undefined, 5, 19)), { tell: 'exact', covered: 6 })
+  // 7×7 剩不到两成（9 格）也是收尾
+  assert.equal(regions.tellOf(at(undefined, 7, 40)).tell, 'exact')
+  assert.equal(regions.tellOf(at('mine', 6, 15)).tell, 'garble')
+  assert.equal(regions.tellOf(at('mine', 6, 31)).tell, 'exact')
+  assert.equal(regions.tellOf(at('trial', 6, 31)).tell, 'fuzzy')
+  assert.equal(regions.tellOf(at('nether', 6, 2)).tell, 'fuzzy')
+  assert.equal(regions.tellOf(at('nether', 6, 15)).tell, 'exact')
+  assert.equal(regions.tellOf(at('deep', 7, 30)).tell, 'garble')
+  assert.equal(regions.tellOf(at('deep', 7, 44)).tell, 'fuzzy')
+  assert.equal(regions.tellOf(at('end', 3, 0)).tell, 'exact')
+  // 宝库、装饰这些固定的格子不算没挖开
+  assert.equal(regions.coveredOf(at('trial', 5, 0, { 3: 'vault', 7: 'deco' })), 23)
+  assert.equal(regions.PLENTY, 4)
+})

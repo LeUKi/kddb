@@ -1,7 +1,7 @@
 // 卡周围的说明（docs/V3_ITEMS.md §9）：区块叫什么、点问号看的说明、卡下面的余量和深暗之域的噪音。
 // 纯函数，网页和测试共用。
 import type { IconKind } from '../../src/game'
-import type { Kind, PublicCard, Rules } from './types'
+import type { Biome, Kind, PublicCard, Rules } from './types'
 import { BIOME_NAMES, currentStep, decimalsOf, stepMinor } from './types'
 
 /** 卡上面那一行的名字：区块名，普通卡是第几张。 */
@@ -76,6 +76,40 @@ export function aboutMoney(points: number) {
 
 /** 卡下面列出来的宝贝（最多 4 样，按这个先后）：值钱的、能长出新卡的。 */
 export const TREASURES: Kind[] = ['debris', 'diamond', 'apple', 'eye', 'pearl', 'minecart', 'emerald']
+
+/**
+ * 余量怎么说（docs/V3_ITEMS.md §15，2026-11-12 用户定的）：乱码是不劝退（有，但不说多少），模糊是吸引（4 个以上写“不少”），
+ * 准数最吸引，只在数字好看的时候用（剩下的格子少，带上“最后 N 格”；或者本来就是大奖）。一张卡同一时刻只用一种。
+ * 按区块和这张卡挖到哪一段：开头（挖开不到三成）、中段、收尾（没挖开的剩 6 格以内，或不到两成）。
+ */
+export type Tell = 'garble' | 'fuzzy' | 'exact'
+const TELLS: Record<Biome | 'normal', [Tell, Tell, Tell]> = {
+  normal: ['garble', 'fuzzy', 'exact'],
+  // 又黑又危险（蜘蛛网、刷怪笼），最后才亮
+  mine: ['garble', 'garble', 'exact'],
+  // 宝库是主角（宝库还能开几次照旧写准数），宝贝只说多不多
+  trial: ['fuzzy', 'fuzzy', 'fuzzy'],
+  // 岩浆一直在吞格子，个数在变少要看得见
+  nether: ['fuzzy', 'exact', 'exact'],
+  // 越挖越吵、会惊醒监守者，故意不给准数
+  deep: ['garble', 'garble', 'fuzzy'],
+  // 开出来就是大奖，摆在明面上抢
+  end: ['exact', 'exact', 'exact'],
+}
+/** 模糊的时候，几个以上写“不少” */
+export const PLENTY = 4
+/** 还没挖开的格子（装饰、宝库、岩浆这些固定的不算） */
+export function coveredOf(card: Pick<PublicCard, 'cells' | 'fixed'>) {
+  let covered = 0
+  card.cells.forEach((cell, index) => { if (!cell && !card.fixed?.[index]) covered += 1 })
+  return covered
+}
+export function tellOf(card: Pick<PublicCard, 'cells' | 'fixed' | 'kind'>): { tell: Tell; covered: number } {
+  const total = card.cells.length - Object.keys(card.fixed ?? {}).length
+  const covered = coveredOf(card)
+  const stage = covered <= 6 || covered < total * 0.2 ? 2 : total - covered < total * 0.3 ? 0 : 1
+  return { tell: TELLS[card.kind ?? 'normal'][stage], covered }
+}
 
 /** 还没挖完、没关的卡。 */
 const open = (card: Pick<PublicCard, 'finished' | 'closed'>) => !card.finished && !card.closed

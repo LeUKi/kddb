@@ -752,6 +752,8 @@ button.effect-body { cursor: pointer; }
 .leftovers .leftovers-label + .leftovers-worth, .leftovers-worth + .leftovers-label { margin-left: -6px; }
 .leftovers-worth { color: #ffd36b; font-size: 14px; }
 .leftover { display: inline-flex; align-items: center; gap: 3px; }
+/* 模糊（docs/V3_ITEMS.md §15）：4 个以上写“不少”，和乱码、准数一样的橙色 */
+.leftover-plenty { color: #ffaa00; font-size: 12px; font-weight: 600; }
 /* 原版像素字（McText）：画布按字图的像素放大，不平滑 */
 .mc-text { display: inline-block; flex: none; image-rendering: pixelated; vertical-align: middle; }
 .leftovers.is-poor { gap: 8px; padding-right: 3px; }
