@@ -76,8 +76,18 @@ export function App() {
     {guide && game ? <Guide rules={game.rules} unit={hongbao?.unit ?? 'LDC'} onClose={closeGuide} /> : null}
     {summary && phase === 'ready' ? <SummaryCard reason={summary} onClose={closeSummary} /> : null}
     <Toast />
+    {KEEP_DRAWING ? <div className="keep-drawing" aria-hidden="true" /> : null}
   </div>
 }
+
+/**
+ * 安卓上一直画一个几乎看不见的小点（docs/V3_ITEMS.md §8，2026-11-12）：用户的 OPPO（Adreno 730，Chrome 156）上，
+ * 页面静下来以后手指一按，屏幕会放出一帧旧画面——顶栏底栏的字没了、地图挪了位，下一帧又好了。页面自己的状态那一下
+ * 没变（记录了按下、尺寸、镜头，都没动），Chrome 自己画的帧也没有这一帧；数据线模拟的点不会触发，只有手指真按才会。
+ * 让页面一直在画（一个 2px 的点一直转，只动合成层，不重排不重绘），同样亲手点了几十下一次都没闪。代价是开着这一页时
+ * 屏幕不会降到低刷新率，耗电多一点；iPhone 上没有这个问题，不画。
+ */
+const KEEP_DRAWING = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent)
 
 function Toast() {
   const toast = useAtomValue(toastAtom)

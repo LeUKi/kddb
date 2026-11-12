@@ -409,6 +409,11 @@ button.eye-status { cursor: pointer; }
   .map-view .map-block.has-eye::before, .map-view .map-block.is-end:not(.is-done)::before { opacity: 1; }
 }
 
+/* 安卓上一直转的 2px 小点（App.tsx KEEP_DRAWING）：页面一直在画，手指一按屏幕就不会放出一帧旧画面。几乎透明、不接收点击；
+   不在减少动态里停（它不是给人看的动） */
+.keep-drawing { position: fixed; right: 0; bottom: 0; z-index: 1; width: 2px; height: 2px; background: #ffffff08; pointer-events: none; animation: keep-drawing 1s linear infinite; }
+@keyframes keep-drawing { to { transform: rotate(360deg); } }
+
 /* —— 工具条（Toolbar.tsx，docs/V3_ITEMS.md §5）：镐子固定在最前面；后面的放不下时能滑，两头渐隐，有箭头 —— */
 /* 右边留给缩放那一列（36 + 内边距 8 + 边框 2 + 离边 10，再隔 8） */
 .toolbar { position: absolute; left: 10px; bottom: 10px; z-index: 6; display: flex; align-items: stretch; gap: 0; max-width: calc(100% - 84px); }
