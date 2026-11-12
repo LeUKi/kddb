@@ -28,7 +28,7 @@ const open = (card, index) => card.opened[index] === null && !card.fixed?.[index
  * 量“每次机会平均几份小奖”。
  */
 function play({ seed, items, players, chances = 20, level = "normal", interval = "1", budget, quit = false }) {
-  const params = { players, initialChances: chances, level, interval, eyeEvery: 3, creeper: 0 };
+  const params = { players, initialChances: chances, level, interval, eyeEvery: Number(process.env.EYE_EVERY ?? 3), creeper: 0 };
   const pool = budget ?? 1e12;
   const rules = rulesOf(params, pool);
   if (!items) delete rules.items;
