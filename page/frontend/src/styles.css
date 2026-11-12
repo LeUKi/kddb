@@ -17,7 +17,12 @@
 }
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 280px; }
-button, a { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+/* 手机上按住图片时系统的“拿起”预览、存图菜单和拖动，按住文字时的选字放大镜，点按时的灰色高亮，都不要：
+   按住格子里的物品图标约 0.4 秒，iOS 先把整页压暗、再弹菜单，看着就是一按就闪（2026-11-12 用户：点格子、
+   滑一下附带网页就闪）。这几项会继承，写在根上整页都管到 */
+html { -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
+img { -webkit-user-drag: none; }
+button, a { touch-action: manipulation; }
 button { font: inherit; cursor: pointer; }
 button:disabled { cursor: default; }
 a { color: inherit; text-decoration: none; }

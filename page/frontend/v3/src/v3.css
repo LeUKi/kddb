@@ -1,7 +1,7 @@
 /* 矿洞夺宝 v3：一张地图（docs/V3_MAP.md §6）。颜色沿用 v2 的 styles.css。 */
 html, body, #root { height: 100%; }
 body { overflow: hidden; overscroll-behavior: none; }
-.v3-app { position: fixed; inset: 0; display: flex; flex-direction: column; min-height: 0; color: var(--ink); }
+.v3-app { position: fixed; inset: 0; display: flex; flex-direction: column; min-height: 0; color: var(--ink); -webkit-user-select: none; user-select: none; }
 
 /* —— 上面一条 —— */
 .top-bar { position: relative; z-index: 5; display: flex; align-items: center; gap: 14px; padding: 10px 14px; background: #1a2229e6; border-bottom: 1px solid #3a4148; }
