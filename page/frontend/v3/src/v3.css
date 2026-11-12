@@ -425,23 +425,26 @@ button.eye-status { cursor: pointer; }
 .toolbar.is-alone > .toolbar-divider.is-pin, .toolbar.is-alone > .toolbar-scroll-wrap { display: none; }
 .toolbar-divider.is-pin { align-self: stretch; height: auto; margin: 0; background: #11171de6; border-top: 1px solid #ffffff1f; border-bottom: 1px solid #ffffff1f; box-shadow: inset 1px 0 0 #ffffff2e; width: 7px; }
 /* 放不下时在自己那块里滚（外面的 .toolbar 限了最大宽、高，这里跟着收） */
-.toolbar-scroll { flex: 0 1 auto; min-width: 0; min-height: 0; overflow: auto hidden; scrollbar-width: none; overscroll-behavior: contain; touch-action: pan-x; }
+.toolbar-scroll { flex: 0 1 auto; display: flex; align-items: flex-end; min-width: 0; min-height: 0; margin-top: -10px; padding-top: 10px; overflow: auto hidden; scrollbar-width: none; overscroll-behavior: contain; touch-action: pan-x; }
+/* 后面那一截贴着靠边的那一侧：竖屏贴底、横屏贴左，不飘起来 */
 .toolbar-scroll::-webkit-scrollbar { display: none; }
 .toolbar-scroll.fade-start { -webkit-mask-image: linear-gradient(90deg, transparent, #000 36px); mask-image: linear-gradient(90deg, transparent, #000 36px); }
 .toolbar-scroll.fade-end { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); }
 .toolbar-scroll.fade-start.fade-end { -webkit-mask-image: linear-gradient(90deg, transparent, #000 36px, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(90deg, transparent, #000 36px, #000 calc(100% - 36px), transparent); }
-.toolbar-slots { display: flex; align-items: flex-end; gap: 6px; width: max-content; }
+.toolbar-slots { flex: none; display: flex; align-items: flex-end; gap: 6px; width: max-content; }
 .toolbar-arrow { position: absolute; top: 50%; z-index: 2; display: grid; place-items: center; width: 28px; height: 28px; margin-top: -14px; padding: 0; color: var(--ink); background: #232b31f0; border: 1px solid #56636b; border-radius: 50%; box-shadow: 0 2px 8px #0008; }
 .toolbar-arrow svg { width: 16px; height: 16px; }
 .toolbar-arrow.is-start { left: -6px; }
 .toolbar-arrow.is-end { right: -6px; }
 .tool-cell { flex: none; }
-.tool-slot { position: relative; display: grid; place-items: center; width: 48px; height: 48px; padding: 0; overflow: hidden; background: linear-gradient(#2a333b, #20282e); border: 2px solid #4a565e; border-radius: 8px; box-shadow: inset 0 2px 0 #ffffff12, inset 0 -3px 0 #0005; cursor: pointer; transition: border-color .15s var(--ease-out), box-shadow .15s var(--ease-out), transform .1s, width .22s var(--ease-out), height .22s var(--ease-out); }
-/* 激活（docs/ITEM_UX.md §3.1）：手上拿着的那一件，什么都没拿时是镐子，一次只有一格。金边、大一点，
-   贴着工具条靠边的那一侧长（竖屏往上、横屏往右），旁边的跟着让开 */
+.tool-slot { position: relative; display: grid; place-items: center; width: 48px; height: 48px; padding: 0; overflow: hidden; background: linear-gradient(#2a333b, #20282e); border: 2px solid #4a565e; border-radius: 8px; box-shadow: inset 0 2px 0 #ffffff12, inset 0 -3px 0 #0005; cursor: pointer; transition: border-color .15s var(--ease-out), box-shadow .15s var(--ease-out), transform .1s, width .22s var(--ease-out), height .22s var(--ease-out), margin .22s var(--ease-out); }
+/* 激活（docs/ITEM_UX.md §3.1）：手上拿着的那一件，什么都没拿时是镐子，一次只有一格。金边、大一点（48 → 58）：
+   贴着靠边的那一侧往外长、探出托盘（竖屏往上、横屏往右），旁边的格子让开；托盘本身不变大（2026-11-12 用户：
+   图标放大为什么托盘也被撑大）。多出来的 10px 用负外边距抵掉，所在的滚动区多留 10px 不裁掉它 */
 .tool-slot.is-selected { width: 58px; height: 58px; border-color: #f3cc8f; box-shadow: inset 0 2px 0 #ffffff12, inset 0 -3px 0 #0005, 0 0 0 2px #e9b56b40; }
 .tool-slot > .item-icon { transition: transform .22s var(--ease-out); }
 .tool-slot.is-selected > .item-icon { transform: scale(1.18); }
+.toolbar .tool-slot.is-selected { margin-top: -10px; }
 /* 一直摆着、现在没有的（火把 0）：灰的 */
 .tool-slot.is-empty > .item-icon { filter: grayscale(1) brightness(.85); opacity: .45; }
 .tool-slot.is-empty { background: linear-gradient(#232a30, #1c2227); border-color: #3a444b; }
@@ -558,7 +561,8 @@ button.effect-body { cursor: pointer; }
   .toolbar.is-alone > .tool-cell { border-bottom: 1px solid #ffffff1f; border-radius: 12px; }
   .toolbar-divider.is-pin { width: auto; height: 7px; border: 0; border-left: 1px solid #ffffff1f; border-right: 1px solid #ffffff1f; box-shadow: inset 0 1px 0 #ffffff2e; }
   .toolbar-scroll-wrap { flex-direction: column; padding: 0 5px 5px; border: 1px solid #ffffff1f; border-top: 0; border-radius: 0 0 12px 12px; }
-  .toolbar-scroll { overflow: hidden auto; touch-action: pan-y; }
+  .toolbar-scroll { flex-direction: column; align-items: flex-start; margin: 0 -10px 0 0; padding: 0 10px 0 0; overflow: hidden auto; touch-action: pan-y; }
+  .toolbar .tool-slot.is-selected { margin: 0 -10px 0 0; }
   .toolbar-scroll.fade-start { -webkit-mask-image: linear-gradient(180deg, transparent, #000 36px); mask-image: linear-gradient(180deg, transparent, #000 36px); }
   .toolbar-scroll.fade-end { -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(180deg, #000 calc(100% - 36px), transparent); }
   .toolbar-scroll.fade-start.fade-end { -webkit-mask-image: linear-gradient(180deg, transparent, #000 36px, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(180deg, transparent, #000 36px, #000 calc(100% - 36px), transparent); }
