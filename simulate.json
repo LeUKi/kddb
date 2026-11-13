@@ -11,9 +11,11 @@
   "params": {
     "players": 20,
     "initialChances": 20,
+    "style": "standard",
     "level": "normal",
     "interval": "1",
-    "eyeEvery": 3
+    "eyeEvery": "3",
+    "creeper": "60"
   },
   "submissions": [
     {
