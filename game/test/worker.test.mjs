@@ -666,7 +666,8 @@ describe("在场：指针、谁在看、表情（docs/V3_ITEMS.md §20）", () =
     say(room, a, { w: [5, 0, 0, 2] });
     room.join(b, { uid: 2, name: "小红" }, NOW);
     flush();
-    assert.deepEqual(take(a), [{ w: [["s1", 1, "小明", 5]], P: [] }]);
+    // 只有他一个人在看：告诉他没人看得见他（网页就先不发指针）
+    assert.deepEqual(take(a), [{ w: [["s1", 1, "小明", 5]], P: [], s: 0 }]);
     assert.deepEqual(take(b), [{ hi: "s2", w: [["s1", 1, "小明", 5]], P: [] }]);
     assert.deepEqual(saved.get(a).here, { c: 5, x: 0, y: 0, l: 2 });
     // 同一张卡上缩放级变了：不用告诉别人
@@ -678,7 +679,7 @@ describe("在场：指针、谁在看、表情（docs/V3_ITEMS.md §20）", () =
     assert.deepEqual(take(b), [{ w: [["s1", 1, "小明", null]] }]);
   });
 
-  it("指针只发给在看附近的卡的人（挖卡那一级 1 格、附近 2 格、全图不收），离开范围时说收起；自己的不回给自己", () => {
+  it("以前的网页没报屏幕范围：指针按缩放级估（挖卡那一级 1 格、附近 2 格、全图不收），离开范围时说收起；自己的不回给自己", () => {
     const { room, flush } = setup();
     const [a, near, far, mid, overview, twin] = [conn(), conn(), conn(), conn(), conn(), conn()];
     room.join(a, { uid: 1, name: "a" }, NOW);
@@ -782,10 +783,10 @@ describe("在场：指针、谁在看、表情（docs/V3_ITEMS.md §20）", () =
     take(b);
     say(room, b, { w: [1, 0, 0, 2] });
     flush();
-    assert.deepEqual(take(b), [{ w: [["s2", 2, "b", 1]], P: [["s1", 5, 5]] }]);
+    assert.deepEqual(take(b), [{ w: [["s2", 2, "b", 1]], P: [["s1", 5, 5]], s: 1 }]);
     say(room, a, { w: null });
     flush();
-    assert.deepEqual(take(b), [{ w: [["s1", 1, "a", null]], p: [["s1"]] }]);
+    assert.deepEqual(take(b), [{ w: [["s1", 1, "a", null]], p: [["s1"]], s: 0 }]);
     // 不在看的人发来的指针不要
     say(room, a, { p: [6, 6] });
     assert.equal(room.pointers.size, 0);
@@ -795,7 +796,59 @@ describe("在场：指针、谁在看、表情（docs/V3_ITEMS.md §20）", () =
     take(b);
     room.leave(a);
     flush();
-    assert.deepEqual(take(b), [{ w: [["s1", 1, "a", null]], p: [["s1"]] }]);
+    assert.deepEqual(take(b), [{ w: [["s1", 1, "a", null]], p: [["s1"]], s: 0 }]);
+  });
+
+  it("网页报了屏幕范围就按它发：宽屏上露出的远一点的卡也收；全图那一级不收指针、收表情", () => {
+    const { room, flush } = setup();
+    const [a, wide, overview] = [conn(), conn(), conn()];
+    room.join(a, { uid: 1, name: "a" }, NOW);
+    room.join(wide, { uid: 2, name: "wide" }, NOW);
+    room.join(overview, { uid: 3, name: "all" }, NOW);
+    say(room, a, { w: [7, 2, 0, 2, 2, 0, 2, 0] });
+    // 挖卡那一级、当前卡在 (0, 0)，宽屏左右各露出两张
+    say(room, wide, { w: [1, 0, 0, 2, -2, 0, 2, 0] });
+    say(room, overview, { w: [1, 0, 0, 0, -9, -9, 9, 9] });
+    flush();
+    for (const c of [a, wide, overview]) take(c);
+    say(room, a, { p: [SLOT_PX * 2, 10] });
+    say(room, a, { e: 2 });
+    flush();
+    assert.deepEqual(take(wide), [{ p: [["s1", SLOT_PX * 2, 10]], e: [["s1", 2]] }]);
+    assert.deepEqual(take(overview), [{ e: [["s1", 2]] }]);
+    // 出了屏幕右边：说收起
+    say(room, a, { p: [SLOT_PX * 3, 10] }, NOW + 10);
+    flush();
+    assert.deepEqual(take(wide), [{ p: [["s1"]] }]);
+    // 屏幕范围看不懂的不要
+    say(room, a, { w: [7, 2, 0, 2, 3, 0, 2, 0] }, NOW + 20);
+    assert.deepEqual(room.seats.get(a)?.here?.v, { x0: 2, y0: 0, x1: 2, y1: 0 });
+  });
+
+  it("有没有别人看得见你：屏幕和别人重叠了说 1，没人了说 0；全图那一级和自己的另一个标签页不算；变了才说", () => {
+    const { room, flush } = setup();
+    const [a, b, twin, overview] = [conn(), conn(), conn(), conn()];
+    room.join(a, { uid: 1, name: "a" }, NOW);
+    room.join(b, { uid: 2, name: "b" }, NOW);
+    room.join(twin, { uid: 1, name: "a" }, NOW);
+    room.join(overview, { uid: 3, name: "all" }, NOW);
+    say(room, a, { w: [1, 0, 0, 2, -1, -1, 1, 1] });
+    say(room, twin, { w: [1, 0, 0, 2, -1, -1, 1, 1] });
+    say(room, overview, { w: [1, 0, 0, 0, -9, -9, 9, 9] });
+    flush();
+    assert.equal(take(a)[0].s, 0);
+    assert.equal(take(overview)[0].s, undefined);
+    say(room, b, { w: [5, 2, 0, 2, 1, 0, 3, 0] });
+    flush();
+    assert.equal(take(a)[0].s, 1);
+    assert.equal(take(b)[0].s, undefined);
+    // 换到别的卡还和他重叠：只有名单变了，不再说
+    say(room, b, { w: [6, 2, 1, 2, 1, 0, 3, 1] }, NOW + 10);
+    flush();
+    assert.deepEqual(take(a), [{ w: [["s2", 2, "b", 6]] }]);
+    say(room, b, { w: null }, NOW + 20);
+    flush();
+    assert.equal(take(a)[0].s, 0);
   });
 
   it("表情：发给看得见扔的人那张卡的人，不回给自己；每人 2 秒最多一个；不在看、号不对的不要", () => {

@@ -140,3 +140,17 @@ test('滚轮放大朝指针下面那张卡', () => {
   const point = { x: camera.centerOf(target).x * at.scale + at.x, y: camera.centerOf(target).y * at.scale + at.y }
   assert.deepEqual(camera.cardNear(cards, at, point), target)
 })
+
+test('屏幕上看得到的格位：正中那张和露出一点的都算；放大缩小、挪动都跟着', () => {
+  const view = { width: 1280, height: 650 }
+  // 挖卡那一级原大，正中是 (0, 0)：左右各 640，格位 408、区块 392，左右各露出两张（第二张露出一点）
+  const at = camera.cameraAt({ x: 0, y: 0 }, 1, view)
+  assert.deepEqual(camera.slotsOnScreen(at, view), { x0: -2, y0: -1, x1: 2, y1: 1 })
+  // 正中挪到 (3, 0)
+  const moved = camera.cameraAt({ x: 3 * camera.SLOT_PX, y: 0 }, 1, view)
+  assert.deepEqual(camera.slotsOnScreen(moved, view), { x0: 1, y0: -1, x1: 5, y1: 1 })
+  // 手机竖屏：只看得到正中那张（上下露出一点）
+  const phone = { width: 390, height: 640 }
+  assert.deepEqual(camera.slotsOnScreen(camera.cameraAt({ x: 0, y: 0 }, 0.94, phone), phone), { x0: 0, y0: -1, x1: 0, y1: 1 })
+})
+

@@ -7,7 +7,7 @@ import { CardView } from './CardView'
 import { CardLabels } from './CardLabels'
 import { useGesture } from '@use-gesture/react'
 import type { Camera, Direction, Level, Viewport, WheelZoom } from './camera'
-import { BLOCK_PX, withToolbar, cameraAt, cardNear, cardToward, cellCenter, centerOf, edgeFacing, edgePointer, entryPoint, fullyOnScreen, nearestCard, nearestLevel, onScreen, overviewCamera, overviewScale, scaleOf, SLOT_PX, wheelZoom } from './camera'
+import { BLOCK_PX, slotsOnScreen, withToolbar, cameraAt, cardNear, cardToward, cellCenter, centerOf, edgeFacing, edgePointer, entryPoint, fullyOnScreen, nearestCard, nearestLevel, onScreen, overviewCamera, overviewScale, scaleOf, SLOT_PX, wheelZoom } from './camera'
 import type { Flight, Point } from './PearlFlight'
 import { cardAt, MapCanvas } from './MapCanvas'
 import { regionName, richnessOf } from './regions'
@@ -24,7 +24,7 @@ import { FollowTip, StepBar } from './Tips'
 import { Creeper } from './Creeper'
 import { Effects } from './Effects'
 import { ChestNote } from './Hud'
-import { EmoteButton, EmoteWheel, MyBubble, PeerPointers, TOOLS, WatchBadges } from './Peers'
+import { EmoteButton, EmoteWheel, HeatBadges, MyBubble, PeerPointers, TOOLS, WatchBadges } from './Peers'
 import type { Point as PeerPoint } from './presence'
 import { canPoint, reportPointer, reportWatch, sendEmote, startPresence, stopPresence } from './presence'
 import type { DigResult, Peek, PublicCard, Torch } from './types'
@@ -165,15 +165,21 @@ export function MapView() {
 
   /** 把镜头移到一张卡，用这一级的缩放。 */
   const goToCard = useCallback((card: PublicCard, at: Level = level, instant = false) => {
+    // 在场（docs/V3_ITEMS.md §20）：起飞时就报落点和落地后屏幕上看得到的格位，落地时那边的指针已经到了
     if (at === 0) {
       // 全图：当前卡不变
       setLevel(0)
-      flyTo(overviewCamera(view, cards), instant)
+      const target = overviewCamera(view, cards)
+      const here = cards.find(item => item.id === focusId)
+      if (landed.current) reportWatch(here ? { id: here.id, x: here.x, y: here.y } : null, 0, slotsOnScreen(target, view))
+      flyTo(target, instant)
       return
     }
     setLevel(at)
-    flyTo(cameraAt(centerOf(card), scaleOf(at, view, cards), view), instant, card.id)
-  }, [cards, flyTo, level, view])
+    const target = cameraAt(centerOf(card), scaleOf(at, view, cards), view)
+    if (landed.current) reportWatch({ id: card.id, x: card.x, y: card.y }, at, slotsOnScreen(target, view))
+    flyTo(target, instant, card.id)
+  }, [cards, flyTo, focusId, level, view])
 
   // 量画面大小
   useLayoutEffect(() => {
@@ -248,9 +254,12 @@ export function MapView() {
     startPresence()
     return stopPresence
   }, [])
+  // 落地时再报一次（起飞时报过的一样就不重发；全图上长出新卡、画面大小变了时范围会变）
   useEffect(() => {
-    if (landed.current) reportWatch(focused ? { id: focused.id, x: focused.x, y: focused.y } : null, level)
-  }, [focused?.id, focused?.x, focused?.y, level])
+    if (landed.current) reportWatch(focused ? { id: focused.id, x: focused.x, y: focused.y } : null, level, slotsOnScreen(settled, view))
+    // 只在落定的位置、当前卡、缩放级变了时
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focused?.id, focused?.x, focused?.y, level, settled, view])
 
   // 全图那一级不能拖：长出新卡时重新放下所有卡
   useEffect(() => {
@@ -693,7 +702,7 @@ export function MapView() {
       {/* 卡周围的说明：挖卡这一级、落定了才出来，换卡时淡出淡入 */}
       <AnimatePresence>{level === 2 && focused && warm === null ? <CardLabels key={focused.id} card={focused} /> : null}</AnimatePresence>
       {level !== 0 ? <WatchBadges cards={cards.filter(card => dom.has(card.id) && !(level === 2 && card.id === focused?.id))} /> : null}
-      {level !== 0 ? <PeerPointers near={focused} /> : null}
+      {level !== 0 ? <PeerPointers near={focused} /> : <HeatBadges cards={cards} />}
       <MyBubble />
       {entrance?.flight ? <PearlFlight key={newCard?.at} from={entrance.flight.from} to={entrance.flight.to} variant={entrance.flight.variant} /> : null}
     </motion.div>

@@ -7,7 +7,7 @@ import { colorOf, EMOTES, initialOf, pathsOf } from './emotes'
 import { McText } from './McText'
 import type { Watcher } from './presence'
 import { bubblesAtom, canPoint, emoteReadyAtAtom, onlineAtom, pointersAtom, seatsAtom, sendEmote, setSettings, settingsAtom, watchersAtom } from './presence'
-import { toast, uidAtom } from './state'
+import { gameAtom, toast, uidAtom } from './state'
 import type { PublicCard } from './types'
 
 // 在场（docs/V3_ITEMS.md §20）：别人的指针、卡旁边谁在看、表情气泡、扔表情的按钮。指针和“在看”放在地图里
@@ -113,6 +113,50 @@ export function Watchers({ cardId, words = true }: { cardId: number; words?: boo
     {watchers.length > 3 ? <span className="watcher-more">+{watchers.length - 3}</span> : null}
     {words ? <span className="watcher-words">在看</span> : null}
   </button>
+}
+
+/** 全图上“最近有人挖”算多久。 */
+const RECENT_DIG_MS = 20_000
+
+/**
+ * 全图那一级（2026-11-13 用户：全图上怎么知道哪里热闹）：每张有人在看、最近有人挖的卡正中一个小牌子，写几人在看，
+ * 人越多越亮；最近 20 秒有人挖过画一把镐子（不动，到时候就撤）；那张卡上有人扔表情时牌子跳一下。不画指针，
+ * 全图上看不清，还要把所有人的指针都发过来。点牌子就是点那张卡（牌子不接收点击）。
+ */
+export function HeatBadges({ cards }: { cards: PublicCard[] }) {
+  const watchers = useAtomValue(watchersAtom)
+  const bubbles = useAtomValue(bubblesAtom)
+  const feed = useAtomValue(gameAtom)?.feed
+  const [now, setNow] = useState(() => hb.now())
+  const dugAt = new Map<number, number>()
+  // 时钟对不上（比现在晚很多）的不算
+  for (const item of feed ?? []) if (now - item.at < RECENT_DIG_MS && item.at - now < 5000) dugAt.set(item.cardId, Math.max(dugAt.get(item.cardId) ?? 0, item.at))
+  // 最早到时候的那把镐子到点了再画一次（没有就不定时）
+  const next = dugAt.size ? Math.min(...dugAt.values()) + RECENT_DIG_MS - now : null
+  useEffect(() => {
+    if (next === null) return
+    const timer = window.setTimeout(() => setNow(hb.now()), Math.max(50, next))
+    return () => window.clearTimeout(timer)
+  }, [next])
+  useEffect(() => setNow(hb.now()), [feed])
+  const byId = new Map(cards.map(card => [card.id, card]))
+  const ids = new Set([...watchers.keys(), ...dugAt.keys()])
+  return <>{[...ids].map(id => {
+    const card = byId.get(id)
+    if (!card) return null
+    const people = watchers.get(id) ?? NO_WATCHERS
+    const count = people.length
+    const tier = count >= 10 ? 4 : count >= 5 ? 3 : count >= 2 ? 2 : count
+    const pulse = people.reduce((latest, watcher) => Math.max(latest, bubbles[String(watcher.uid)]?.at ?? 0), 0)
+    const dug = dugAt.has(id)
+    const said = `${count ? `${count} 人在看` : ''}${count && dug ? '，' : ''}${dug ? '刚有人在挖' : ''}`
+    return <div key={id} className="heat-badge" style={{ left: card.x * SLOT_PX, top: card.y * SLOT_PX }} aria-label={said} title={said}>
+      <span key={pulse} className={`heat-tag tier-${tier}${pulse ? ' is-pulse' : ''}`}>
+        {count ? `${count} 人` : null}
+        {dug ? <i className="heat-dig" aria-hidden="true" /> : null}
+      </span>
+    </div>
+  })}</>
 }
 
 /** 别的卡上谁在看（当前卡的写在卡上面那一行里）：卡的左上角上面一个小牌子。 */

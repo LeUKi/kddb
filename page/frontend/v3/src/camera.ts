@@ -180,6 +180,23 @@ export function onScreen(card: Pick<PublicCard, 'x' | 'y'>, camera: Camera, view
   return sx + half > -margin && sx - half < view.width + margin && sy + half > -margin && sy - half < view.height + margin
 }
 
+/**
+ * 屏幕上看得到哪些格位（含两头，露出一点的也算）：报给在场的房间（docs/V3_ITEMS.md §20），房间按它发别人的指针和
+ * 表情。区块在格位正中、BLOCK_PX 见方。
+ */
+export function slotsOnScreen(camera: Camera, view: Viewport) {
+  const left = -camera.x / camera.scale
+  const top = -camera.y / camera.scale
+  const right = (view.width - camera.x) / camera.scale
+  const bottom = (view.height - camera.y) / camera.scale
+  const half = BLOCK_PX / 2
+  // || 0：不要 -0
+  return {
+    x0: Math.ceil((left - half) / SLOT_PX) || 0, y0: Math.ceil((top - half) / SLOT_PX) || 0,
+    x1: Math.floor((right + half) / SLOT_PX) || 0, y1: Math.floor((bottom + half) / SLOT_PX) || 0,
+  }
+}
+
 /** 整张卡都在画面里（NEW 提醒用：只露出一部分也要提醒）。 */
 export function fullyOnScreen(card: Pick<PublicCard, 'x' | 'y'>, camera: Camera, view: Viewport) {
   // 被工具条盖住一点也不算整张在画面里

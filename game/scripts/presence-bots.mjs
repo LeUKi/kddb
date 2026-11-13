@@ -41,7 +41,8 @@ for (let n = 0; n < count; n++) {
   };
   socket.onopen = () => {
     open += 1;
-    send({ w: [card, sx, sy, 2] });
+    // 屏幕范围按宽屏挖卡那一级报：左右各两张、上下各一张
+    send({ w: [card, sx, sy, 2, sx - 2, sy - 1, sx + 2, sy + 1] });
     // 每个机器人绕卡上一个圈走，起点和速度不同
     const phase = (n / count) * Math.PI * 2;
     const radius = 60 + (n % 5) * 25;

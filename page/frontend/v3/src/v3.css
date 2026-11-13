@@ -827,6 +827,17 @@ button.effect-body { cursor: pointer; }
 .watch-badge { position: absolute; z-index: 4; width: 360px; height: 0; pointer-events: none; }
 .watch-badge > .watchers { position: absolute; left: 0; bottom: 6px; padding: 2px 8px 2px 4px; background: #1c252cc8; border-radius: 999px; transform: scale(var(--px, 1)); transform-origin: left bottom; }
 
+/* 全图上的人数牌（Peers.tsx HeatBadges）：在卡正中，按镜头缩放反着缩；人越多越亮；有人扔表情时跳一下 */
+.heat-badge { position: absolute; z-index: 5; width: 0; height: 0; pointer-events: none; }
+.heat-tag { position: absolute; left: 0; top: 0; display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px; color: #10161b; background: #f4f1e8; border: 1.5px solid #11171d; border-radius: 999px; box-shadow: 0 1px 4px #0009; font-size: 12px; font-weight: 700; line-height: 1.3; white-space: nowrap; font-variant-numeric: tabular-nums; transform: translate(-50%, -50%) scale(var(--px, 1)); }
+.heat-tag.tier-0 { padding: 2px 4px; background: #242d34e6; border-color: #56636b; }
+.heat-tag.tier-2 { background: #ffd36b; }
+.heat-tag.tier-3 { background: #ffaa00; box-shadow: 0 0 10px #ffaa0099, 0 1px 4px #0009; }
+.heat-tag.tier-4 { background: #ff7a3d; box-shadow: 0 0 16px #ff7a3dcc, 0 1px 4px #0009; }
+.heat-tag.is-pulse { animation: heat-pulse .6s var(--ease-out, ease-out); }
+.heat-dig { display: inline-block; width: 16px; height: 16px; background: var(--tool-pick) no-repeat center / 100% 100%; image-rendering: pixelated; }
+@keyframes heat-pulse { 0% { scale: 1; } 30% { scale: 1.4; } 100% { scale: 1; } }
+
 .emote-float { position: relative; }
 .emote-toggle { position: relative; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; background: #242d34b3; border: 1px solid #56636b99; border-radius: 12px; cursor: pointer; }
 @media (hover: hover) { .emote-toggle:hover { border-color: #8a979f; } }
@@ -859,7 +870,7 @@ button.effect-body { cursor: pointer; }
 }
 @media (prefers-reduced-motion: reduce) {
   .peer { transition: none; }
-  .emote-wheel-item { animation: none; }
+  .emote-wheel-item, .heat-tag.is-pulse { animation: none; }
   .emote-bubble { animation-name: emote-fade; }
   @keyframes emote-fade { 0%, 85% { opacity: 1; } 100% { opacity: 0; } }
 }

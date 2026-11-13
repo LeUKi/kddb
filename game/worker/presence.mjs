@@ -4,7 +4,8 @@
 // 还在。这里是纯逻辑，测试直接用；房间只管收发、心跳和睡醒后把人找回来。
 //
 // 网页说的（一条一个 JSON，太长、太多的不理）：
-//   {"w":[卡号, 格位 x, 格位 y, 缩放级]} 在看哪张卡（镜头停下来时）；{"w":null} 不在看（页面到了后台）
+//   {"w":[卡号, 格位 x, 格位 y, 缩放级, 左, 上, 右, 下]} 在看哪张卡、屏幕上看得到哪些格位（镜头起飞时就报落点，
+//   最多 0.4 秒一次；以前的网页只有前 4 个，按缩放级估一个范围）；{"w":null} 不在看（页面到了后台）
 //   {"p":[x, y, 道具]} 指针在地图上的位置（世界坐标取整；只有电脑上、鼠标动了才发，最多 5 次/秒）和手上拿的
 //   道具（画在指针上，号码见网页 v3/src/Peers.tsx 的 TOOLS，0 是镐子，可以不带）；{"p":null} 收起
 //   {"e":表情号} 扔一个表情（每人 2 秒最多一个）
@@ -15,8 +16,9 @@
 //   "p": [[座位号, x, y, 道具?] | [座位号], …] 动了的指针（道具是 0 时不带），只有座位号的是收起了
 //   "P": 同上，是你看得见的全部指针（你换了卡以后那一批）：手上的换成这一份
 //   "e": [[座位号, 表情号], …]
-// 指针和表情只发给看得见的人：他在看的卡离指针（扔表情的人在看的卡）不超过 1 格，附近那一级 2 格，全图那一级不收。
-// 同一个人（两个标签页）的指针和表情不回给自己。
+//   "s": 1 | 0 有没有别人的屏幕和你的重叠（变了才说；网页默认有）：没有时网页不发指针，反正没人看得见
+// 指针只发给屏幕上看得到它的人（全图那一级不收，人数牌够了）；表情发给屏幕上看得到扔的人那张卡的人，全图那一级也收
+// （人数牌跳一下）。同一个人（两个标签页）的指针和表情不回给自己。
 
 /** 一张卡占的格位（和网页 v3/src/camera.ts 的 SLOT_PX 一样，测试里核对）：指针在哪张卡上按它算。 */
 export const SLOT_PX = 408;
@@ -35,7 +37,7 @@ export const SWEEP_MS = 60_000;
  * 100 个人挤在一张卡上时，每人收的从每秒 9 KB 降到 2 KB 以内，房间要拼的也少。
  */
 export const FOLLOW_MAX = 20;
-/** 每级缩放收多远的指针和表情（按格位，横竖斜都算）：全图那一级不收。 */
+/** 以前的网页没报屏幕范围：按缩放级估（按格位，横竖斜都算），全图那一级不收。 */
 const RANGE = [-1, 2, 1];
 /** 每条连接每秒能说几句（正常的 6 句左右），最多攒几句；一直超的断开。 */
 const RATE = 15;
@@ -46,8 +48,10 @@ const COORD_MAX = 10_000;
 const TOOL_MAX = 15;
 
 /**
- * @typedef {{ c: number, x: number, y: number, l: 0|1|2 }} Here 在看的卡、它的格位、缩放级
- * @typedef {{ sid: string, uid: number, name: string, here: Here|null, joined: number }} Seat 一个座位（存在连接上）
+ * @typedef {{ x0: number, y0: number, x1: number, y1: number }} View 屏幕上看得到的格位（含两头）
+ * @typedef {{ c: number, x: number, y: number, l: 0|1|2, v?: View }} Here 在看的卡、它的格位、缩放级、屏幕范围
+ * @typedef {{ sid: string, uid: number, name: string, here: Here|null, joined: number, seen?: boolean }} Seat
+ *   一个座位（存在连接上）；seen 是上次告诉他的“有没有别人看得见你”（没说过是有）
  * @typedef {{ send(text: string): void, close(code?: number, reason?: string): void }} Conn
  * @typedef {{ x: number, y: number }} Slot
  * @typedef {[number, number, number]} Point 世界坐标和手上的道具
@@ -59,11 +63,26 @@ const isInt = (/** @type {unknown} */ value, /** @type {number} */ max) => Numbe
 /** @param {unknown} value @returns {Here|null|undefined} undefined 是看不懂 */
 function hereOf(value) {
   if (value === null) return null;
-  if (!Array.isArray(value) || value.length !== 4) return undefined;
-  const [c, x, y, l] = value;
+  if (!Array.isArray(value) || (value.length !== 4 && value.length !== 8)) return undefined;
+  const [c, x, y, l, x0, y0, x1, y1] = value;
   if (!isInt(c, 1_000_000) || c < 0 || !isInt(x, COORD_MAX) || !isInt(y, COORD_MAX) || (l !== 0 && l !== 1 && l !== 2)) return undefined;
-  return { c, x, y, l };
+  if (value.length === 4) return { c, x, y, l };
+  if (![x0, y0, x1, y1].every((edge) => isInt(edge, COORD_MAX)) || x0 > x1 || y0 > y1) return undefined;
+  return { c, x, y, l, v: { x0, y0, x1, y1 } };
 }
+
+/** 屏幕上看得到的格位：网页报的；以前的网页按缩放级估；不在看是 null。 */
+function viewOf(/** @type {Here|null} */ here) {
+  if (!here) return null;
+  if (here.v) return here.v;
+  const range = RANGE[here.l];
+  return range < 0 ? null : { x0: here.x - range, y0: here.y - range, x1: here.x + range, y1: here.y + range };
+}
+
+/** 收指针的范围：全图那一级不收。 */
+const pointerView = (/** @type {Here|null} */ here) => (here && here.l !== 0 ? viewOf(here) : null);
+const inView = (/** @type {View|null} */ view, /** @type {Slot|null} */ slot) => !!view && !!slot && slot.x >= view.x0 && slot.x <= view.x1 && slot.y >= view.y0 && slot.y <= view.y1;
+const overlap = (/** @type {View} */ a, /** @type {View} */ b) => a.x0 <= b.x1 && b.x0 <= a.x1 && a.y0 <= b.y1 && b.y0 <= a.y1;
 
 /** @param {unknown} value @returns {Point|null|undefined} */
 function pointOf(value) {
@@ -112,6 +131,8 @@ export class PresenceRoom {
   fresh = new Set();
   /** @type {Set<Conn>} 刚连上的人：这一批给他座位号和所有在看的人 */
   hello = new Set();
+  /** 有人换了屏幕范围、来了、走了：这一批重新算谁被别人看得见 */
+  viewsChanged = false;
   /** @type {unknown} */
   timer = null;
 
@@ -144,6 +165,7 @@ export class PresenceRoom {
     this.save(conn, seat);
     this.lastSeen.set(conn, now);
     this.hello.add(conn);
+    this.viewsChanged = true;
     this.schedule();
     return seat;
   }
@@ -160,6 +182,7 @@ export class PresenceRoom {
     this.hello.delete(conn);
     this.fresh.delete(conn);
     this.dropPointer(seat.sid);
+    this.viewsChanged = true;
     if (seat.here || this.watched.has(seat.sid)) {
       this.left.set(seat.sid, { ...seat, here: null });
       this.watched.add(seat.sid);
@@ -214,9 +237,10 @@ export class PresenceRoom {
   watch(conn, seat, here) {
     if (here === undefined) return;
     const before = seat.here;
-    if (before && here && before.c === here.c && before.x === here.x && before.y === here.y && before.l === here.l) return;
+    if (JSON.stringify(before) === JSON.stringify(here)) return;
     seat.here = here;
     this.save(conn, seat);
+    this.viewsChanged = true;
     // 不在看了（页面到后台）、到了全图那一级：指针也收起
     if (!here || here.l === 0) this.dropPointer(seat.sid);
     if (!before || !here || before.c !== here.c) this.watched.add(seat.sid);
@@ -278,6 +302,21 @@ export class PresenceRoom {
     }, FLUSH_MS);
   }
 
+  /**
+   * 每个在挖卡、附近两级的人：有没有别人（不是自己的另一个标签页）的屏幕和他的重叠、也收指针。没有的话他的指针
+   * 谁也看不见，网页就先不发。只在有人换了范围、来了、走了时算。
+   * @returns {Map<Conn, boolean>}
+   */
+  whoIsSeen() {
+    const views = [...this.seats].flatMap(([conn, seat]) => {
+      const view = pointerView(seat.here);
+      return view ? [{ conn, uid: seat.uid, view }] : [];
+    });
+    const seen = new Map();
+    for (const one of views) seen.set(one.conn, views.some((other) => other.uid !== one.uid && overlap(one.view, other.view)));
+    return seen;
+  }
+
   /** 发这一批：每人一份，只放他看得见的指针和表情。 */
   flush() {
     const wList = [...this.watched].flatMap((sid) => {
@@ -291,12 +330,22 @@ export class PresenceRoom {
       const conn = this.bySid.get(sid);
       return (conn && this.seats.get(conn)?.uid) ?? this.left.get(sid)?.uid;
     };
+    const seen = this.viewsChanged ? this.whoIsSeen() : null;
+    this.viewsChanged = false;
     for (const [conn, seat] of this.seats) {
       const here = seat.here;
-      const range = here ? RANGE[here.l] : -1;
-      const near = (/** @type {Slot|null} */ slot) => !!slot && !!here && range >= 0 && Math.max(Math.abs(slot.x - here.x), Math.abs(slot.y - here.y)) <= range;
+      const view = pointerView(here);
+      const near = (/** @type {Slot|null} */ slot) => inView(view, slot);
+      const emoteView = viewOf(here);
       /** @type {Record<string, unknown>} */
       const out = {};
+      // 有没有别人看得见你：变了才说（没说过的当作“有”，和网页的默认一样）
+      const visible = seen?.get(conn);
+      if (visible !== undefined && visible !== (seat.seen ?? true)) {
+        seat.seen = visible;
+        this.save(conn, seat);
+        out.s = visible ? 1 : 0;
+      }
       if (this.hello.has(conn)) {
         out.hi = seat.sid;
         out.w = (roster ??= [...this.seats.values()].filter((other) => other.here).map((other) => [other.sid, other.uid, other.name, /** @type {Here} */ (other.here).c]));
@@ -335,7 +384,7 @@ export class PresenceRoom {
         }
         if (moved.length > 0) out.p = moved;
       }
-      const emotes = this.emotes.filter((emote) => emote.uid !== seat.uid && near(emote.at)).map((emote) => [emote.sid, emote.n]);
+      const emotes = this.emotes.filter((emote) => emote.uid !== seat.uid && inView(emoteView, emote.at)).map((emote) => [emote.sid, emote.n]);
       if (emotes.length > 0) out.e = emotes;
       if (Object.keys(out).length === 0) continue;
       try {

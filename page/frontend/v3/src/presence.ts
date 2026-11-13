@@ -1,8 +1,9 @@
 // 在场（docs/V3_ITEMS.md §20）：别人的指针、谁在看哪张卡、表情气泡。另一条连接连游戏站的另一个房间
 // （game/worker/presence.mjs，消息的样子写在那里），挖格子那条不受影响。
 //
-// 发得省：在看哪张卡只在镜头停下 0.5 秒后发，两次至少隔 2 秒；指针只在电脑上、鼠标动了时发，最多 5 次/秒，
-// 停下就不发；页面到后台说一声不看了，回来再说。指针带着手上的道具（别人的指针上画那个图标）；拿着望远镜时
+// 发得省：在看哪张卡、屏幕上看得到哪些格位在镜头起飞时就报落点（落地时那边的指针已经在了），最多 0.4 秒一次；
+// 指针只在电脑上、鼠标动了时发，最多 5 次/秒，停下就不发；房间说没人的屏幕和你重叠时也不发；页面到后台说一声
+// 不看了，回来再说。指针带着手上的道具（别人的指针上画那个图标）；拿着望远镜时
 // 不发（看哪一格只有自己知道）。
 import { atom } from 'jotai'
 import { gameApi, store, toast, uidAtom } from './state'
@@ -57,11 +58,11 @@ const byName = (a: Watcher, b: Watcher) => a.name.localeCompare(b.name)
 export const watchersAtom = atom(get => {
   const me = get(uidAtom)
   const byCard = new Map<number, Watcher[]>()
-  const seen = new Set<string>()
+  const counted = new Set<string>()
   for (const [sid, seat] of Object.entries(get(seatsAtom))) {
     const key = `${seat.c}:${seat.uid}`
-    if (seat.uid === me || seen.has(key)) continue
-    seen.add(key)
+    if (seat.uid === me || counted.has(key)) continue
+    counted.add(key)
     const list = byCard.get(seat.c) ?? []
     list.push({ sid, uid: seat.uid, name: seat.name })
     byCard.set(seat.c, list)
@@ -75,15 +76,16 @@ export const onlineAtom = atom(get => new Set([get(uidAtom), ...Object.values(ge
 /** 只有电脑上（有鼠标）才发自己的指针 */
 export const canPoint = () => !!window.matchMedia?.('(hover: hover) and (pointer: fine)').matches
 
-const WATCH_SETTLE_MS = 500
-const WATCH_GAP_MS = 2000
+const WATCH_GAP_MS = 400
 const POINTER_GAP_MS = 200
 export const EMOTE_COOL_MS = 2500
 export const BUBBLE_MS = 3000
 
 let conn: { send(text: string): boolean; close(): void } | null = null
 let visible = typeof document === 'undefined' || document.visibilityState === 'visible'
-let watchWanted: [number, number, number, 0 | 1 | 2] | null = null
+let watchWanted: number[] | null = null
+/** 房间说的“有没有别人看得见你”（默认有；刚连上也当有） */
+let seen = true
 let watchSent: string | null = null
 let watchLastAt = 0
 let watchTimer: ReturnType<typeof setTimeout> | undefined
@@ -117,6 +119,7 @@ function onOpen() {
   // 新连上的房间什么都不知道：在看哪张重新说，指针有就再说
   watchSent = null
   pointerSent = NO_POINTER
+  seen = true
   flushWatch()
 }
 
@@ -131,11 +134,13 @@ function onVisibility() {
   flushWatch()
 }
 
-/** 镜头停在哪张卡、哪一级（地图落定时报）；null 是没有卡。 */
-export function reportWatch(card: { id: number; x: number; y: number } | null, level: 0 | 1 | 2) {
-  watchWanted = card ? [card.id, card.x, card.y, level] : null
+/** 镜头去哪张卡、哪一级、屏幕上看得到哪些格位（起飞和落地时报，同样的不重发）；null 是没有卡。 */
+export function reportWatch(card: { id: number; x: number; y: number } | null, level: 0 | 1 | 2, view: { x0: number; y0: number; x1: number; y1: number }) {
+  watchWanted = card ? [card.id, card.x, card.y, level, view.x0, view.y0, view.x1, view.y1] : null
   clearTimeout(watchTimer)
-  watchTimer = setTimeout(flushWatch, Math.max(WATCH_SETTLE_MS, watchLastAt + WATCH_GAP_MS - Date.now()))
+  const wait = watchLastAt + WATCH_GAP_MS - Date.now()
+  if (wait <= 0) flushWatch()
+  else watchTimer = setTimeout(flushWatch, wait)
 }
 
 function flushWatch() {
@@ -166,7 +171,7 @@ export function reportPointer(where: (() => Point | null) | null) {
 }
 
 function flushPointer() {
-  const allowed = visible && store.get(settingsAtom).mine && !!watchWanted && watchWanted[3] !== 0 && JSON.stringify({ w: watchWanted }) === watchSent
+  const allowed = visible && seen && store.get(settingsAtom).mine && !!watchWanted && watchWanted[3] !== 0 && JSON.stringify({ w: watchWanted }) === watchSent
   const point = allowed ? pointerOf?.() ?? null : null
   const text = JSON.stringify({ p: point ? [Math.round(point[0]), Math.round(point[1]), ...(point[2] ? [point[2]] : [])] : null })
   if (text === pointerSent) return
@@ -214,6 +219,11 @@ export function onText(text: string) {
   if (typeof data !== 'object' || data === null) return
   const hello = typeof data.hi === 'string'
   if (hello) store.set(mySidAtom, data.hi as string)
+  // 有没有别人看得见你：变成有就把指针补上，变成没有就收起、先不发
+  if (data.s === 0 || data.s === 1) {
+    seen = data.s === 1
+    flushPointer()
+  }
   let pointers: Record<string, Point> | null = null
   if (Array.isArray(data.w)) {
     const seats = hello ? {} : { ...store.get(seatsAtom) }
