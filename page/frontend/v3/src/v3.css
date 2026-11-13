@@ -802,8 +802,8 @@ button.effect-body { cursor: pointer; }
 .peer { position: absolute; left: 0; top: 0; transition: transform .24s linear; will-change: transform; }
 .peer-body { position: relative; transform: scale(var(--px, 1)); transform-origin: 0 0; }
 .peer-arrow { display: block; width: 22px; height: 32px; filter: drop-shadow(0 1px 1px #0008); }
-/* 手上的道具：和自己的指针一样挂在箭头右下（cursor.ts 画好的 --tool-*，2 倍） */
-.peer-tool { position: absolute; left: 24px; top: 26px; width: 36px; height: 36px; background: no-repeat center / 100% 100%; image-rendering: pixelated; }
+/* 手上的道具：和自己的指针一样挂在箭头右下（cursor.ts 画好的 --tool-*，1.5 倍：2 倍和格子里的东西一样大，太抢眼） */
+.peer-tool { position: absolute; left: 18px; top: 20px; width: 27px; height: 27px; background: no-repeat center / 100% 100%; image-rendering: pixelated; }
 .peer-name { position: absolute; left: 16px; top: 0; max-width: 120px; overflow: hidden; padding: 1px 6px; color: #10161b; background: var(--peer); border-radius: 6px; font-size: 11px; font-weight: 600; line-height: 1.5; white-space: nowrap; text-overflow: ellipsis; }
 .peer .emote-bubble { left: 30px; bottom: 34px; }
 /* 自己右键扔的：从扔的地方往上冒 */
@@ -818,7 +818,7 @@ button.effect-body { cursor: pointer; }
 @media (hover: hover) { .emote-wheel-item:not(:disabled):hover { background: #2c373f; border-color: #8fe3f0; } }
 @keyframes wheel-in { from { opacity: 0; transform: translate(0, 0) scale(.4); } }
 
-.card-head-end { display: inline-flex; align-items: center; gap: 8px; min-width: 0; margin-left: auto; }
+.card-head-start { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
 .watchers { position: relative; display: inline-flex; align-items: center; gap: 0; padding: 0; color: var(--muted); background: none; border: 0; font: inherit; font-size: 12px; pointer-events: auto; cursor: pointer; }
 .watcher { position: relative; display: grid; place-items: center; width: 20px; height: 20px; margin-right: -4px; color: #10161b; background: var(--peer); border: 2px solid #11171d; border-radius: 50%; font-size: 10px; font-weight: 700; line-height: 1; }
 .watcher-more { margin-left: 8px; font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px #000; }

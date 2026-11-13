@@ -31,16 +31,17 @@ export function CardLabels({ card }: { card: PublicCard }) {
   return <motion.div className="card-labels" style={style} aria-label={`${regionName(card)}的说明`}
     initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}>
     <div className="card-head">
-      <button type="button" className={`region-name is-${card.kind ?? 'normal'}`} onClick={() => setDialog({ type: 'region', cardId: card.id })}
-        aria-label={`${regionName(card)}：点开看说明`}>
-        {regionName(card)}<i aria-hidden="true">?</i>
-      </button>
-      <span className="card-head-end">
+      {/* 谁在看紧挨着区块名字（2026-11-13 用户：靠近区块说明，看得出是这张卡的） */}
+      <span className="card-head-start">
+        <button type="button" className={`region-name is-${card.kind ?? 'normal'}`} onClick={() => setDialog({ type: 'region', cardId: card.id })}
+          aria-label={`${regionName(card)}：点开看说明`}>
+          {regionName(card)}<i aria-hidden="true">?</i>
+        </button>
         <Watchers cardId={card.id} />
-        {deep ? <Leftovers card={card} /> : <span className="card-progress">
-          {card.finished ? '挖完了' : `已挖 ${dug}/${card.cells.length - fixed}`}
-        </span>}
       </span>
+      {deep ? <Leftovers card={card} /> : <span className="card-progress">
+        {card.finished ? '挖完了' : `已挖 ${dug}/${card.cells.length - fixed}`}
+      </span>}
     </div>
     <div className="card-foot">
       {deep ? <Noise card={card} /> : <Leftovers card={card} />}
