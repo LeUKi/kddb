@@ -6,6 +6,8 @@ import { signVoucher } from "../shared/voucher.mjs";
 import { pageFrom, SDK_URL, withSdkFrom } from "../worker/page.mjs";
 import { inScope, outOfScope } from "../worker/scope.mjs";
 import { LivePushes, PUSH_EVERY_MS } from "../worker/push.mjs";
+import { EMOTE_GAP_MS, FLUSH_MS, FOLLOW_MAX, PresenceRoom, SLOT_PX, STALE_MS } from "../worker/presence.mjs";
+import { readFileSync } from "node:fs";
 import { BOT_BASE, botKeyValid } from "../worker/bots.mjs";
 import { newCard } from "../shared/rules.mjs";
 
@@ -628,5 +630,218 @@ describe("v3 的网页从这个环境的红包站加载 SDK", () => {
     const script = page("x", "text/javascript");
     assert.equal(await pageFrom(script, "https://staging.hb.lafi.sh"), script);
     assert.equal(withSdkFrom(html, "http://127.0.0.1:8730"), '<head><script src="http://127.0.0.1:8730/sdk/v1.js"></script></head>');
+  });
+});
+
+describe("在场：指针、谁在看、表情（docs/V3_ITEMS.md §20）", () => {
+  const conn = () => {
+    /** @type {{ sent: Record<string, unknown>[], closed: number|null, send(text: string): void, close(code?: number): void }} */
+    const out = { sent: [], closed: null, send(text) { this.sent.push(JSON.parse(text)); }, close(code) { this.closed = code ?? null; } };
+    return out;
+  };
+  const setup = () => {
+    /** @type {(() => void)[]} */
+    const timers = [];
+    let n = 0;
+    const saved = new Map();
+    const room = new PresenceRoom({ later: (run, ms) => { assert.equal(ms, FLUSH_MS); timers.push(run); return timers.length; }, sid: () => `s${++n}`, save: (c, seat) => saved.set(c, { ...seat }) });
+    const flush = () => { const run = timers.shift(); assert.ok(run, "该有一批"); run(); };
+    return { room, timers, flush, saved };
+  };
+  const say = (/** @type {PresenceRoom} */ room, c, data, now = NOW) => room.message(c, typeof data === "string" ? data : JSON.stringify(data), now);
+  const take = (c) => c.sent.splice(0);
+
+  it("和网页的格位一样大", () => {
+    const camera = readFileSync(new URL("../../page/frontend/v3/src/camera.ts", import.meta.url), "utf8");
+    const px = (name) => Number(new RegExp(`export const ${name} = ([^\\n]+)`).exec(camera)?.[1].replace(/[A-Z_]+/g, (key) => String(px(key))).replace(/[^0-9+*]/g, "").split("+").reduce((sum, part) => sum + part.split("*").reduce((product, value) => product * Number(value), 1), 0));
+    assert.equal(px("SLOT_PX"), SLOT_PX);
+  });
+
+  it("刚连上给座位号和谁在看哪张；换卡告诉所有人；走了说一声", () => {
+    const { room, flush, saved } = setup();
+    const a = conn(), b = conn();
+    room.join(a, { uid: 1, name: "小明" }, NOW);
+    flush();
+    assert.deepEqual(take(a), [{ hi: "s1", w: [], P: [] }]);
+    say(room, a, { w: [5, 0, 0, 2] });
+    room.join(b, { uid: 2, name: "小红" }, NOW);
+    flush();
+    assert.deepEqual(take(a), [{ w: [["s1", 1, "小明", 5]], P: [] }]);
+    assert.deepEqual(take(b), [{ hi: "s2", w: [["s1", 1, "小明", 5]], P: [] }]);
+    assert.deepEqual(saved.get(a).here, { c: 5, x: 0, y: 0, l: 2 });
+    // 同一张卡上缩放级变了：不用告诉别人
+    say(room, a, { w: [5, 0, 0, 1] });
+    flush();
+    assert.deepEqual(take(b), []);
+    room.leave(a);
+    flush();
+    assert.deepEqual(take(b), [{ w: [["s1", 1, "小明", null]] }]);
+  });
+
+  it("指针只发给在看附近的卡的人（挖卡那一级 1 格、附近 2 格、全图不收），离开范围时说收起；自己的不回给自己", () => {
+    const { room, flush } = setup();
+    const [a, near, far, mid, overview, twin] = [conn(), conn(), conn(), conn(), conn(), conn()];
+    room.join(a, { uid: 1, name: "a" }, NOW);
+    room.join(near, { uid: 2, name: "near" }, NOW);
+    room.join(far, { uid: 3, name: "far" }, NOW);
+    room.join(mid, { uid: 4, name: "mid" }, NOW);
+    room.join(overview, { uid: 5, name: "all" }, NOW);
+    room.join(twin, { uid: 1, name: "a" }, NOW);
+    say(room, a, { w: [1, 0, 0, 2] });
+    say(room, near, { w: [2, 1, 0, 2] });
+    say(room, far, { w: [3, 2, 0, 2] });
+    say(room, mid, { w: [3, 2, 0, 1] });
+    say(room, overview, { w: [1, 0, 0, 0] });
+    say(room, twin, { w: [1, 0, 0, 2] });
+    flush();
+    for (const c of [a, near, far, mid, overview, twin]) take(c);
+    say(room, a, { p: [10, -20] });
+    say(room, a, { p: [12, -20] });
+    flush();
+    assert.deepEqual(take(near), [{ p: [["s1", 12, -20]] }]);
+    assert.deepEqual(take(mid), [{ p: [["s1", 12, -20]] }]);
+    assert.deepEqual(take(far), []);
+    assert.deepEqual(take(overview), []);
+    assert.deepEqual(take(twin), []);
+    // 指针挪到隔壁卡（格位 1, 0）：far 现在看得见了；再挪远，near 收到“收起”前的最后一下
+    say(room, a, { p: [SLOT_PX, 0] });
+    flush();
+    assert.deepEqual(take(far), [{ p: [["s1", SLOT_PX, 0]] }]);
+    assert.deepEqual(take(near), [{ p: [["s1", SLOT_PX, 0]] }]);
+    take(mid);
+    say(room, a, { p: [SLOT_PX * 5, 0] });
+    flush();
+    assert.deepEqual(take(near), [{ p: [["s1"]] }]);
+    assert.deepEqual(take(far), [{ p: [["s1"]] }]);
+    assert.deepEqual(take(mid), [{ p: [["s1"]] }]);
+    say(room, a, { p: null });
+    flush();
+    assert.deepEqual(take(near), []);
+    assert.deepEqual(take(mid), []);
+  });
+
+  it("每人最多跟着 20 个指针：换卡时挑最近的，有人收起了再补上", () => {
+    const { room, flush } = setup();
+    const viewer = conn();
+    room.join(viewer, { uid: 1, name: "v" }, NOW);
+    const others = Array.from({ length: FOLLOW_MAX + 5 }, () => conn());
+    others.forEach((other, n) => {
+      room.join(other, { uid: 100 + n, name: `p${n}` }, NOW);
+      say(room, other, { w: [1, 0, 0, 2] });
+    });
+    flush();
+    // 第 n 个离卡中心 n×5 像素
+    others.forEach((other, n) => say(room, other, { p: [n * 5, 0] }, NOW + 10));
+    flush();
+    take(viewer);
+    say(room, viewer, { w: [1, 0, 0, 2] }, NOW + 20);
+    flush();
+    const [first] = take(viewer);
+    assert.equal(first.P.length, FOLLOW_MAX);
+    assert.deepEqual(first.P.at(-1), [`s${FOLLOW_MAX + 1}`, (FOLLOW_MAX - 1) * 5, 0]);
+    // 没跟着的动了：不发；跟着的收起了：说收起，空出的位置给下一个动的
+    say(room, others[FOLLOW_MAX + 2], { p: [1, 1] }, NOW + 30);
+    flush();
+    assert.deepEqual(take(viewer), []);
+    say(room, others[0], { p: null }, NOW + 40);
+    say(room, others[FOLLOW_MAX + 2], { p: [2, 2] }, NOW + 40);
+    flush();
+    assert.deepEqual(take(viewer), [{ p: [["s2"], [`s${FOLLOW_MAX + 4}`, 2, 2]] }]);
+  });
+
+  it("换了卡给他看得见的全部指针；不在看了、到全图、走了指针都收起", () => {
+    const { room, flush } = setup();
+    const [a, b] = [conn(), conn()];
+    room.join(a, { uid: 1, name: "a" }, NOW);
+    room.join(b, { uid: 2, name: "b" }, NOW);
+    say(room, a, { w: [1, 0, 0, 2] });
+    say(room, b, { w: [9, 9, 9, 2] });
+    flush();
+    say(room, a, { p: [5, 5] });
+    flush();
+    take(a);
+    take(b);
+    say(room, b, { w: [1, 0, 0, 2] });
+    flush();
+    assert.deepEqual(take(b), [{ w: [["s2", 2, "b", 1]], P: [["s1", 5, 5]] }]);
+    say(room, a, { w: null });
+    flush();
+    assert.deepEqual(take(b), [{ w: [["s1", 1, "a", null]], p: [["s1"]] }]);
+    // 不在看的人发来的指针不要
+    say(room, a, { p: [6, 6] });
+    assert.equal(room.pointers.size, 0);
+    say(room, a, { w: [1, 0, 0, 2] });
+    say(room, a, { p: [7, 7] });
+    flush();
+    take(b);
+    room.leave(a);
+    flush();
+    assert.deepEqual(take(b), [{ w: [["s1", 1, "a", null]], p: [["s1"]] }]);
+  });
+
+  it("表情：发给看得见扔的人那张卡的人，不回给自己；每人 2 秒最多一个；不在看、号不对的不要", () => {
+    const { room, flush } = setup();
+    const [a, b, c] = [conn(), conn(), conn()];
+    room.join(a, { uid: 1, name: "a" }, NOW);
+    room.join(b, { uid: 2, name: "b" }, NOW);
+    room.join(c, { uid: 3, name: "c" }, NOW);
+    say(room, b, { w: [2, 1, 1, 2] });
+    say(room, c, { w: [3, 5, 5, 2] });
+    say(room, a, { e: 1 });
+    flush();
+    for (const x of [a, b, c]) take(x);
+    say(room, a, { w: [1, 0, 0, 2] });
+    flush();
+    for (const x of [a, b, c]) take(x);
+    say(room, a, { e: 3 }, NOW);
+    say(room, a, { e: 4 }, NOW + EMOTE_GAP_MS - 1);
+    say(room, a, { e: 99 }, NOW + EMOTE_GAP_MS);
+    say(room, a, { e: "1" }, NOW + EMOTE_GAP_MS);
+    flush();
+    assert.deepEqual(take(b), [{ e: [["s1", 3]] }]);
+    assert.deepEqual(take(c), []);
+    assert.deepEqual(take(a), []);
+    say(room, a, { e: 5 }, NOW + EMOTE_GAP_MS);
+    flush();
+    assert.deepEqual(take(b), [{ e: [["s1", 5]] }]);
+  });
+
+  it("看不懂的、太长的、心跳不理；说得太多的超出部分不理，一直超就断开", () => {
+    const { room, flush, timers } = setup();
+    const a = conn();
+    room.join(a, { uid: 1, name: "a" }, NOW);
+    flush();
+    take(a);
+    for (const text of ["ping", "{", "[1]", JSON.stringify({ w: [1, 0, 0, 3] }), JSON.stringify({ w: [1.5, 0, 0, 2] }), JSON.stringify({ p: [1, 2, 3] }), "x".repeat(300)]) say(room, a, text);
+    assert.equal(timers.length, 0);
+    assert.equal(room.seats.get(a)?.here, null);
+    for (let i = 0; i < 400; i++) say(room, a, { w: [i % 2, 0, 0, 2] }, NOW + 1000);
+    assert.equal(a.closed, 1008);
+    assert.equal(room.seats.size, 0);
+  });
+
+  it("心跳没了 90 秒的断开，当作走了；平台自动回的心跳也算", () => {
+    const { room, flush } = setup();
+    const [a, b] = [conn(), conn()];
+    room.join(a, { uid: 1, name: "a" }, NOW);
+    room.join(b, { uid: 2, name: "b" }, NOW);
+    say(room, a, { w: [1, 0, 0, 2] });
+    flush();
+    take(b);
+    room.sweep(NOW + STALE_MS + 1, (c) => (c === b ? NOW + STALE_MS : 0));
+    assert.equal(a.closed, 4000);
+    assert.equal(b.closed, null);
+    flush();
+    assert.deepEqual(take(b), [{ w: [["s1", 1, "a", null]] }]);
+  });
+
+  it("房间睡醒：连接上存的座位找回来，接着用", () => {
+    const { room, flush } = setup();
+    const a = conn();
+    room.restore(a, { sid: "old", uid: 1, name: "a", here: { c: 1, x: 0, y: 0, l: 2 }, joined: NOW });
+    const b = conn();
+    room.join(b, { uid: 2, name: "b" }, NOW);
+    flush();
+    assert.deepEqual(take(b), [{ hi: "s1", w: [["old", 1, "a", 1]], P: [] }]);
   });
 });

@@ -228,7 +228,9 @@ button.eye-status { cursor: pointer; }
 .zoom button:disabled { opacity: .35; }
 .zoom span { min-width: 2.5em; color: var(--muted); font-size: 13px; text-align: center; }
 /* 缩放按钮：地图右下角竖着一列，半透明，不占一整行 */
-.zoom-float { position: absolute; right: 10px; bottom: 10px; z-index: 3; flex-direction: column; gap: 4px; padding: 4px; background: #11171d8c; border: 1px solid #ffffff14; border-radius: 12px; }
+/* 右下角竖着一列：扔表情的按钮在上，缩放在下（Peers.tsx EmoteButton） */
+.map-float { position: absolute; right: 10px; bottom: 10px; z-index: 7; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.zoom-float { flex-direction: column; gap: 4px; padding: 4px; background: #11171d8c; border: 1px solid #ffffff14; border-radius: 12px; }
 .zoom-float button { width: 36px; height: 36px; font-size: 18px; line-height: 1; background: #242d34b3; border-color: #56636b99; }
 .zoom-float span { min-width: 0; font-size: 11px; line-height: 1.4; }
 
@@ -379,7 +381,9 @@ button.eye-status { cursor: pointer; }
   .sound-button, .rules-button { width: 28px; height: 28px; }
   .bottom-bar { padding: 6px 10px 8px; }
   /* 手机上卡几乎占满宽度：缩放按钮小一号、不写字，正好落在卡下面的空白里，不压格子 */
-  .zoom-float { right: 6px; bottom: 6px; gap: 3px; padding: 3px; }
+  .map-float { right: 6px; bottom: 6px; gap: 6px; }
+  .zoom-float { gap: 3px; padding: 3px; }
+  .emote-toggle { width: 40px; height: 40px; }
   .zoom-float button { width: 32px; height: 32px; font-size: 16px; }
   .zoom-float span { display: none; }
   /* 底栏固定几行：奖池和人数一行，截止和收益一行，开了末地宝藏再一行；长了省略，不换行（高度一变，地图就重新对准） */
@@ -789,3 +793,59 @@ button.effect-body { cursor: pointer; }
 .noise-track i { position: absolute; top: 50%; left: var(--n); z-index: 1; width: 12px; height: 12px; translate: -50% -50%; border-radius: 50%; background: #8fe3f0; border: 2px solid #0b1215; box-shadow: 0 0 6px #8fe3f0; transition: left .3s var(--ease-out); }
 .noise-line.is-danger .noise-track i { background: #ff8c97; box-shadow: 0 0 6px #ff8c97; }
 .noise-words { flex: none; }
+
+
+/* —— 在场（Peers.tsx，docs/V3_ITEMS.md §20）：别人的指针、谁在看、表情 ——
+   指针和“在看”在地图里，按镜头缩放反着缩（--px）。指针换位置用 CSS 补间滑过去（比 5 次/秒的更新稍长一点，
+   接得上），停下就不再画。--peer 是那个人的颜色。 */
+.peers { position: absolute; left: 0; top: 0; z-index: 6; pointer-events: none; }
+.peer { position: absolute; left: 0; top: 0; transition: transform .24s linear; will-change: transform; }
+.peer-body { position: relative; transform: scale(var(--px, 1)); transform-origin: 0 0; }
+.peer-arrow { display: block; width: 22px; height: 32px; filter: drop-shadow(0 1px 1px #0008); }
+.peer-name { position: absolute; left: 18px; top: 26px; max-width: 120px; overflow: hidden; padding: 1px 6px; color: #10161b; background: var(--peer); border-radius: 6px; font-size: 11px; font-weight: 600; line-height: 1.5; white-space: nowrap; text-overflow: ellipsis; }
+.peer .emote-bubble { left: 22px; bottom: 30px; translate: 0 0; }
+
+.card-head-end { display: inline-flex; align-items: center; gap: 8px; min-width: 0; margin-left: auto; }
+.watchers { position: relative; display: inline-flex; align-items: center; gap: 0; padding: 0; color: var(--muted); background: none; border: 0; font: inherit; font-size: 12px; pointer-events: auto; cursor: pointer; }
+.watcher { position: relative; display: grid; place-items: center; width: 20px; height: 20px; margin-right: -4px; color: #10161b; background: var(--peer); border: 2px solid #11171d; border-radius: 50%; font-size: 10px; font-weight: 700; line-height: 1; }
+.watcher-more { margin-left: 8px; font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px #000; }
+.watcher-words { margin-left: 8px; text-shadow: 0 1px 2px #000; }
+.watcher-more + .watcher-words { margin-left: 4px; }
+.watch-badge { position: absolute; z-index: 4; width: 360px; height: 0; pointer-events: none; }
+.watch-badge > .watchers { position: absolute; left: 0; bottom: 6px; padding: 2px 8px 2px 4px; background: #1c252cc8; border-radius: 999px; transform: scale(var(--px, 1)); transform-origin: left bottom; }
+
+.emote-float { position: relative; }
+.emote-toggle { position: relative; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; background: #242d34b3; border: 1px solid #56636b99; border-radius: 12px; cursor: pointer; }
+@media (hover: hover) { .emote-toggle:hover { border-color: #8a979f; } }
+/* 冷却：下面一条 2.5 秒走完（和网页的 EMOTE_COOL_MS 一样） */
+.emote-toggle.is-cooling::after { content: ''; position: absolute; left: 6px; right: 6px; bottom: 4px; height: 2px; background: var(--gold, #ffd36b); border-radius: 2px; transform-origin: left center; animation: emote-cool 2.5s linear forwards; }
+@keyframes emote-cool { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+.emote-toggle .emote-bubble { left: 50%; bottom: 100%; }
+.emote-panel { position: absolute; right: calc(100% + 8px); bottom: 0; width: 220px; padding: 10px; color: var(--ink); background: #11171df2; border: 1px solid #ffffff1f; border-radius: 14px; box-shadow: 0 8px 24px #0009; }
+.emote-online { margin: 0 0 8px; color: var(--muted); font-size: 12px; line-height: 1.45; }
+.emote-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 8px; }
+.emote-grid button { display: grid; place-items: center; height: 44px; padding: 0; background: #242d34; border: 1px solid #56636b; border-radius: 10px; cursor: pointer; }
+.emote-grid button:disabled { opacity: .45; cursor: default; }
+@media (hover: hover) { .emote-grid button:not(:disabled):hover { border-color: #8a979f; background: #2c373f; } }
+.emote-switch { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 13px; cursor: pointer; }
+.emote-switch input { width: 16px; height: 16px; margin: 0; accent-color: #8fe3f0; }
+
+.emote-art { display: block; image-rendering: pixelated; }
+.emote-bubble { position: absolute; z-index: 2; display: grid; place-items: center; min-width: 40px; height: 40px; padding: 0 5px; translate: -50% 0; background: #f4f1e8; border: 2px solid #11171d; border-radius: 12px; box-shadow: 0 3px 8px #0008; pointer-events: none; animation: emote-pop 3s var(--ease-out, ease-out) forwards; }
+.emote-bubble .mc-text { filter: drop-shadow(0 0 1px #0006); }
+.emote-bubble::after { content: ''; position: absolute; left: 50%; bottom: -7px; width: 10px; height: 10px; translate: -50% 0; rotate: 45deg; background: #f4f1e8; border-right: 2px solid #11171d; border-bottom: 2px solid #11171d; }
+/* “在看”的小圆点在卡上面那一行，往上冒会被画面顶上的提示和地图边挡住：往下冒，压在卡上 3 秒 */
+.watcher .emote-bubble { left: 50%; top: calc(100% + 10px); }
+.watcher .emote-bubble::after { top: -7px; bottom: auto; rotate: 225deg; }
+@keyframes emote-pop {
+  0% { opacity: 0; transform: translateY(6px) scale(.6); }
+  8% { opacity: 1; transform: translateY(0) scale(1.08); }
+  14% { transform: translateY(0) scale(1); }
+  80% { opacity: 1; transform: translateY(-10px); }
+  100% { opacity: 0; transform: translateY(-16px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .peer { transition: none; }
+  .emote-bubble { animation-name: emote-fade; }
+  @keyframes emote-fade { 0%, 85% { opacity: 1; } 100% { opacity: 0; } }
+}

@@ -1,6 +1,7 @@
 // 矿洞夺宝的游戏站（docs/V3_MAP.md §7）：hbweb-kddb.lafi.sh。
 // 根路径照旧是 v2 的网页（开着的红包还在用），v3 的网页在 /v3/，接口在 /v3/api/，
-// 和网页同源。每个红包一个 Durable Object（按红包编号起名，放亚太）。
+// 和网页同源。每个红包一个 Durable Object（按红包编号起名，放亚太）；指针、谁在看、表情另开一个
+// （PresenceObject，docs/V3_ITEMS.md §20），挖格子的房间不受影响。
 //
 // 环境变量：HB_ORIGIN（红包站，本地是开发包模拟器 http://127.0.0.1:8730）、
 // PAGE_ORIGIN（这个网页的来源，令牌的 aud）、JUDGE_ID、MIN_JUDGE_VERSION（只认 v3
@@ -11,7 +12,8 @@ import { DurableObject } from "cloudflare:workers";
 import { signVoucher } from "../shared/voucher.mjs";
 import { makeNonce, makeTicket, nonceValid, readTicket, TICKET_TTL_MS, verifyIdentity } from "./auth.mjs";
 import { pageFrom } from "./page.mjs";
-import { BOT_DIGS_MAX, botKeyValid } from "./bots.mjs";
+import { BOT_BASE, BOT_DIGS_MAX, botKeyValid } from "./bots.mjs";
+import { PresenceRoom, SWEEP_MS } from "./presence.mjs";
 import { LivePushes } from "./push.mjs";
 import { MineRoom, RoomError } from "./room.mjs";
 import { inScope, outOfScope } from "./scope.mjs";
@@ -20,7 +22,7 @@ import { inScope, outOfScope } from "./scope.mjs";
  * @typedef {{
  *   HB_ORIGIN: string, PAGE_ORIGIN: string, JUDGE_ID: string, MIN_JUDGE_VERSION: string,
  *   CLAIM_KID: string, CLAIM_KEY: string, TICKET_KEY: string, LOCAL_SEED?: string, BOT_KEY?: string,
- *   MINE: DurableObjectNamespace<MineObject>, ASSETS: Fetcher,
+ *   MINE: DurableObjectNamespace<MineObject>, PRESENCE: DurableObjectNamespace<PresenceObject>, ASSETS: Fetcher,
  * }} Env
  */
 
@@ -67,11 +69,35 @@ export default {
       }));
     const hongbao = url.searchParams.get("hb") ?? "";
     if (!HONGBAO_ID.test(hongbao)) return withCors(request, env, json({ message: "没有红包编号" }, 400));
+    // 两条实时连接：票据先在这里验，验不过的不进房间（Cloudflare 的建议，省一次房间请求）
+    if (url.pathname === "/v3/api/live" || url.pathname === "/v3/api/presence") {
+      const who = await socketWho(request, url, env, hongbao);
+      if (!who) return withCors(request, env, json({ message: "票据过期了" }, 401));
+      if (request.headers.get("Upgrade") !== "websocket") return withCors(request, env, json({ message: "要用 WebSocket" }, 426));
+      if (url.pathname === "/v3/api/presence") {
+        const room = env.PRESENCE.get(env.PRESENCE.idFromName(hongbao), { locationHint: "apac" });
+        // 只带验过的这几样进去：网页自己带的头一概不转
+        return room.fetch(new Request(url, { headers: { Upgrade: "websocket", "X-Uid": String(who.uid), "X-Name": encodeURIComponent(who.name) } }));
+      }
+    }
     const stub = env.MINE.get(env.MINE.idFromName(hongbao), { locationHint: "apac" });
     const response = await stub.fetch(request);
     return response.status === 101 ? response : withCors(request, env, response);
   },
 };
+
+/**
+ * 实时连接是谁：票据里的人。Stage 上压测的机器人（带 BOT_KEY，只连 presence）是“机器人 N”。
+ * @param {Request} request @param {URL} url @param {Env} env @param {string} hongbao
+ * @returns {Promise<{ uid: number, name: string }|null>}
+ */
+async function socketWho(request, url, env, hongbao) {
+  if (url.pathname === "/v3/api/presence" && botKeyValid(request.headers.get("X-Bot-Key"), env.BOT_KEY)) {
+    const n = Math.floor(Number(url.searchParams.get("bot")));
+    return Number.isSafeInteger(n) && n >= 0 && n < 100_000 ? { uid: BOT_BASE + n, name: `机器人 ${n}` } : null;
+  }
+  return readTicket(env.TICKET_KEY, url.searchParams.get("ticket") ?? "", hongbao, Date.now());
+}
 
 export class MineObject extends DurableObject {
   /** @type {{ info: import("./room.mjs").Info, at: number }|null} */
@@ -309,5 +335,60 @@ export class MineObject extends DurableObject {
     } catch {
       // 已经关了
     }
+  }
+}
+
+/**
+ * 在场的房间（docs/V3_ITEMS.md §20）：别人的指针、谁在看哪张卡、表情。逻辑在 presence.mjs；这里收发、
+ * 睡醒时把连接上存的座位找回来、每分钟查一次心跳没了的人。网页的心跳 "ping" 由平台自动回 "pong"，
+ * 不叫醒房间；没人说话时房间睡着，不收时长费。
+ */
+export class PresenceObject extends DurableObject {
+  /** @param {DurableObjectState} ctx @param {Env} env */
+  constructor(ctx, env) {
+    super(ctx, env);
+    ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
+    this.room = new PresenceRoom({ save: (conn, seat) => /** @type {WebSocket} */ (/** @type {unknown} */ (conn)).serializeAttachment(seat) });
+    for (const socket of ctx.getWebSockets()) {
+      const seat = socket.deserializeAttachment();
+      if (seat) this.room.restore(socket, seat);
+    }
+  }
+
+  /** 只从上面的 Worker 进来（验过票据，带着 X-Uid、X-Name）。 */
+  async fetch(/** @type {Request} */ request) {
+    if (request.headers.get("Upgrade") !== "websocket") return json({ message: "要用 WebSocket" }, 426);
+    const uid = Number(request.headers.get("X-Uid"));
+    const name = decodeURIComponent(request.headers.get("X-Name") ?? "");
+    if (!Number.isSafeInteger(uid) || !name) return json({ message: "不认识你" }, 400);
+    const pair = new WebSocketPair();
+    this.ctx.acceptWebSocket(pair[1]);
+    this.room.join(pair[1], { uid, name }, Date.now());
+    if ((await this.ctx.storage.getAlarm()) === null) await this.ctx.storage.setAlarm(Date.now() + SWEEP_MS);
+    return new Response(null, { status: 101, webSocket: pair[0] });
+  }
+
+  async webSocketMessage(/** @type {WebSocket} */ socket, /** @type {string|ArrayBuffer} */ message) {
+    this.room.message(socket, typeof message === "string" ? message : "", Date.now());
+  }
+
+  async webSocketClose(/** @type {WebSocket} */ socket, /** @type {number} */ code) {
+    this.room.leave(socket);
+    try {
+      socket.close(code, "bye");
+    } catch {
+      // 已经关了
+    }
+  }
+
+  async webSocketError(/** @type {WebSocket} */ socket) {
+    this.room.leave(socket);
+  }
+
+  /** 每分钟一次：心跳没了的人当作走了；还有人就再定一次。 */
+  async alarm() {
+    const now = Date.now();
+    this.room.sweep(now, (conn) => this.ctx.getWebSocketAutoResponseTimestamp(/** @type {WebSocket} */ (/** @type {unknown} */ (conn)))?.getTime() ?? 0);
+    if (this.room.seats.size > 0) await this.ctx.storage.setAlarm(now + SWEEP_MS);
   }
 }

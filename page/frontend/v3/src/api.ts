@@ -35,7 +35,17 @@ export class GameApi {
     return url
   }
 
-  async hello(): Promise<State> {
+  /** 正在认人的那一次：两条连接一起要换票据时共用（不问两次红包站） */
+  private helloing: Promise<State> | null = null
+
+  hello(): Promise<State> {
+    this.helloing ??= this.helloOnce().finally(() => {
+      this.helloing = null
+    })
+    return this.helloing
+  }
+
+  private async helloOnce(): Promise<State> {
     const { nonce } = await this.raw<{ nonce: string }>('GET', 'nonce')
     const identity = await hb.identity({ nonce })
     if (!identity.identified) throw new ApiError(401, identity.message ?? identityWords[identity.reason] ?? '身份确认失败，稍后再试')
@@ -136,10 +146,28 @@ export class GameApi {
    * 要等自己挖一下才好（2026-11-11 生产上看到 3 个人这样）。认人失败（不在红包页、没登录）5 分钟后再试。
    */
   live(onMessage: (message: Live) => void, onOpen: () => void) {
+    return this.socket('live', { v: '2' }, text => {
+      for (const message of liveMessages(text)) onMessage(message)
+    }, onOpen).close
+  }
+
+  /**
+   * 在场（docs/V3_ITEMS.md §20）：指针、谁在看、表情走另一个房间，和挖格子的推送分开。25 秒一次心跳
+   * （游戏站的平台自动回，不叫醒房间），90 秒没有心跳的算走了。send 在没连上时返回 false。
+   */
+  presence(onText: (text: string) => void, onOpen: () => void, onClose: () => void) {
+    return this.socket('presence', {}, text => {
+      if (text !== 'pong') onText(text)
+    }, onOpen, onClose, HEARTBEAT_MS)
+  }
+
+  /** 一条实时连接：断了退避重连；票据旧了先换；可以带心跳。 */
+  private socket(path: string, params: Record<string, string>, onText: (text: string) => void, onOpen: () => void, onClose?: () => void, heartbeat = 0) {
     let socket: WebSocket | null = null
     let closed = false
     let delay = 1000
     let timer: ReturnType<typeof setTimeout> | undefined
+    let beat: ReturnType<typeof setInterval> | undefined
     const retry = (after = delay) => {
       timer = setTimeout(() => void open(), after)
       delay = Math.min(delay * 2, 30_000)
@@ -157,30 +185,44 @@ export class GameApi {
       }
       const ticket = this.ticket
       if (!ticket) return retry(REHELLO_MS)
-      const url = this.url('live')
+      const url = this.url(path)
       url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
       url.searchParams.set('ticket', ticket)
-      url.searchParams.set('v', '2')
-      socket = new WebSocket(url)
-      socket.onopen = () => {
+      for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value)
+      const current = new WebSocket(url)
+      socket = current
+      current.onopen = () => {
         delay = 1000
+        if (heartbeat) beat = setInterval(() => current.send('ping'), heartbeat)
         onOpen()
       }
-      socket.onmessage = event => {
-        for (const message of liveMessages(String(event.data))) onMessage(message)
-      }
-      socket.onclose = () => {
+      current.onmessage = event => onText(String(event.data))
+      current.onclose = () => {
+        clearInterval(beat)
+        if (socket === current) socket = null
+        onClose?.()
         if (!closed) retry()
       }
     }
     void open()
-    return () => {
-      closed = true
-      clearTimeout(timer)
-      socket?.close()
+    return {
+      send: (text: string) => {
+        if (socket?.readyState !== 1) return false
+        socket.send(text)
+        return true
+      },
+      close: () => {
+        closed = true
+        clearTimeout(timer)
+        clearInterval(beat)
+        socket?.close()
+      },
     }
   }
 }
+
+/** 在场那条连接的心跳。 */
+const HEARTBEAT_MS = 25_000
 
 const identityWords: Record<string, string> = {
   login: '登录以后才能挖',

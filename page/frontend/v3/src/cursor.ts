@@ -3,7 +3,7 @@
 // 16 像素贴图画一张 32 像素的，放进 CSS 变量（--cur-*）。画不出来就用默认指针。
 
 const BASE = 'assets/minecraft/1.21.4/'
-const ARROW = [
+export const ARROW = [
   'X..........', 'XX.........', 'XWX........', 'XWWX.......', 'XWWWX......', 'XWWWWX.....', 'XWWWWWX....', 'XWWWWWWX...',
   'XWWWWWWWX..', 'XWWWWWXXXX.', 'XWWXWWX....', 'XWX.XWWX...', 'XX..XWWX...', 'X....XWWX..', '.....XWWX..', '......XX...',
 ]

@@ -96,6 +96,8 @@ export function putDown() {
 }
 
 let api: GameApi | null = null
+/** 连上游戏站以后的接口（在场那条连接用，presence.ts） */
+export const gameApi = () => api
 let stopLive: (() => void) | null = null
 let autoClaimed = false
 /** 结束时的弹窗每次打开网页只弹一次 */

@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { ItemIcon } from '../../src/ItemIcon'
 import { CARD_PX, SLOT_PX } from './camera'
 import { McText } from './McText'
+import { Watchers } from './Peers'
 import { aboutMoney, chanceWords, decayingNoiseOf, leftoversOf, noiseOf, PLENTY, regionName, richestOf, tellOf } from './regions'
 import { dialogAtom, digIntervalAtom, focusRequestAtom, gameAtom, hongbaoAtom, uidAtom } from './state'
 import type { Kind, PublicCard, WokeBy } from './types'
@@ -34,9 +35,12 @@ export function CardLabels({ card }: { card: PublicCard }) {
         aria-label={`${regionName(card)}：点开看说明`}>
         {regionName(card)}<i aria-hidden="true">?</i>
       </button>
-      {deep ? <Leftovers card={card} /> : <span className="card-progress">
-        {card.finished ? '挖完了' : `已挖 ${dug}/${card.cells.length - fixed}`}
-      </span>}
+      <span className="card-head-end">
+        <Watchers cardId={card.id} />
+        {deep ? <Leftovers card={card} /> : <span className="card-progress">
+          {card.finished ? '挖完了' : `已挖 ${dug}/${card.cells.length - fixed}`}
+        </span>}
+      </span>
     </div>
     <div className="card-foot">
       {deep ? <Noise card={card} /> : <Leftovers card={card} />}

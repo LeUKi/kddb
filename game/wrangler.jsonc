@@ -17,9 +17,10 @@
   },
   "routes": [{ "pattern": "hbweb-kddb.lafi.sh", "custom_domain": true }],
   "durable_objects": {
-    "bindings": [{ "name": "MINE", "class_name": "MineObject" }]
+    "bindings": [{ "name": "MINE", "class_name": "MineObject" }, { "name": "PRESENCE", "class_name": "PresenceObject" }]
   },
-  "migrations": [{ "tag": "v3", "new_sqlite_classes": ["MineObject"] }],
+  // v4：指针、谁在看、表情另开的房间（docs/V3_ITEMS.md §20，2026-11-13），不写存储
+  "migrations": [{ "tag": "v3", "new_sqlite_classes": ["MineObject"] }, { "tag": "v4", "new_sqlite_classes": ["PresenceObject"] }],
   "observability": { "enabled": true },
   "vars": {
     "HB_ORIGIN": "https://hb.lafi.sh",
@@ -38,7 +39,7 @@
       "name": "hbweb-kddb-staging",
       "routes": [{ "pattern": "kddb-staging.lafi.sh", "custom_domain": true }],
       "durable_objects": {
-        "bindings": [{ "name": "MINE", "class_name": "MineObject" }]
+        "bindings": [{ "name": "MINE", "class_name": "MineObject" }, { "name": "PRESENCE", "class_name": "PresenceObject" }]
       },
       "vars": {
         "HB_ORIGIN": "https://staging.hb.lafi.sh",
@@ -56,7 +57,7 @@
     "local": {
       "routes": [],
       "durable_objects": {
-        "bindings": [{ "name": "MINE", "class_name": "MineObject" }]
+        "bindings": [{ "name": "MINE", "class_name": "MineObject" }, { "name": "PRESENCE", "class_name": "PresenceObject" }]
       },
       "vars": {
         "HB_ORIGIN": "http://127.0.0.1:8730",
@@ -65,7 +66,9 @@
         "MIN_JUDGE_VERSION": "0",
         "CLAIM_KID": "k1",
         // 本地开局用固定的种子，好按 game/shared/rules.mjs 算出哪格是什么来试
-        "LOCAL_SEED": "local-seed-1"
+        "LOCAL_SEED": "local-seed-1",
+        // 本地压在场的房间用的机器人钥匙（scripts/presence-bots.mjs）；Stage 的是 secret，生产没有
+        "BOT_KEY": "local-bots"
       }
     }
   }

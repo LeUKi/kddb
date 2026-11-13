@@ -24,6 +24,8 @@ import { FollowTip, StepBar } from './Tips'
 import { Creeper } from './Creeper'
 import { Effects } from './Effects'
 import { ChestNote } from './Hud'
+import { EmoteButton, PeerPointers, WatchBadges } from './Peers'
+import { canPoint, reportPointer, reportWatch, startPresence, stopPresence } from './presence'
 import type { DigResult, Peek, PublicCard, Torch } from './types'
 
 const DRAG_SLOP = 6
@@ -238,6 +240,15 @@ export function MapView() {
         // 记不住就算了
       }
   }, [focused, hongbao])
+
+  // 在场（docs/V3_ITEMS.md §20）：地图开着时连上；镜头停在哪张卡、哪一级报给大家（谁在看）
+  useEffect(() => {
+    startPresence()
+    return stopPresence
+  }, [])
+  useEffect(() => {
+    if (landed.current) reportWatch(focused ? { id: focused.id, x: focused.x, y: focused.y } : null, level)
+  }, [focused?.id, focused?.x, focused?.y, level])
 
   // 全图那一级不能拖：长出新卡时重新放下所有卡
   useEffect(() => {
@@ -546,6 +557,30 @@ export function MapView() {
   if (jpPointer) jpLast.current = jpPointer
   const jpAt = jpPointer ?? jpLast.current
 
+  // 自己的指针（电脑上）：鼠标在地图上动了才报，拿着道具时不报（瞄准哪一格不给别人看），离开地图收起。
+  // 镜头飞到别处、放下道具时，指针下面的地方变了，也报一次
+  const mouseAt = useRef<{ x: number; y: number } | null>(null)
+  const pointerWorld = useCallback(() => {
+    const at = mouseAt.current
+    if (!at || store.get(heldAtom) || !box.current) return null
+    const rect = box.current.getBoundingClientRect()
+    const now = camera()
+    return [(at.x - rect.left - now.x) / now.scale, (at.y - rect.top - now.y) / now.scale] as [number, number]
+  }, [camera])
+  const onPointerMove = (event: React.PointerEvent) => {
+    if (event.pointerType !== 'mouse' || !canPoint()) return
+    mouseAt.current = { x: event.clientX, y: event.clientY }
+    reportPointer(pointerWorld)
+  }
+  const onPointerLeave = (event: React.PointerEvent) => {
+    if (event.pointerType !== 'mouse') return
+    mouseAt.current = null
+    reportPointer(null)
+  }
+  useEffect(() => {
+    if (mouseAt.current) reportPointer(pointerWorld)
+  }, [settled, held, pointerWorld])
+
   // 拿着道具时点右键是放下（电脑上）
   const onContextMenu = (event: React.MouseEvent) => {
     if (!held) return
@@ -591,7 +626,7 @@ export function MapView() {
   return <div ref={root} className={`map-view level-${level}${cooling.seconds ? ' is-cooling' : ''}${hoverCard ? ' is-pointing' : ''}${held ? ` is-aiming aim-${held}` : ''} ${cursorClass}`}>
     <div className="map-stage">
     <div className="map-canvas" ref={box} onClickCapture={onClickCapture} onContextMenu={onContextMenu}
-      onPointerDownCapture={event => { lastPointer.current = event.pointerType }}>
+      onPointerDownCapture={event => { lastPointer.current = event.pointerType }} onPointerMove={onPointerMove} onPointerLeave={onPointerLeave}>
     <motion.div className="map-world" style={{ x, y, scale, transformOrigin: '0 0', '--px': 1 / settled.scale } as MotionStyle}>
       <MapCanvas cards={cards} rich={richness} view={view} skip={entrance?.cardId ?? null} inDom={dom} onPick={pickOnCanvas} onHover={hoverOnCanvas} />
       {hoverCard && !dom.has(hoverCard.id) ? <div className="map-hover" aria-hidden="true"
@@ -630,6 +665,8 @@ export function MapView() {
       })}
       {/* 卡周围的说明：挖卡这一级、落定了才出来，换卡时淡出淡入 */}
       <AnimatePresence>{level === 2 && focused && warm === null ? <CardLabels key={focused.id} card={focused} /> : null}</AnimatePresence>
+      {level !== 0 ? <WatchBadges cards={cards.filter(card => dom.has(card.id) && !(level === 2 && card.id === focused?.id))} /> : null}
+      {level !== 0 ? <PeerPointers near={focused} /> : null}
       {entrance?.flight ? <PearlFlight key={newCard?.at} from={entrance.flight.from} to={entrance.flight.to} variant={entrance.flight.variant} /> : null}
     </motion.div>
     <div className="map-fog" aria-hidden="true" />
@@ -643,11 +680,14 @@ export function MapView() {
       <span className="jp-text"><span>JP</span><small className="jp-where">{regionName(jpCard)}</small></span>
       <span className="new-arrow" style={{ transform: `rotate(${jpAt.angle}deg)` }}>➜</span>
     </button> : null}
-    {/* 缩放：地图右下角竖着一列，半透明 */}
-    <div className="zoom zoom-float" role="group" aria-label="缩放">
-      <button type="button" onClick={() => changeLevel(1)} disabled={level === 2} aria-label="放大">＋</button>
-      <span>{level === 2 ? '单张' : level === 1 ? '附近' : '全图'}</span>
-      <button type="button" onClick={() => changeLevel(-1)} disabled={level === 0} aria-label="缩小">－</button>
+    {/* 右下角竖着一列，半透明：扔表情，下面是缩放 */}
+    <div className="map-float">
+      <EmoteButton />
+      <div className="zoom zoom-float" role="group" aria-label="缩放">
+        <button type="button" onClick={() => changeLevel(1)} disabled={level === 2} aria-label="放大">＋</button>
+        <span>{level === 2 ? '单张' : level === 1 ? '附近' : '全图'}</span>
+        <button type="button" onClick={() => changeLevel(-1)} disabled={level === 0} aria-label="缩小">－</button>
+      </div>
     </div>
     {banner ? <p className="map-banner" role="status">{banner}</p>
       : level !== 2 ? <p className="map-hint">点一张卡放大过去，放大以后才能挖</p> : null}
