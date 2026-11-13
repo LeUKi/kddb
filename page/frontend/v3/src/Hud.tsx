@@ -8,6 +8,7 @@ import { madeWords, outOfPicks } from './items'
 import { money, unitsOf } from './types'
 import { crystalPercent, eyeStatus, openSpecial } from './eye'
 import { regionName } from './regions'
+import { OwnerRules } from './Owner'
 
 /**
  * 数字变了从旧的滚到新的；减少动画时直接到位。滚动直接改这一小段文字（motion 值），
@@ -242,6 +243,8 @@ export function Rules({ onClose, onPractice }: { onClose: () => void; onPractice
   const rules = game?.rules
   return <div className="rules-backdrop" onClick={onClose}>
     <section className="rules" role="dialog" aria-modal="true" aria-label="怎么玩" onClick={event => event.stopPropagation()}>
+      {/* 这一局的规矩是谁定的（docs/V3_ITEMS.md §21）：难度、镐子、苦力怕、末影之眼、奖池；下面是每样东西的说明 */}
+      <OwnerRules />
       <h2>怎么玩</h2>
       <ul>
         <li>矿洞卡铺成一张地图，大家一起挖。放大到一张卡上才能挖。</li>
@@ -249,8 +252,6 @@ export function Rules({ onClose, onPractice }: { onClose: () => void; onPractice
         <li><b>截止前要领取</b>：截止前 2 分钟停止挖掘，开着网页的人自动领取，没领的作废。</li>
         <li>末影珍珠会在这张卡旁边长出一张新卡；旧卡挖完以前一直能挖。</li>
       </ul>
-      {rules?.players ? <p className="rules-money">这个红包按大约 {rules.players} 人、每人挖 {rules.initialChances} 次算：绿宝石 {money(rules.smallReward)} {unit}，钻石 {money(rules.smallReward * rules.bigMultiplier)} {unit}。</p> : null}
-      {rules && (rules.digInterval ?? 1) > 1 ? <p className="rules-money">每人两次挖掘至少隔 {rules.digInterval} 秒。</p> : null}
       {rules ? <dl className="rule-items">
         <dt><ItemIcon kind="emerald" size={18} /> 绿宝石</dt><dd>+{money(rules.smallReward)} {unit}</dd>
         <dt><ItemIcon kind="diamond" size={18} /> 钻石</dt><dd>+{money(rules.smallReward * rules.bigMultiplier)} {unit}</dd>

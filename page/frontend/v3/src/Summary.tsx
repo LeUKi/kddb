@@ -6,7 +6,8 @@ import type { IconKind } from '../../src/game'
 import type { Point } from './chart'
 import { barsOf, CHART, chartOf, colorOf, legendOf, picksOf, pointAt, pointWords, statsOf } from './chart'
 import { factsOf, quipOf } from './quips'
-import { hongbaoAtom, loadSummary, settledAtom, uidAtom } from './state'
+import { Avatar, OwnerTag } from './Owner'
+import { hongbaoAtom, loadSummary, settledAtom, uidAtom, viewerAtom } from './state'
 import type { Summary } from './types'
 import { KIND_NAMES, money } from './types'
 
@@ -18,6 +19,7 @@ export function SummaryCard({ reason, onClose }: { reason: 'button' | 'end'; onC
   const hongbao = useAtomValue(hongbaoAtom)
   const settled = useAtomValue(settledAtom)
   const uid = useAtomValue(uidAtom)
+  const viewer = useAtomValue(viewerAtom)
   const [summary, setSummary] = useState<Summary | null>(null)
   const [problem, setProblem] = useState('')
   // 拖到（电脑上指着）的那一步：说那一步挖到了什么；电脑上移开就收，手机上点别处就收
@@ -67,12 +69,14 @@ export function SummaryCard({ reason, onClose }: { reason: 'button' | 'end'; onC
         <button type="button" className="summary-close" onClick={onClose} aria-label="关闭">×</button>
       </header>
       <h2>{ended ? '这一局结束了' : '我的收益'}</h2>
+      {/* 谁的矿洞、什么难度：规矩是谁定的，截图分享时也看得出来（docs/V3_ITEMS.md §21） */}
+      <OwnerTag />
       {problem ? <div className="summary-problem"><p>{problem}</p><button type="button" onClick={load}>再试一次</button></div>
         : !summary || !me ? <div className="summary-loading" aria-label="正在读"><div className="sheen summary-sheen" /><div className="sheen summary-sheen is-short" /></div>
           : <>
             <p className="summary-amount">
               {headline ? <span className="summary-figure"><strong>{headline}</strong> <small>{unit}</small></span> : <strong className="is-none">这一局没挖到奖励</strong>}
-              <span>{me.name}{settled || me.status === 'claimed' ? '' : me.points > 0 ? ' · 还在矿洞里，没领' : ''}</span>
+              <span className="summary-me"><Avatar name={me.name} src={viewer?.avatar} size={18} />{me.name}{settled || me.status === 'claimed' ? '' : me.points > 0 ? ' · 还在矿洞里，没领' : ''}</span>
             </p>
             {/* 一局的评语：原版“进度达成”的样子，称号 + 一句（docs/V3_ITEMS.md §12） */}
             {quip ? <div className="summary-quip" role="note">

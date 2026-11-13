@@ -874,3 +874,25 @@ button.effect-body { cursor: pointer; }
   .emote-bubble { animation-name: emote-fade; }
   @keyframes emote-fade { 0%, 85% { opacity: 1; } 100% { opacity: 0; } }
 }
+
+/* —— 这一局是谁的矿洞（Owner.tsx，docs/V3_ITEMS.md §21）：第一次进来的规矩卡、“怎么玩”最上面、收益卡上那一行 —— */
+.avatar { display: inline-block; flex: none; object-fit: cover; border-radius: 50%; background: #33414a; }
+.avatar.is-letter { display: inline-grid; place-items: center; color: #10161b; font-weight: 700; line-height: 1; }
+.owner { display: grid; gap: 10px; padding-bottom: 12px; border-bottom: 1px solid #ffffff1a; }
+.owner-head { display: flex; align-items: center; gap: 10px; }
+.owner-names { display: grid; gap: 2px; min-width: 0; }
+.owner-names strong { overflow: hidden; font-size: 17px; text-overflow: ellipsis; white-space: nowrap; }
+.owner-names span { color: var(--muted); font-size: 13px; }
+.owner-rows { display: grid; gap: 6px; margin: 0; }
+.owner-rows > div { display: grid; grid-template-columns: 4.5em 1fr; gap: 8px; align-items: baseline; }
+.owner-rows dt { color: var(--muted); font-size: 13px; }
+.owner-rows dd { margin: 0; color: var(--ink); font-size: 14px; line-height: 1.45; }
+.owner-card .owner { padding-bottom: 0; border-bottom: 0; }
+.owner-go { justify-self: stretch; padding: 10px 14px; color: #2b1a05; background: linear-gradient(#f6d58f, #e2ad55); border: 0; border-radius: 10px; font: inherit; font-size: 16px; font-weight: 700; cursor: pointer; }
+@media (hover: hover) { .owner-go:hover { filter: brightness(1.06); } }
+.owner-tag { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: -4px 0 0; color: var(--ink); font-size: 13px; }
+.owner-level { padding: 1px 8px; color: #10161b; background: #f4f1e8; border-radius: 999px; font-size: 12px; }
+.owner-level.is-tough, .owner-level.is-hard { background: #ffaa00; }
+.owner-level.is-hell { background: #ff7a3d; }
+.owner-level.is-easy { background: #9fe0a8; }
+.summary-me { display: inline-flex; align-items: center; gap: 6px; }

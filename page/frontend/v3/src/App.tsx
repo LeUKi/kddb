@@ -1,7 +1,8 @@
 import { useAtom, useAtomValue } from 'jotai'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { CaveScene } from '../../src/CaveScene'
 import { Guide, GUIDE_SEEN } from './Guide'
+import { OwnerCard, ownerSeenKey } from './Owner'
 import { BottomBar, Rules, TopBar } from './Hud'
 import { MapView } from './MapView'
 import { installSound } from './sound'
@@ -20,20 +21,40 @@ export function App() {
   const [summary, setSummary] = useAtom(summaryOpenAtom)
   const closeSummary = useCallback(() => setSummary(null), [setSummary])
 
-  // 第一次来、还没挖过：先练一下
+  // 第一次进这个红包：先看这一局的规矩是谁定的（docs/V3_ITEMS.md §21）；第一次来、还没挖过：看完再练一下
   const meReady = phase === 'ready' && me !== null
+  const [owner, setOwner] = useState(false)
+  const guideAfter = useRef(false)
   useEffect(() => {
-    if (!meReady || !me || me.digs > 0 || me.status !== 'playing') return
-    let seen = false
+    if (!meReady || !me || me.status !== 'playing') return
+    let guideSeen = false
+    let ownerSeen = false
     try {
-      seen = localStorage.getItem(GUIDE_SEEN) === '1'
+      guideSeen = localStorage.getItem(GUIDE_SEEN) === '1'
+      ownerSeen = !!hongbao && localStorage.getItem(ownerSeenKey(hongbao.id)) === '1'
     } catch {
-      // 记不住也照样练
+      // 记不住也照样看、照样练
     }
-    if (!seen) setGuide(true)
+    const wantsGuide = !guideSeen && me.digs <= 0
+    if (!ownerSeen && hongbao && !game?.over) {
+      guideAfter.current = wantsGuide
+      setOwner(true)
+    } else if (wantsGuide) setGuide(true)
     // 只在连上时看一次
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meReady])
+  const closeOwner = useCallback(() => {
+    setOwner(false)
+    try {
+      if (hongbao) localStorage.setItem(ownerSeenKey(hongbao.id), '1')
+    } catch {
+      // 记不住就算了
+    }
+    if (guideAfter.current) {
+      guideAfter.current = false
+      setGuide(true)
+    }
+  }, [hongbao])
   const closeGuide = () => {
     setGuide(false)
     try {
@@ -73,6 +94,7 @@ export function App() {
           </>}
     {rules ? <Rules onClose={() => setRules(false)} onPractice={() => { setRules(false); setGuide(true) }} /> : null}
     {phase === 'ready' ? <ItemDialogs /> : null}
+    {owner && game ? <OwnerCard onClose={closeOwner} /> : null}
     {guide && game ? <Guide rules={game.rules} unit={hongbao?.unit ?? 'LDC'} onClose={closeGuide} /> : null}
     {summary && phase === 'ready' ? <SummaryCard reason={summary} onClose={closeSummary} /> : null}
     <Toast />

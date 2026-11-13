@@ -32,6 +32,8 @@ export const blockedAtom = atom<string | null>(null)
 /** 什么时候（本机时间，毫秒）能再挖：游戏站给的 coolingMs 加上收到的时刻 */
 export const readyAtAtom = atom(0)
 export const hongbaoAtom = atom<HbHongbao | null>(null)
+/** 看的人自己：昵称和头像（红包站 2026-11-13 起给头像，以前的没有） */
+export const viewerAtom = atom<{ name: string; avatar: string | null } | null>(null)
 export const uidAtom = atom<number | null>(null)
 /** 自己正在挖的格子："卡号:格" */
 export const pendingAtom = atom<Record<string, true>>({})
@@ -146,7 +148,8 @@ function acceptMe(me: Awaited<ReturnType<typeof hb.me>>) {
 export async function start() {
   store.set(phaseAtom, 'starting')
   try {
-    const { hongbao } = await hb.ready()
+    const { hongbao, viewer } = await hb.ready()
+    if (viewer.signedIn) store.set(viewerAtom, { name: viewer.name, avatar: viewer.avatar ?? null })
     // 三方积分红包：数都是多少个最小单位，按它的最小单位写（游戏站的 rules.step 到了以后以它为准）
     setMoneyStep(hongbao.step)
     store.set(hongbaoAtom, hongbao)
