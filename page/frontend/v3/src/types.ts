@@ -79,6 +79,8 @@ export interface Rules {
   special?: 2
   /** 一块煤炭、一根木棍做成几个火把：2026-11-13 起开的局是 4（照原版，docs/V3_ITEMS.md §18）；旧局没有，是 1 */
   craftTorches?: 4
+  /** 1：挖到末影珍珠、末影之眼另得道具，箱子矿车能开出附魔台（2026-11-13 起开的局，docs/V3_ITEMS.md §19）；旧局没有 */
+  loot?: 1
   /** 三方积分红包的最小单位（"1"、"0.5"、"100"…），所有的数都是多少个最小单位；LDC 和🐟红包没有（就是 0.01） */
   step?: string
 }
@@ -91,7 +93,10 @@ export interface Peek { cardId: number; index: number; kind: Kind }
 export interface DigResult {
   kind: Kind; cardId: number; index: number; amount: number
   blocked: boolean; text: string; newCardId: number | null
+  /** 挖到末影珍珠、末影之眼、箱子矿车另得的一样道具（rules.loot 的局，docs/V3_ITEMS.md §19） */
+  loot?: Loot
 }
+export type Loot = 'spyglass' | 'map' | 'key' | 'table' | 'ender' | 'potion' | 'torch'
 export interface Me {
   chances: number; shield: boolean; peeks: Peek[]; points: number; digs: number
   /** 有道具栏的局：几面盾牌、几个望远镜；旧局没有（盾牌只看 shield） */

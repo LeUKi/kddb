@@ -237,6 +237,10 @@ test('卡周围的说明：余量报还藏着多少钱、有哪几样宝贝，�
   assert.equal(regions.regionName({ id: 7 }), '第 7 张卡')
   assert.equal(regions.regionName({ id: 7, kind: 'deep' }), '深暗之域')
   assert.match(regions.regionAbout({ kind: 'mine' }, { items: 2, tntPercent: 25 })[0], /多等 10 秒/)
+  // 开图有奖的局（rules.loot，§19）：箱子矿车能开出附魔台，钥匙也能从末影珍珠来
+  assert.match(regions.regionAbout({ kind: 'mine' }, { items: 2, tntPercent: 25 })[0], /箱子矿车（小奖、火把或藏宝图）/)
+  assert.match(regions.regionAbout({ kind: 'mine' }, { items: 2, tntPercent: 25, loot: 1 })[0], /箱子矿车（小奖、藏宝图、火把或附魔台）/)
+  assert.match(regions.regionAbout({ kind: 'trial' }, { items: 2, tntPercent: 25, loot: 1 })[1], /挖到末影珍珠也可能捡到/)
 })
 
 /** 读 font/ascii.png 的不透明度（1 位调色板的 PNG，0 号色透明）：测试里不用画布也能量字宽。 */

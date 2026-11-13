@@ -50,6 +50,7 @@ import { lavaOf, railsOf, trialLayout } from "./layouts.mjs";
  *   layout?: 2,
  *   special?: 2,
  *   craftTorches?: 4,
+ *   loot?: 1,
  *   step?: string,
  * }} Rules
  */
@@ -75,13 +76,14 @@ import { lavaOf, railsOf, trialLayout } from "./layouts.mjs";
  * }} Card
  */
 /** @typedef {{ cardId: number, index: number, kind: Kind }} Peek */
+/** 挖到末影珍珠、末影之眼、箱子矿车另得的一样道具（rules.loot，docs/V3_ITEMS.md §19） @typedef {'spyglass'|'map'|'key'|'table'|'ender'|'potion'|'torch'} Loot */
 /**
  * 挖一格的结果。burned：这一挖让岩浆吞掉的格子；warden：唤醒监守者被扣掉的分；
  * poison：这次动作中毒扣掉的分（附魔镐一次只算一次，记在第一格）。
  * @typedef {{
  *   kind: Kind, cardId: number, index: number, amount: number,
  *   blocked: boolean, text: string, newCardId: number|null,
- *   burned?: { index: number, kind: Kind }[], warden?: number, poison?: number,
+ *   burned?: { index: number, kind: Kind }[], warden?: number, poison?: number, loot?: Loot,
  * }} Result
  */
 /** 手里的道具（新局）。 @typedef {{ torch: number, map: number, potion: number, ender: number, table: number, key: number, pick: Record<Shape, number> }} Bag */
@@ -171,6 +173,20 @@ export const CRAFT_TORCHES = 4;
 export const craftedTorches = (/** @type {Rules} */ rules) => rules.craftTorches ?? 1;
 /** “一个火把”“ 4 个火把”（数字前带空格，接在“做成了”后面） */
 export const torchesWords = (/** @type {number} */ count) => (count === 1 ? "一个火把" : ` ${count} 个火把`);
+/**
+ * 开图有奖（2026-11-13 起开的局，rules.loot，docs/V3_ITEMS.md §19，用户定的）：挖到末影珍珠的人另得一样道具
+ * （望远镜 35、藏宝图 30、试炼钥匙 25、附魔台 10；挖掘间隔 ≥3 秒的局急迫药水占 20，别的按比例让），挖到末影之眼的
+ * 另得附魔台或末影箱（各一半）；箱子矿车改成小奖 50、藏宝图 25、火把 10、附魔台 15。都是百分比的累计上限，按种子抽。
+ */
+export const PEARL_LOOT = /** @type {const} */ ([["spyglass", 35], ["map", 65], ["key", 90], ["table", 100]]);
+export const PEARL_LOOT_SLOW = /** @type {const} */ ([["potion", 20], ["spyglass", 48], ["map", 72], ["key", 92], ["table", 100]]);
+export const EYE_LOOT = /** @type {const} */ ([["table", 50], ["ender", 100]]);
+export const MINECART_LOOT = /** @type {const} */ ([["small", 50], ["map", 75], ["torch", 85], ["table", 100]]);
+/** 以前开的局的箱子矿车：小奖 50、火把 25、藏宝图 25 */
+const MINECART_OLD = /** @type {const} */ ([["small", 50], ["torch", 75], ["map", 100]]);
+export const LOOT_WORDS = /** @type {Record<Loot, string>} */ ({
+  spyglass: "一个望远镜", map: "一张藏宝图", key: "一把试炼钥匙", table: "一个附魔台", ender: "一个末影箱", potion: "一瓶急迫药水", torch: "一个火把",
+});
 /** 中毒：挖到刷怪笼以后这么多次挖掘，每次扣手上的百分之几（盾牌挡不住）。 */
 export const POISON_TIMES = 3;
 export const POISON_PERCENT = 5;
@@ -339,6 +355,8 @@ export function rulesOf(/** @type {Record<string, unknown>} */ params, /** @type
     special: 2,
     // 一块煤炭、一根木棍照原版做成 4 个火把（2026-11-13 起，docs/V3_ITEMS.md §18）；以前开的局没有这一项，一个
     craftTorches: CRAFT_TORCHES,
+    // 开图有奖、附魔台多几个地方（2026-11-13 起，docs/V3_ITEMS.md §19）；以前开的局没有这一项，照旧
+    loot: 1,
   });
 }
 
@@ -371,9 +389,11 @@ export function averageUnits(/** @type {Difficulty} */ difficulty, items = false
  * 份小奖）。垃圾格、道具占了绿宝石的位置，困难的 TNT 又扣得多；绿宝石按这个比例变贵，同样的奖池、
  * 同样的人数，发出去的和旧局差不多。2026-11-12 特殊区块都从末影之眼开（rules.special: 2，§17）：珍珠长的多是
  * 普通和废弃矿井，下界、深暗之域少了，sim-items.mjs 60 局（3 秒一下）每次机会发出去的是以前的 0.824 / 0.828 / 0.825
- * （简单 1.193/1.447、普通 0.959/1.158、困难 0.517/0.627），上面的几成都乘 0.825。
+ * （简单 1.193/1.447、普通 0.959/1.158、困难 0.517/0.627），上面的几成都乘 0.825。2026-11-13 开图有奖（rules.loot，§19）：
+ * 附魔台、钥匙多了，sim-items.mjs 1000 局每次机会发出去的是以前的 1.055 / 1.048 / 1.042（简单 1.275/1.209、普通
+ * 1.028/0.981、困难 0.548/0.526），各乘上去（绿宝石便宜半成）。
  */
-export const ITEMS_UNITS = /** @type {const} */ ({ easy: 0.62, normal: 0.55, tough: 0.355, hard: 0.55, hell: 0.355 });
+export const ITEMS_UNITS = /** @type {const} */ ({ easy: 0.654, normal: 0.576, tough: 0.37, hard: 0.576, hell: 0.37 });
 
 /**
  * 末影之眼的三档（判定器第 11 版的少 / 正常 / 多 = 每 5 / 3 / 2 张卡一颗，docs/V3_ITEMS.md §14）：眼多，
@@ -919,6 +939,8 @@ function digCell(/** @type {Game} */ game, /** @type {Player} */ player, /** @ty
   let label = "";
   /** @type {Card|null} */
   let grown = null;
+  /** @type {Loot|undefined} */
+  let loot;
   const bag = rules.items ? bagOf(player) : null;
   switch (kind) {
     case "emerald":
@@ -973,6 +995,12 @@ function digCell(/** @type {Game} */ game, /** @type {Player} */ player, /** @ty
       grown = addCard(game, place.x, place.y);
       text = "末影珍珠！旁边长出了一张新卡";
       publicText = "末影珍珠长出了一张新卡";
+      if (rules.loot && bag) {
+        loot = rollLoot(game, `loot:${cardId}:${index}`, (rules.digInterval ?? 1) >= 3 ? PEARL_LOOT_SLOW : PEARL_LOOT);
+        giveLoot(player, bag, loot);
+        text += `，还捡到了${LOOT_WORDS[loot]}`;
+        publicText += `，还捡到了${LOOT_WORDS[loot]}`;
+      }
       break;
     }
     case "eye": {
@@ -987,6 +1015,12 @@ function digCell(/** @type {Game} */ game, /** @type {Player} */ player, /** @ty
       const where = opens === "end" ? "末地宝藏" : BIOME_NAMES[opens];
       text = `末影之眼！远处开出了${where}`;
       publicText = `挖到末影之眼，${where}开了！`;
+      if (rules.loot && bag) {
+        loot = rollLoot(game, `loot:${cardId}:${index}`, EYE_LOOT);
+        giveLoot(player, bag, loot);
+        text += `，还捡到了${LOOT_WORDS[loot]}`;
+        publicText += `还捡到了${LOOT_WORDS[loot]}`;
+      }
       break;
     }
     case "shield":
@@ -1095,16 +1129,15 @@ function digCell(/** @type {Game} */ game, /** @type {Player} */ player, /** @ty
       const int = randomOf(game.seed, `minecart:${cardId}:${index}`);
       const roll = int(0, 99);
       publicText = "打开了箱子矿车";
-      if (roll < 50) {
+      const got = (rules.loot ? MINECART_LOOT : MINECART_OLD).find(([, upTo]) => roll < upTo)?.[0] ?? "small";
+      if (got === "small") {
         const count = int(2, 4);
         wanted = rules.smallReward * count;
         label = `箱子矿车里有 ${count} 份小奖`;
-      } else if (roll < 75) {
-        if (bag) bag.torch += 1;
-        text = "箱子矿车里有一个火把";
       } else {
-        if (bag) bag.map += 1;
-        text = "箱子矿车里有一张藏宝图";
+        if (bag) giveLoot(player, bag, got);
+        text = `箱子矿车里有${LOOT_WORDS[got]}`;
+        if (rules.loot) loot = got;
       }
       break;
     }
@@ -1172,7 +1205,7 @@ function digCell(/** @type {Game} */ game, /** @type {Player} */ player, /** @ty
   /** @type {Result} */
   const result = {
     kind, cardId, index, amount, blocked: blockedTnt, text, newCardId: grown?.id ?? null,
-    ...(burned.length > 0 ? { burned } : {}), ...(warden > 0 ? { warden } : {}),
+    ...(burned.length > 0 ? { burned } : {}), ...(warden > 0 ? { warden } : {}), ...(loot ? { loot } : {}),
   };
   player.lastResult = result;
   game.seq += 1;
@@ -1180,6 +1213,18 @@ function digCell(/** @type {Game} */ game, /** @type {Player} */ player, /** @ty
   const feed = { seq: game.seq, uid: player.uid, name: player.name, kind, cardId, index, text: publicText, at: now, newCardId: grown?.id ?? null };
   game.feed = [feed, ...game.feed].slice(0, FEED_LIMIT);
   return { result, feed, newCard: grown, burned };
+}
+
+/** 按种子从累计上限表里抽一样（0–99）。 */
+function rollLoot(/** @type {Game} */ game, /** @type {string} */ key, /** @type {ReadonlyArray<readonly [Loot, number]>} */ odds) {
+  const roll = randomOf(game.seed, key)(0, 99);
+  return odds.find(([, upTo]) => roll < upTo)?.[0] ?? odds[odds.length - 1][0];
+}
+
+/** 道具收进手里（望远镜在新局里单独记）。 */
+function giveLoot(/** @type {Player} */ player, /** @type {Bag} */ bag, /** @type {Loot} */ loot) {
+  if (loot === "spyglass") player.spyglasses = (player.spyglasses ?? 0) + 1;
+  else bag[loot] += 1;
 }
 
 /**

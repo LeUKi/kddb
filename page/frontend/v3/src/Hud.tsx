@@ -266,8 +266,8 @@ export function Rules({ onClose, onPractice }: { onClose: () => void; onPractice
           <dt><ItemIcon kind="map" size={18} /> 藏宝图</dt><dd>随机标出地图上一格奖励，只有你看得见；奖励越大越难标到</dd>
           <dt><ItemIcon kind="potion" size={18} /> 急迫药水</dt><dd>10 秒里每次挖只要隔 1 秒</dd>
           <dt><ItemIcon kind="key" size={18} /> 试炼钥匙</dt><dd>开试炼密室里的宝库：每个宝库每人一次，开出奖励或附魔台</dd>
-          <dt><ItemIcon kind="table" size={18} /> 附魔台</dt><dd>两种附魔镐挑一种（横三格、竖三格、十字），一次挖开一片</dd>
-          <dt><ItemIcon kind="ender" size={18} /> 末影箱</dt><dd>末地宝藏里有；待领取的一半存进去（谁都炸不到，领取时一起算），另一半退回奖池</dd>
+          <dt><ItemIcon kind="table" size={18} /> 附魔台</dt><dd>{rules.loot ? '宝库和箱子矿车里有，挖到末影珍珠、末影之眼也可能捡到；' : ''}两种附魔镐挑一种（横三格、竖三格、十字），一次挖开一片</dd>
+          <dt><ItemIcon kind="ender" size={18} /> 末影箱</dt><dd>末地宝藏里有{rules.loot ? '，挖到末影之眼也可能捡到' : ''}；待领取的一半存进去（谁都炸不到，领取时一起算），另一半退回奖池</dd>
           <dt><ItemIcon kind="cobweb" size={18} /> 蜘蛛网、刷怪笼</dt><dd>废弃矿井里有：蜘蛛网让下一次多等 {(rules.items ?? 0) >= 2 ? 10 : 5} 秒；刷怪笼让你中毒，之后 3 次每挖一次扣待领取的 5%</dd>
           <dt><ItemIcon kind="lava" size={18} /> 下界、深暗之域</dt><dd>下界每挖 3 格岩浆流一格，吞掉的格子就没了，远古残骸烧不掉；{(rules.special ?? 0) >= 2
             ? '深暗之域谁挖一格噪音都加一，没人挖时慢慢退；噪音过了安静的那一段，每挖一格都可能吵醒监守者，越吵越容易醒：吵醒它的人，待领取的奖励被抢走一半，那张卡关掉'
@@ -275,8 +275,8 @@ export function Rules({ onClose, onPractice }: { onClose: () => void; onPractice
           {rules.creeper !== 0 ? <><dt><ItemIcon kind="spawner" size={18} /> 苦力怕</dt><dd>有待领取的奖励、开着网页却 {rules.creeper ?? 60} 秒没挖也没用道具，苦力怕会来，10 秒内不挖就炸掉待领取的 20%{(rules.items ?? 0) >= 2 ? `（至少 ${money(1)}）。关了网页、离开 5 分钟以上又没领取的，苦力怕每分钟来一次，直到炸完` : ''}</dd></> : null}</>
           : <><dt><ItemIcon kind="shield" size={18} /> 盾牌</dt><dd>挡下一次 TNT；已经有了就转成一份小奖</dd>
             <dt><ItemIcon kind="spyglass" size={18} /> 望远镜</dt><dd>看到这张卡上一个没开的格子，只有你看得见</dd></>}
-        <dt><ItemIcon kind="pearl" size={18} /> 末影珍珠</dt><dd>旁边长出一张新卡{(rules.special ?? 0) >= 2 ? '：普通的卡、废弃矿井或试炼密室' : ''}</dd>
-        {rules.eyeEvery ? <><dt><ItemIcon kind="eye" size={18} /> 末影之眼</dt><dd>每 {rules.eyeEvery} 张卡有一颗，那张卡发紫光；挖到它，远处开出{(rules.special ?? 0) >= 2 ? '一个特殊区块：末地宝藏（一半的机会）、深暗之域或下界。画面边上的 JP 指着离你最近的那个' : `末地宝藏（3×3${rules.endMix === 2 ? '，每张随机：钻石 3–5 颗、双铁镐 1–2 把、附魔金苹果 0–1 个，其余是绿宝石' : ''}），没领奖的人都能挖`}</dd>
+        <dt><ItemIcon kind="pearl" size={18} /> 末影珍珠</dt><dd>旁边长出一张新卡{(rules.special ?? 0) >= 2 ? '：普通的卡、废弃矿井或试炼密室' : ''}{rules.loot ? `。挖到的人还捡到一样道具：望远镜、藏宝图、试炼钥匙或附魔台${(rules.digInterval ?? 1) >= 3 ? '，也可能是急迫药水' : ''}` : ''}</dd>
+        {rules.eyeEvery ? <><dt><ItemIcon kind="eye" size={18} /> 末影之眼</dt><dd>每 {rules.eyeEvery} 张卡有一颗，那张卡发紫光；挖到它，远处开出{(rules.special ?? 0) >= 2 ? `一个特殊区块：末地宝藏（一半的机会）、深暗之域或下界。画面边上的 JP 指着离你最近的那个${rules.loot ? '。挖到的人还捡到附魔台或末影箱' : ''}` : `末地宝藏（3×3${rules.endMix === 2 ? '，每张随机：钻石 3–5 颗、双铁镐 1–2 把、附魔金苹果 0–1 个，其余是绿宝石' : ''}），没领奖的人都能挖`}</dd>
           <dt><ItemIcon kind="crystal" size={18} /> 末影水晶</dt><dd>藏在末地宝藏里，一张{rules.endMix === 2 ? '一到两颗' : '一颗'}；踩中扣掉还没领的奖励的 {crystalPercent(rules)}%（TNT 的两倍，盾牌能挡）</dd></> : null}
       </dl> : null}
       <p className="rules-tip">拖动地图平移，滚轮或捏合缩放。点旁边的卡就能换过去，方向键也行；+/- 缩放。全图那一级能看到所有的卡，不能拖动。</p>

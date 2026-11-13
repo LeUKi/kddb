@@ -20,15 +20,15 @@ export function regionIcon(card: Pick<PublicCard, 'kind'>): IconKind {
 }
 
 /** 点区块名字旁边的问号看的说明（一两段，大白话）。 */
-export function regionAbout(card: Pick<PublicCard, 'kind'>, rules: Pick<Rules, 'items' | 'tntPercent' | 'special'>): string[] {
+export function regionAbout(card: Pick<PublicCard, 'kind'>, rules: Pick<Rules, 'items' | 'tntPercent' | 'special' | 'loot'>): string[] {
   const cobweb = (rules.items ?? 0) >= 2 ? 10 : 5
   switch (card.kind) {
     case 'trial': return [
       '四角和正中的凝灰岩是装饰，不能挖。中间偏左、偏右各有一个宝库：用试炼钥匙点它可以打开一次，开出小奖、钻石、附魔台或盾牌。每个宝库每人只能开一次，一共能开 4 次。',
-      '这张卡里有 2 把试炼钥匙，普通的卡里也偶尔有。',
+      rules.loot ? '这张卡里有 2 把试炼钥匙，普通的卡里也偶尔有，挖到末影珍珠也可能捡到。' : '这张卡里有 2 把试炼钥匙，普通的卡里也偶尔有。',
     ]
     case 'mine': return [
-      `中间一行的铁轨是装饰，不能挖。这里有蜘蛛网（下一次挖要多等 ${cobweb} 秒）、刷怪笼（中毒，之后 3 次每挖一次扣待领取的 5%）和箱子矿车（小奖、火把或藏宝图），煤炭和木棍也多。`,
+      `中间一行的铁轨是装饰，不能挖。这里有蜘蛛网（下一次挖要多等 ${cobweb} 秒）、刷怪笼（中毒，之后 3 次每挖一次扣待领取的 5%）和箱子矿车（${rules.loot ? '小奖、藏宝图、火把或附魔台' : '小奖、火把或藏宝图'}），煤炭和木棍也多。`,
     ]
     case 'nether': return [
       '岩浆开局就看得见，不能挖。这张卡上每挖开 3 格，岩浆往旁边流一格，吞掉的格子就没了，里面的奖励留在奖池里。',

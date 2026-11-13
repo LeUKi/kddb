@@ -34,6 +34,8 @@ function play({ seed, items, players, chances = 20, level = "normal", interval =
   if (!items) delete rules.items;
   // OLD_SPECIAL=1：按 2026-11-12 以前的局算（珍珠什么区块都长、末影之眼只开末地、监守者到数就醒），和新的比
   if (process.env.OLD_SPECIAL) delete rules.special;
+  // NO_LOOT=1：按 2026-11-13 以前的局算（挖到珍珠、眼不给道具，箱子矿车没有附魔台，§19），和新的比
+  if (process.env.NO_LOOT) delete rules.loot;
   if (budget === undefined) {
     rules.smallReward = 100;
     rules.appleCap = 1000;

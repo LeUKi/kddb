@@ -9,7 +9,7 @@ import { drawThumb, THUMB_PX, whenImages } from './thumb'
 import { isBulb, RAIL_TEXTURE, railOf, sculkOf } from './layout'
 import { torchWords } from './aim'
 import { digIntervalAtom, toast } from './state'
-import type { DigResult, Peek, PublicCard, Torch } from './types'
+import type { DigResult, Loot, Peek, PublicCard, Torch } from './types'
 import { BIOME_NAMES, KIND_NAMES, money } from './types'
 import { useAtomValue } from 'jotai'
 import { NoiseRail } from './CardLabels'
@@ -249,11 +249,16 @@ function ThumbCanvas({ card }: { card: PublicCard }) {
   return <canvas ref={canvas} className="thumb-canvas" width={THUMB_PX} height={THUMB_PX} aria-hidden="true" />
 }
 
+/** 格子上飘的字里道具的短名 */
+const LOOT_NAMES: Record<Loot, string> = { spyglass: '望远镜', map: '藏宝图', key: '钥匙', table: '附魔台', ender: '末影箱', potion: '急迫药水', torch: '火把' }
+
 function floatText(result: DigResult) {
   if (result.amount > 0) return `+${money(result.amount)}`
   if (result.amount < 0) return money(result.amount)
   if (result.kind === 'totem') return '+3 次'
-  if (result.kind === 'pearl') return '新卡！'
+  if (result.kind === 'pearl') return result.loot ? `新卡 +1 ${LOOT_NAMES[result.loot]}` : '新卡！'
+  // 末影之眼、箱子矿车另得的道具（§19）
+  if (result.loot) return `+1 ${LOOT_NAMES[result.loot]}`
   if (result.kind === 'shield') return result.blocked ? '挡住了' : '盾牌'
   // 没有盾牌、待领取是 0 时踩到：没挡，只是没东西可扣
   if (result.kind === 'tnt' || result.kind === 'crystal') return result.blocked ? '挡住了' : '没扣到'

@@ -5,7 +5,7 @@ import {
   amountOf, budgetLeft, claim, createGame, creeperBlast, crystalPercent, dig, digBlocked, formatPoints,
   averageUnits, coolingOf, MIN_INTERVAL_MS, newCard, newEndCard, newPlayer, placeFor, POOL_TARGET, privatePlayer, publicCard, publicGame,
   publicTorches, randomOf, rewardFor, rulesOf, SHIELD_CAP, shieldsOf, summaryOf, tableChoicesOf, topWith, useItem, usePick, WRAP_UP_MS,
-  drainIdle, idleNextAt, IDLE_MS, IDLE_EVERY_MS, noiseNow, wardenChance, NOISE_DECAY_MS,
+  drainIdle, idleNextAt, IDLE_MS, IDLE_EVERY_MS, noiseNow, wardenChance, NOISE_DECAY_MS, LOOT_WORDS,
 } from "../shared/rules.mjs";
 
 const T0 = Date.parse("2026-11-06T12:00:00+08:00");
@@ -1637,6 +1637,88 @@ describe("特殊区块和监守者（rules.special: 2，docs/V3_ITEMS.md §16、
     const deep = biomeCard(g, "deep");
     assert.equal(typeof deep.wardenAt, "number");
     assert.equal(deep.noiseAt, undefined);
+  });
+});
+
+describe("开图有奖、附魔台多几个地方（rules.loot，docs/V3_ITEMS.md §19）", () => {
+  const SEEDS = Array.from({ length: 40 }, (_, k) => `loot-${k}`);
+  /** 新来的人挖开第 1 张卡的第 0 格（换成 kind） */
+  const digOne = (kind, params = {}, seed = "seed-a", drop = false) => {
+    const g = game({ seed, params });
+    if (drop) delete g.rules.loot;
+    stack(g, 1, { 0: kind });
+    const p = newPlayer(g, 10001, "小明");
+    const out = dig(g, p, { cardId: 1, index: 0, now: later() });
+    assert.ok(out.ok);
+    return { g, p, out };
+  };
+  const held = (p, loot) => (loot === "spyglass" ? p.spyglasses ?? 0 : p.items[loot]);
+
+  it("挖到末影珍珠：另得望远镜、藏宝图、试炼钥匙或附魔台，自己和大家都看得到", () => {
+    assert.equal(game().rules.loot, 1);
+    const seen = {};
+    for (const seed of SEEDS) {
+      const { p, out } = digOne("pearl", {}, seed);
+      const { loot } = out.result;
+      assert.ok(["spyglass", "map", "key", "table"].includes(loot), loot);
+      assert.equal(held(p, loot), 1);
+      assert.equal(out.result.text, `末影珍珠！旁边长出了一张新卡，还捡到了${LOOT_WORDS[loot]}`);
+      assert.equal(out.feed.text, `末影珍珠长出了一张新卡，还捡到了${LOOT_WORDS[loot]}`);
+      assert.ok(out.result.newCardId);
+      seen[loot] = (seen[loot] ?? 0) + 1;
+    }
+    assert.deepEqual(Object.keys(seen).sort(), ["key", "map", "spyglass", "table"]);
+  });
+
+  it("挖掘间隔 ≥3 秒的局，末影珍珠也可能给急迫药水；1 秒的局不给（没用）", () => {
+    const slow = SEEDS.map((seed) => digOne("pearl", { interval: "3" }, seed).out.result.loot);
+    assert.ok(slow.includes("potion"));
+    assert.ok(!SEEDS.map((seed) => digOne("pearl", {}, seed).out.result.loot).includes("potion"));
+  });
+
+  it("挖到末影之眼：另得附魔台或末影箱", () => {
+    const seen = new Set();
+    for (const seed of SEEDS) {
+      const { p, out } = digOne("eye", {}, seed);
+      const { loot } = out.result;
+      assert.ok(loot === "table" || loot === "ender", loot);
+      assert.equal(p.items[loot], 1);
+      assert.match(out.result.text, new RegExp(`^末影之眼！远处开出了.+，还捡到了${LOOT_WORDS[loot]}$`));
+      assert.match(out.feed.text, new RegExp(`开了！还捡到了${LOOT_WORDS[loot]}$`));
+      seen.add(loot);
+    }
+    assert.equal(seen.size, 2);
+  });
+
+  it("箱子矿车：小奖、藏宝图、火把或附魔台", () => {
+    const seen = new Set();
+    for (const seed of SEEDS) {
+      const { p, out } = digOne("minecart", {}, seed);
+      const { loot } = out.result;
+      if (loot === undefined) {
+        assert.ok(out.result.amount > 0);
+        seen.add("small");
+        continue;
+      }
+      assert.ok(["map", "torch", "table"].includes(loot), loot);
+      assert.equal(p.items[loot], 1);
+      // stack 把别的格子都换成了绿宝石，没有珍珠时后面还接一句“长出一张新卡”
+      assert.ok(out.result.text.startsWith(`箱子矿车里有${LOOT_WORDS[loot]}`), out.result.text);
+      seen.add(loot);
+    }
+    assert.deepEqual([...seen].sort(), ["map", "small", "table", "torch"]);
+  });
+
+  it("2026-11-13 以前开的局（没有 loot）照旧：珍珠、眼不给道具，箱子矿车没有附魔台", () => {
+    for (const seed of SEEDS) {
+      const pearl = digOne("pearl", {}, seed, true);
+      assert.equal(pearl.out.result.text, "末影珍珠！旁边长出了一张新卡");
+      assert.equal(pearl.out.result.loot, undefined);
+      assert.equal(digOne("eye", {}, seed, true).out.result.loot, undefined);
+      const cart = digOne("minecart", {}, seed, true);
+      assert.equal(cart.out.result.loot, undefined);
+      assert.equal(cart.p.items.table, 0);
+    }
   });
 });
 
