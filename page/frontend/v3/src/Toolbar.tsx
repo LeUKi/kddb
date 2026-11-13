@@ -295,7 +295,7 @@ export const Toolbar = memo(function Toolbar({ level, onNeedDig }: { level: Leve
 
 /**
  * 第 2 版的合成（docs/V3_ITEMS.md §9，用户选的“水滴”）：煤炭、木棍各一个就合成，游戏站在同一下里把一样减一、
- * 火把加一。看到这样的变化时：挖到的那一样（incoming）先在手里那一样（from）旁边长出来，像水滴一样流进去、
+ * 火把加 rules.craftTorches 个（2026-11-13 起的局 4 个，以前 1 个，§18）。看到这样的变化时：挖到的那一样（incoming）先在手里那一样（from）旁边长出来，像水滴一样流进去、
  * 融成一滴，火把从里面长出来，再顺着流进旁边的火把格，火把数字跳一下（不到一秒）。两格之间的液桥是一层
  * 模糊再收边的“壳”（.craft-goo），垫在格子后面。显示的数按动画的进度走，动画完了就是游戏站的数。
  */
@@ -336,7 +336,7 @@ function useCraftDrop(me: Me | null, version: number, reduced: boolean, drop: Dr
     const now = { coal: me.coal ?? 0, stick: me.stick ?? 0, torch: me.items?.torch ?? 0 }
     const last = before.current
     before.current = now
-    if (!last || reduced || now.torch !== last.torch + 1) return
+    if (!last || reduced || now.torch <= last.torch) return
     const from = now.coal === last.coal - 1 && last.stick === 0 && now.stick === 0 ? 'coal'
       : now.stick === last.stick - 1 && last.coal === 0 && now.coal === 0 ? 'stick' : null
     if (!from) return

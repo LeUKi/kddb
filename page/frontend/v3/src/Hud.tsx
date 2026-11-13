@@ -4,7 +4,7 @@ import { memo, useEffect, useRef, useState } from 'react'
 import { ItemIcon } from '../../src/ItemIcon'
 import { mutedAtom, play, setMuted } from './sound'
 import { blockedAtom, chestNoteAtom, claim, claimingAtom, creeperShownAtom, digIntervalAtom, heldAtom, focusRequestAtom, gameAtom, hongbaoAtom, jpTargetAtom, itemsVersionAtom, meAtom, readyAtAtom, settledAtom, slowUntilAtom, summaryOpenAtom, totalOf } from './state'
-import { outOfPicks } from './items'
+import { madeWords, outOfPicks } from './items'
 import { money, unitsOf } from './types'
 import { crystalPercent, eyeStatus, openSpecial } from './eye'
 import { regionName } from './regions'
@@ -259,7 +259,7 @@ export function Rules({ onClose, onPractice }: { onClose: () => void; onPractice
         <dt><ItemIcon kind="tnt" size={18} /> TNT</dt><dd>扣掉还没领的奖励的 {rules.tntPercent}%（盾牌能挡一次）</dd>
         {rules.items ? <><dt><ItemIcon kind="shield" size={18} /> 盾牌</dt><dd>自动挡下一次 TNT 或末影水晶；最多带 3 面，再挖到换成一份小奖</dd>
           <dt><ItemIcon kind="spyglass" size={18} /> 望远镜</dt><dd>看一格是什么，只有你看得见</dd>
-          {(rules.items ?? 0) >= 2 ? <><dt><ItemIcon kind="coal" size={18} /> 煤炭、木棍</dt><dd>各有一个就自动做成一个火把，多的攒着</dd>
+          {(rules.items ?? 0) >= 2 ? <><dt><ItemIcon kind="coal" size={18} /> 煤炭、木棍</dt><dd>各有一个就自动做成{madeWords(rules.craftTorches ?? 1)}，多的攒着</dd>
             <dt><ItemIcon kind="torch" size={18} /> 火把</dt><dd>插在挖开的格子上，照亮周围 9 格，大家都看得见。颜色表示这 9 格里有几个 TNT、末影水晶和刷怪笼（挖开的也算）：绿色没有，黄色 1～2 个，橙色 3～4 个，红色 5 个以上</dd></>
             : <><dt><ItemIcon kind="coal" size={18} /> 煤炭、木棍</dt><dd>各攒满 2 个，自动做成一个火把；满了再挖到不算</dd>
               <dt><ItemIcon kind="torch" size={18} /> 火把</dt><dd>插在四个格子相交的角上，大家都看得见：绿色是这 4 格里没有危险，黄色 1～2 个，红色 3～4 个（TNT、末影水晶、刷怪笼）</dd></>}

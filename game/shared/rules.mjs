@@ -49,6 +49,7 @@ import { lavaOf, railsOf, trialLayout } from "./layouts.mjs";
  *   creeper?: number,
  *   layout?: 2,
  *   special?: 2,
+ *   craftTorches?: 4,
  *   step?: string,
  * }} Rules
  */
@@ -162,6 +163,14 @@ export const END_RANGES = /** @type {const} */ ({ crystal: [1, 2], totem: [1, 2]
 export const SHIELD_CAP = 3;
 /** 煤炭、木棍各攒到这么多就满了，两样都满自动做成一个火把。 */
 export const SCRAP_CAP = 2;
+/**
+ * 一块煤炭、一根木棍做成几个火把：2026-11-13 起开的局（rules.craftTorches）照原版做成 4 个，
+ * 以前开的局一个（docs/V3_ITEMS.md §18）。
+ */
+export const CRAFT_TORCHES = 4;
+export const craftedTorches = (/** @type {Rules} */ rules) => rules.craftTorches ?? 1;
+/** “一个火把”“ 4 个火把”（数字前带空格，接在“做成了”后面） */
+export const torchesWords = (/** @type {number} */ count) => (count === 1 ? "一个火把" : ` ${count} 个火把`);
 /** 中毒：挖到刷怪笼以后这么多次挖掘，每次扣手上的百分之几（盾牌挡不住）。 */
 export const POISON_TIMES = 3;
 export const POISON_PERCENT = 5;
@@ -328,6 +337,8 @@ export function rulesOf(/** @type {Record<string, unknown>} */ params, /** @type
     layout: 2,
     // 末影之眼开特殊区块、末影珍珠只长普通的几种、深暗之域的噪音会退（2026-11-12 起，docs/V3_ITEMS.md §16、§17）；以前开的局没有这一项，照旧
     special: 2,
+    // 一块煤炭、一根木棍照原版做成 4 个火把（2026-11-13 起，docs/V3_ITEMS.md §18）；以前开的局没有这一项，一个
+    craftTorches: CRAFT_TORCHES,
   });
 }
 
@@ -1021,11 +1032,12 @@ function digCell(/** @type {Game} */ game, /** @type {Player} */ player, /** @ty
         // 第 2 版：各一个就合成，多的攒着（不封顶），所以两样不会同时有
         player[kind] = have + 1;
         if ((player.coal ?? 0) >= 1 && (player.stick ?? 0) >= 1 && bag) {
+          const made = craftedTorches(rules);
           player.coal = (player.coal ?? 0) - 1;
           player.stick = (player.stick ?? 0) - 1;
-          bag.torch += 1;
-          text = `获得${name}，和${KIND_NAMES[other]}做成了一个火把`;
-          publicText += "，做成了一个火把";
+          bag.torch += made;
+          text = `获得${name}，和${KIND_NAMES[other]}做成了${torchesWords(made)}`;
+          publicText += `，做成了${torchesWords(made)}`;
         } else text = `获得${name}（${have + 1} 个），再有${KIND_NAMES[other]}就能做成火把`;
         break;
       }

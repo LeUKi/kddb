@@ -734,8 +734,9 @@ describe("新局的格子和区块（docs/V3_ITEMS.md §1、§2）", () => {
 });
 
 describe("新局的道具（docs/V3_ITEMS.md §3）", () => {
-  it("第 2 版：煤炭、木棍各一个就合成火把，多的攒着不封顶，两样不会同时有", () => {
+  it("第 2 版：煤炭、木棍各一个就合成 4 个火把（照原版），多的攒着不封顶，两样不会同时有", () => {
     const g = game();
+    assert.equal(g.rules.craftTorches, 4);
     stack(g, 1, { 0: "coal", 1: "coal", 2: "coal", 3: "stick", 4: "stick", 5: "stick", 6: "stick", 7: "stick" });
     const p = newPlayer(g, 10001, "小明");
     const texts = [0, 1, 2, 3, 4, 5, 6, 7].map((index) => {
@@ -744,10 +745,20 @@ describe("新局的道具（docs/V3_ITEMS.md §3）", () => {
       return [out.result.text, out.feed.text, p.coal, p.stick, p.items.torch];
     });
     assert.deepEqual(texts[2], ["获得煤炭（3 个），再有木棍就能做成火把", "挖到了煤炭", 3, 0, 0]);
-    assert.deepEqual(texts[3], ["获得木棍，和煤炭做成了一个火把", "挖到了木棍，做成了一个火把", 2, 0, 1]);
-    assert.deepEqual(texts[5].slice(2), [0, 0, 3]);
-    assert.deepEqual(texts[7], ["获得木棍（2 个），再有煤炭就能做成火把", "挖到了木棍", 0, 2, 3]);
+    assert.deepEqual(texts[3], ["获得木棍，和煤炭做成了 4 个火把", "挖到了木棍，做成了 4 个火把", 2, 0, 4]);
+    assert.deepEqual(texts[5].slice(2), [0, 0, 12]);
+    assert.deepEqual(texts[7], ["获得木棍（2 个），再有煤炭就能做成火把", "挖到了木棍", 0, 2, 12]);
     assert.equal(privatePlayer(p, g, clock).stick, 2);
+  });
+
+  it("2026-11-13 以前开的第 2 版局（没有 craftTorches）一合成还是一个火把", () => {
+    const g = game();
+    delete g.rules.craftTorches;
+    stack(g, 1, { 0: "coal", 1: "stick" });
+    const p = newPlayer(g, 10001, "小明");
+    dig(g, p, { cardId: 1, index: 0, now: later() });
+    const out = dig(g, p, { cardId: 1, index: 1, now: later() });
+    assert.deepEqual([out.result.text, out.feed.text, p.items.torch], ["获得木棍，和煤炭做成了一个火把", "挖到了木棍，做成了一个火把", 1]);
   });
 
   it("第 1 版：煤炭、木棍各攒 2 格，满了再挖到不算；两样都满自动做成一个火把，两样清零", () => {

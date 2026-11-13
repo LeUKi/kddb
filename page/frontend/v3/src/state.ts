@@ -23,6 +23,8 @@ export const gameAtom = atom<PublicGame | null>(null)
 export const itemsGameAtom = atom(get => !!get(gameAtom)?.rules.items)
 /** 第几版的道具规则（rules.items：0 没有道具栏，1 第一版，2 第二版，docs/V3_ITEMS.md §9） */
 export const itemsVersionAtom = atom(get => get(gameAtom)?.rules.items ?? 0)
+/** 一合成做成几个火把（rules.craftTorches，旧局 1） */
+export const craftTorchesAtom = atom(get => get(gameAtom)?.rules.craftTorches ?? 1)
 export const digIntervalAtom = atom(get => get(gameAtom)?.rules.digInterval ?? 1)
 export const hasGameAtom = atom(get => get(gameAtom) !== null)
 export const meAtom = atom<Me | null>(null)

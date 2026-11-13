@@ -317,6 +317,8 @@ test('火把一直在工具条上：没有时是 0，点开说怎么做出来（
   const about = items.aboutSlot('torch', me, true, 1, null, 2)
   assert.equal(about.count, '还没有')
   assert.match(about.words, /^还没有火把。煤炭和木棍各挖到一个，会自动做成一个。插在挖开的格子上/)
+  // 2026-11-13 起的局一合成 4 个（rules.craftTorches）
+  assert.match(items.aboutSlot('torch', me, true, 1, null, 2, 4).words, /^还没有火把。煤炭和木棍各挖到一个，会自动做成 4 个。插在/)
   assert.match(items.aboutSlot('torch', { ...me, items: { ...me.items, torch: 2 } }, true, 1, null, 2).words, /^插在挖开的格子上/)
   // 没有道具栏的局没有火把
   assert.deepEqual(items.slotsOf({ ...me, items: undefined, coal: 0 }, false), { active: [], passive: [] })
@@ -385,6 +387,7 @@ test('道具说明只写玩家用得上的：不说机会、不说用掉几个�
   assert.equal(items.aboutSlot('pickaxe', me, true, 1, null, 2).rule, undefined)
   assert.equal(items.aboutSlot('pick-x', me, true, 1, null, 2).words, '一下挖开十字形的 5 格。')
   assert.equal(items.aboutSlot('stick', { ...me, coal: 0, stick: 1 }, true, 1, null, 2).words, '再挖到一块煤炭，就自动做成一个火把。')
+  assert.equal(items.aboutSlot('coal', { ...me, coal: 1, stick: 0 }, true, 1, null, 2, 4).words, '再挖到一根木棍，就自动做成 4 个火把。')
 })
 
 test('怎么点：触屏“点…预览，再点一下确认”，鼠标“指着预览，点一下确认”；步骤条只接一句', () => {

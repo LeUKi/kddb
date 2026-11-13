@@ -8,7 +8,7 @@ import { flyIntoHelp, growFromHelp } from './guideFly'
 import { aboutSlot, countOf, hasMouse, howToAim, isHeld, learnGuide, SHAPE_NAMES, SHAPES, shapeOf, SLOT_ICONS, SLOT_NAMES } from './items'
 import type { Slot } from './items'
 import { regionAbout, regionIcon, regionName } from './regions'
-import { applyItem, blockedAtom, dialogAtom, digIntervalAtom, gameAtom, heldAtom, itemsGameAtom, itemsVersionAtom, meAtom } from './state'
+import { applyItem, blockedAtom, craftTorchesAtom, dialogAtom, digIntervalAtom, gameAtom, heldAtom, itemsGameAtom, itemsVersionAtom, meAtom } from './state'
 import type { Shape } from './types'
 import { money } from './types'
 
@@ -22,6 +22,7 @@ export function ItemDialogs() {
   const me = useAtomValue(meAtom)
   const items = useAtomValue(itemsGameAtom)
   const version = useAtomValue(itemsVersionAtom)
+  const made = useAtomValue(craftTorchesAtom)
   const game = useAtomValue(gameAtom)
   const interval = useAtomValue(digIntervalAtom)
   const blocked = useAtomValue(blockedAtom)
@@ -56,7 +57,7 @@ export function ItemDialogs() {
   let note: ReactNode = null
   if (dialog.type === 'item') {
     const slot = dialog.slot
-    const about = aboutSlot(slot, me, items, interval, blocked, version)
+    const about = aboutSlot(slot, me, items, interval, blocked, version, made)
     title = SLOT_NAMES[slot]
     icon = SLOT_ICONS[slot]
     note = about.count

@@ -50,15 +50,16 @@ export function classOf(slot: Slot): ItemClass {
  * 放在下面一行小字（rule，最多一句）。看得见的数（镐子还能挖几次、还有几个、几面盾）和它们怎么变不用字说；
  * 弹窗里有图的、用了看得到的也不说。新道具在这里加一行，工具条、弹窗、步骤条都照着它画。
  */
-export function aboutSlot(slot: Slot, me: Me, items: boolean, interval: number, blocked: string | null, version = items ? 1 : 0): { count: string; words: string; rule?: string } {
+export function aboutSlot(slot: Slot, me: Me, items: boolean, interval: number, blocked: string | null, version = items ? 1 : 0, made = 1): { count: string; words: string; rule?: string } {
   const count = countOf(me, slot)
   const v2 = version >= 2
+  const torches = madeWords(made)
   switch (slot) {
     case 'pickaxe': return { count: `还剩 ${me.chances} 次`, words: blocked ?? '点没挖开的格子就能挖。', rule: !blocked && interval > 1 ? `两次之间至少隔 ${interval} 秒。` : undefined }
     case 'pick-h': case 'pick-v': case 'pick-x': return { count: `还能用 ${count} 次`, words: `一下挖开${SHAPE_WORDS[shapeOf(slot)!]}。` }
     case 'spyglass': return { count: `还有 ${count} 个`, words: '看一格下面是什么，只有你看得见。' }
     case 'torch': return v2
-      ? { count: count > 0 ? `还有 ${count} 个` : '还没有', words: `${count > 0 ? '' : '还没有火把。煤炭和木棍各挖到一个，会自动做成一个。'}插在挖开的格子上，照亮周围 9 格，大家都看得见。`,
+      ? { count: count > 0 ? `还有 ${count} 个` : '还没有', words: `${count > 0 ? '' : `还没有火把。煤炭和木棍各挖到一个，会自动做成${made === 1 ? '一个' : ` ${made} 个`}。`}插在挖开的格子上，照亮周围 9 格，大家都看得见。`,
         rule: '颜色表示这 9 格里有几个 TNT、末影水晶和刷怪笼，挖开的也算。' }
       : { count: count > 0 ? `还有 ${count} 个` : '还没有', words: `${count > 0 ? '' : `还没有火把。煤炭和木棍各攒满 ${CRAFT_NEED} 个，会自动做成一个。`}插在四个格子相交的角上，照亮旁边 4 格，大家都看得见。`,
         rule: '绿色是这 4 格里没有 TNT、末影水晶和刷怪笼，黄色有 1～2 个，红色有 3～4 个。' }
@@ -69,11 +70,13 @@ export function aboutSlot(slot: Slot, me: Me, items: boolean, interval: number, 
     case 'table': return { count: `还有 ${count} 个`, words: '两把附魔镐挑一把。' }
     case 'shield': return { count: `${count}/${items ? SHIELD_CAP : 1} 面`, words: '挖到 TNT 或末影水晶时，自动挡下一次。', rule: '带满以后再挖到，换成一份小奖。' }
     case 'coal': case 'stick': return v2
-      ? { count: `${count} 个`, words: `再挖到${slot === 'coal' ? '一根木棍' : '一块煤炭'}，就自动做成一个火把。` }
+      ? { count: `${count} 个`, words: `再挖到${slot === 'coal' ? '一根木棍' : '一块煤炭'}，就自动做成${torches}。` }
       : { count: `${count}/${CRAFT_NEED}`, words: `煤炭和木棍各攒满 ${CRAFT_NEED} 个，就自动做成一个火把。`, rule: '攒满以后再挖到不算。' }
     case 'poison': return { count: `还有 ${count} 次`, words: '接下来每挖一次，扣掉待领取的 5%。' }
   }
 }
+/** 一合成做成几个火把的说法：“一个火把”“ 4 个火把”（数字前带空格，接在“做成”后面） */
+export const madeWords = (made: number) => (made === 1 ? '一个火把' : ` ${made} 个火把`)
 /** 附魔镐一下挖开哪些格（说明里的说法） */
 const SHAPE_WORDS: Record<Shape, string> = { h: '横着的 3 格', v: '竖着的 3 格', x: '十字形的 5 格' }
 
