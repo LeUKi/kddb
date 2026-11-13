@@ -24,8 +24,9 @@ import { FollowTip, StepBar } from './Tips'
 import { Creeper } from './Creeper'
 import { Effects } from './Effects'
 import { ChestNote } from './Hud'
-import { EmoteButton, PeerPointers, WatchBadges } from './Peers'
-import { canPoint, reportPointer, reportWatch, startPresence, stopPresence } from './presence'
+import { EmoteButton, EmoteWheel, MyBubble, PeerPointers, TOOLS, WatchBadges } from './Peers'
+import type { Point as PeerPoint } from './presence'
+import { canPoint, reportPointer, reportWatch, sendEmote, startPresence, stopPresence } from './presence'
 import type { DigResult, Peek, PublicCard, Torch } from './types'
 
 const DRAG_SLOP = 6
@@ -125,6 +126,7 @@ export function MapView() {
    */
   const [warmAt, setWarmAt] = useState<Camera | null>(null)
   const root = useRef<HTMLDivElement>(null)
+  const stage = useRef<HTMLDivElement>(null)
   /** 每次飞都换一个号；拖动、捏合、新的一次飞会让还没落地的那次作废 */
   const flight = useRef(0)
   const landed = useRef(false)
@@ -557,35 +559,60 @@ export function MapView() {
   if (jpPointer) jpLast.current = jpPointer
   const jpAt = jpPointer ?? jpLast.current
 
-  // 自己的指针（电脑上）：鼠标在地图上动了才报，拿着道具时不报（瞄准哪一格不给别人看），离开地图收起。
-  // 镜头飞到别处、放下道具时，指针下面的地方变了，也报一次
+  // 自己的指针（电脑上，docs/V3_ITEMS.md §20）：鼠标在地图上动了才报，带着手上的道具（别人那里画同样的图标）；
+  // 拿着望远镜时不报（看哪一格只有自己知道）。移到地图上的按钮（工具条、表情、缩放）时指针停在原处，离开整块
+  // 地图才收起。镜头飞到别处、换了道具时，指针下面的东西变了，也报一次
   const mouseAt = useRef<{ x: number; y: number } | null>(null)
-  const pointerWorld = useCallback(() => {
+  const tool = held === 'spyglass' ? -1 : held ? (shapeOf(held) ? 2 : TOOLS.indexOf(held as typeof TOOLS[number])) : cooling.seconds ? 1 : 0
+  const toolNow = useRef(tool)
+  toolNow.current = tool < 0 && held !== 'spyglass' ? 0 : tool
+  const pointerWorld = useCallback((): PeerPoint | null => {
     const at = mouseAt.current
-    if (!at || store.get(heldAtom) || !box.current) return null
+    if (!at || toolNow.current < 0 || !box.current) return null
     const rect = box.current.getBoundingClientRect()
     const now = camera()
-    return [(at.x - rect.left - now.x) / now.scale, (at.y - rect.top - now.y) / now.scale] as [number, number]
+    return [(at.x - rect.left - now.x) / now.scale, (at.y - rect.top - now.y) / now.scale, toolNow.current]
   }, [camera])
+  /** 右键弹出的表情圈：在地图区里的位置、扔出去的地方（世界坐标） */
+  const [wheel, setWheel] = useState<{ x: number; y: number; where: [number, number] } | null>(null)
   const onPointerMove = (event: React.PointerEvent) => {
-    if (event.pointerType !== 'mouse' || !canPoint()) return
+    if (event.pointerType !== 'mouse' || !canPoint() || wheel) return
     mouseAt.current = { x: event.clientX, y: event.clientY }
     reportPointer(pointerWorld)
   }
-  const onPointerLeave = (event: React.PointerEvent) => {
+  const onCanvasLeave = (event: React.PointerEvent) => {
+    // 移到地图上的按钮、表情圈上：指针停在原处
+    if (event.pointerType !== 'mouse' || (event.relatedTarget instanceof Node && root.current?.contains(event.relatedTarget))) return
+    mouseAt.current = null
+    reportPointer(null)
+  }
+  const onMapLeave = (event: React.PointerEvent) => {
     if (event.pointerType !== 'mouse') return
     mouseAt.current = null
     reportPointer(null)
   }
   useEffect(() => {
     if (mouseAt.current) reportPointer(pointerWorld)
-  }, [settled, held, pointerWorld])
+  }, [settled, tool, pointerWorld])
 
-  // 拿着道具时点右键是放下（电脑上）
+  // 右键（电脑上）：拿着道具时是放下；手上没拿时在鼠标这里弹出表情圈
   const onContextMenu = (event: React.MouseEvent) => {
-    if (!held) return
+    if (held) {
+      event.preventDefault()
+      putDown()
+      return
+    }
+    if (lastPointer.current !== 'mouse' || !canPoint() || !stage.current) return
     event.preventDefault()
-    putDown()
+    const area = stage.current.getBoundingClientRect()
+    mouseAt.current = { x: event.clientX, y: event.clientY }
+    reportPointer(pointerWorld)
+    const world = worldAt(event.clientX, event.clientY)
+    setWheel({ x: event.clientX - area.left, y: event.clientY - area.top, where: [world.x, world.y] })
+  }
+  const closeWheel = useCallback(() => setWheel(null), [])
+  const throwAt = (n: number) => {
+    if (wheel && sendEmote(n, wheel.where)) setWheel(null)
   }
 
   // 拿着道具：触屏上第一下点是预览，再点同一处才用；鼠标指着就是预览，点一下就用（docs/V3_ITEMS.md §5）
@@ -623,10 +650,10 @@ export function MapView() {
   const shape = held ? shapeOf(held) : null
   const cursorClass = held ? (shape ? 'cur-ench' : `cur-${held}`) : cooling.seconds ? 'cur-cool' : 'cur-pick'
 
-  return <div ref={root} className={`map-view level-${level}${cooling.seconds ? ' is-cooling' : ''}${hoverCard ? ' is-pointing' : ''}${held ? ` is-aiming aim-${held}` : ''} ${cursorClass}`}>
-    <div className="map-stage">
+  return <div ref={root} className={`map-view level-${level}${cooling.seconds ? ' is-cooling' : ''}${hoverCard ? ' is-pointing' : ''}${held ? ` is-aiming aim-${held}` : ''} ${cursorClass}`} onPointerLeave={onMapLeave}>
+    <div className="map-stage" ref={stage}>
     <div className="map-canvas" ref={box} onClickCapture={onClickCapture} onContextMenu={onContextMenu}
-      onPointerDownCapture={event => { lastPointer.current = event.pointerType }} onPointerMove={onPointerMove} onPointerLeave={onPointerLeave}>
+      onPointerDownCapture={event => { lastPointer.current = event.pointerType }} onPointerMove={onPointerMove} onPointerLeave={onCanvasLeave}>
     <motion.div className="map-world" style={{ x, y, scale, transformOrigin: '0 0', '--px': 1 / settled.scale } as MotionStyle}>
       <MapCanvas cards={cards} rich={richness} view={view} skip={entrance?.cardId ?? null} inDom={dom} onPick={pickOnCanvas} onHover={hoverOnCanvas} />
       {hoverCard && !dom.has(hoverCard.id) ? <div className="map-hover" aria-hidden="true"
@@ -667,6 +694,7 @@ export function MapView() {
       <AnimatePresence>{level === 2 && focused && warm === null ? <CardLabels key={focused.id} card={focused} /> : null}</AnimatePresence>
       {level !== 0 ? <WatchBadges cards={cards.filter(card => dom.has(card.id) && !(level === 2 && card.id === focused?.id))} /> : null}
       {level !== 0 ? <PeerPointers near={focused} /> : null}
+      <MyBubble />
       {entrance?.flight ? <PearlFlight key={newCard?.at} from={entrance.flight.from} to={entrance.flight.to} variant={entrance.flight.variant} /> : null}
     </motion.div>
     <div className="map-fog" aria-hidden="true" />
@@ -680,6 +708,7 @@ export function MapView() {
       <span className="jp-text"><span>JP</span><small className="jp-where">{regionName(jpCard)}</small></span>
       <span className="new-arrow" style={{ transform: `rotate(${jpAt.angle}deg)` }}>➜</span>
     </button> : null}
+    {wheel ? <EmoteWheel x={wheel.x} y={wheel.y} width={stage.current?.clientWidth ?? 0} height={stage.current?.clientHeight ?? 0} onPick={throwAt} onClose={closeWheel} /> : null}
     {/* 右下角竖着一列，半透明：扔表情，下面是缩放 */}
     <div className="map-float">
       <EmoteButton />

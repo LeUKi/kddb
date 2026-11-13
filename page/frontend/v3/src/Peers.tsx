@@ -6,13 +6,18 @@ import { ARROW } from './cursor'
 import { colorOf, EMOTES, initialOf, pathsOf } from './emotes'
 import { McText } from './McText'
 import type { Watcher } from './presence'
-import { bubblesAtom, canPoint, EMOTE_COOL_MS, onlineAtom, pointersAtom, seatsAtom, sendEmote, setSettings, settingsAtom, watchersAtom } from './presence'
+import { bubblesAtom, canPoint, emoteReadyAtAtom, onlineAtom, pointersAtom, seatsAtom, sendEmote, setSettings, settingsAtom, watchersAtom } from './presence'
 import { toast, uidAtom } from './state'
 import type { PublicCard } from './types'
 
 // 在场（docs/V3_ITEMS.md §20）：别人的指针、卡旁边谁在看、表情气泡、扔表情的按钮。指针和“在看”放在地图里
 // （跟着拖动走，按镜头缩放反着缩，屏幕上一直一样大）；指针用 CSS 补间滑到新位置，停下就不画。
 
+/**
+ * 指针上画的道具（号码随指针发给游戏站，只能往后加）：镐子、冷却中的镐子、附魔镐、火把、钥匙。图标是
+ * cursor.ts 画好的 --tool-*，和自己的指针一样。拿着望远镜时不发指针。
+ */
+export const TOOLS = ['pick', 'cool', 'ench', 'torch', 'key'] as const
 /** 同屏最多画几个指针（离当前卡近的优先），多的不画 */
 const MAX_POINTERS = 20
 const NO_WATCHERS: Watcher[] = []
@@ -50,9 +55,9 @@ export function PeerPointers({ near }: { near: { x: number; y: number } | null }
   const settings = useAtomValue(settingsAtom)
   const me = useAtomValue(uidAtom)
   if (!settings.pointers) return null
-  const list = Object.entries(pointers).flatMap(([sid, [x, y]]) => {
+  const list = Object.entries(pointers).flatMap(([sid, [x, y, tool]]) => {
     const seat = seats[sid]
-    return seat && seat.uid !== me ? [{ sid, x, y, uid: seat.uid, name: seat.name }] : []
+    return seat && seat.uid !== me ? [{ sid, x, y, tool, uid: seat.uid, name: seat.name }] : []
   })
   if (near && list.length > MAX_POINTERS) {
     const cx = near.x * SLOT_PX
@@ -62,18 +67,19 @@ export function PeerPointers({ near }: { near: { x: number; y: number } | null }
   return <div className="peers" aria-hidden="true">
     {list.slice(0, MAX_POINTERS).map(peer => {
       const bubble = settings.emotes ? bubbles[String(peer.uid)] : undefined
-      return <PeerPointer key={peer.sid} x={peer.x} y={peer.y} uid={peer.uid} name={peer.name} bubble={bubble?.onPointer ? bubble : undefined} />
+      return <PeerPointer key={peer.sid} x={peer.x} y={peer.y} tool={peer.tool} uid={peer.uid} name={peer.name} bubble={bubble?.onPointer ? bubble : undefined} />
     })}
   </div>
 }
 
-const PeerPointer = memo(function PeerPointer({ x, y, uid, name, bubble }: { x: number; y: number; uid: number; name: string; bubble?: { n: number; at: number } }) {
+const PeerPointer = memo(function PeerPointer({ x, y, tool, uid, name, bubble }: { x: number; y: number; tool: number; uid: number; name: string; bubble?: { n: number; at: number } }) {
   return <div className="peer" style={{ transform: `translate3d(${x}px, ${y}px, 0)`, '--peer': colorOf(uid) } as CSSProperties}>
     <div className="peer-body">
       <svg className="peer-arrow" width="11" height="16" viewBox="0 0 11 16" shapeRendering="crispEdges">
         <path d={ARROW_PATHS.outline} fill="#000" />
         <path d={ARROW_PATHS.fill} fill="var(--peer)" />
       </svg>
+      <i className="peer-tool" style={{ backgroundImage: `var(--tool-${TOOLS[tool] ?? 'pick'})` }} />
       <span className="peer-name">{name}</span>
       {bubble ? <EmoteBubble key={bubble.at} n={bubble.n} /> : null}
     </div>
@@ -123,9 +129,22 @@ export function WatchBadges({ cards }: { cards: PublicCard[] }) {
  * 扔表情（地图右下角，缩放按钮上面）：点开 8 个表情，点一个扔出去、收起；2.5 秒一个。下面是开关：
  * 显示别人的表情、显示别人的指针、让别人看到我的指针（只有电脑上有）。
  */
+/** 扔完一个表情以后的 2.5 秒（按钮、表情圈里的表情变暗）。 */
+function useEmoteCooling() {
+  const readyAt = useAtomValue(emoteReadyAtAtom)
+  const [, setTick] = useState(0)
+  const left = readyAt - Date.now()
+  useEffect(() => {
+    if (left <= 0) return
+    const timer = window.setTimeout(() => setTick(value => value + 1), left)
+    return () => window.clearTimeout(timer)
+  }, [left, readyAt])
+  return left > 0
+}
+
 export function EmoteButton() {
   const [open, setOpen] = useState(false)
-  const [cooling, setCooling] = useState(false)
+  const cooling = useEmoteCooling()
   const mine = useAtomValue(bubblesAtom).me
   const online = useAtomValue(onlineAtom)
   const settings = useAtomValue(settingsAtom)
@@ -145,15 +164,8 @@ export function EmoteButton() {
       window.removeEventListener('keydown', onKey)
     }
   }, [open])
-  useEffect(() => {
-    if (!cooling) return
-    const timer = window.setTimeout(() => setCooling(false), EMOTE_COOL_MS)
-    return () => window.clearTimeout(timer)
-  }, [cooling])
   const pick = (n: number) => {
-    if (!sendEmote(n)) return
-    setCooling(true)
-    setOpen(false)
+    if (sendEmote(n)) setOpen(false)
   }
   return <div className="emote-float" ref={box}>
     {open ? <div className="emote-panel" role="dialog" aria-label="扔个表情">
@@ -169,7 +181,58 @@ export function EmoteButton() {
     </div> : null}
     <button type="button" className={`emote-toggle${cooling ? ' is-cooling' : ''}`} aria-expanded={open} aria-label="扔个表情" onClick={() => setOpen(value => !value)}>
       <EmoteArt n={0} size={22} />
-      {mine ? <EmoteBubble key={mine.at} n={mine.n} /> : null}
+      {mine && !mine.where ? <EmoteBubble key={mine.at} n={mine.n} /> : null}
     </button>
   </div>
 }
+
+/** 自己在地图上右键扔的表情：从扔的地方冒出来（地图里，跟着拖动走）。 */
+export function MyBubble() {
+  const mine = useAtomValue(bubblesAtom).me
+  if (!mine?.where) return null
+  return <div className="peer is-me" aria-hidden="true" style={{ transform: `translate3d(${mine.where[0]}px, ${mine.where[1]}px, 0)` }}>
+    <div className="peer-body"><EmoteBubble key={mine.at} n={mine.n} /></div>
+  </div>
+}
+
+/**
+ * 电脑上在地图上点右键（手上没拿道具时）：鼠标周围一圈 8 个表情，点一个就从这里扔出去；Esc、点别处、
+ * 滚轮收起。x、y 是在地图区里的位置，靠边时往里挪一点，整圈都在画面里。
+ */
+export function EmoteWheel({ x, y, width, height, onPick, onClose }: {
+  x: number; y: number; width: number; height: number; onPick: (n: number) => void; onClose: () => void
+}) {
+  const cooling = useEmoteCooling()
+  const box = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const onDown = (event: PointerEvent) => {
+      if (!box.current?.contains(event.target as Node)) onClose()
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('pointerdown', onDown, true)
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('wheel', onClose, { passive: true })
+    return () => {
+      window.removeEventListener('pointerdown', onDown, true)
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('wheel', onClose)
+    }
+  }, [onClose])
+  const reach = WHEEL_RADIUS + 26
+  const cx = Math.min(Math.max(x, reach), Math.max(reach, width - reach))
+  const cy = Math.min(Math.max(y, reach), Math.max(reach, height - reach))
+  return <div className="emote-wheel" ref={box} role="menu" aria-label="扔个表情" style={{ left: cx, top: cy }} onContextMenu={event => event.preventDefault()}>
+    {EMOTES.map((emote, n) => {
+      const angle = -Math.PI / 2 + (n / EMOTES.length) * Math.PI * 2
+      return <button key={emote.label} type="button" role="menuitem" className="emote-wheel-item" title={emote.label} aria-label={emote.label} disabled={cooling}
+        style={{ '--dx': `${Math.round(Math.cos(angle) * WHEEL_RADIUS)}px`, '--dy': `${Math.round(Math.sin(angle) * WHEEL_RADIUS)}px` } as CSSProperties}
+        onClick={() => onPick(n)}>
+        <EmoteArt n={n} size={28} />
+      </button>
+    })}
+  </div>
+}
+
+const WHEEL_RADIUS = 58

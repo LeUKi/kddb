@@ -5,13 +5,14 @@
 //
 // 网页说的（一条一个 JSON，太长、太多的不理）：
 //   {"w":[卡号, 格位 x, 格位 y, 缩放级]} 在看哪张卡（镜头停下来时）；{"w":null} 不在看（页面到了后台）
-//   {"p":[x, y]} 指针在地图上的位置（世界坐标取整；只有电脑上、鼠标动了才发，最多 5 次/秒）；{"p":null} 收起
+//   {"p":[x, y, 道具]} 指针在地图上的位置（世界坐标取整；只有电脑上、鼠标动了才发，最多 5 次/秒）和手上拿的
+//   道具（画在指针上，号码见网页 v3/src/Peers.tsx 的 TOOLS，0 是镐子，可以不带）；{"p":null} 收起
 //   {"e":表情号} 扔一个表情（每人 2 秒最多一个）
 //   "ping" 心跳：平台自动回 "pong"，不叫醒房间（PresenceObject 的 setWebSocketAutoResponse）
 // 房间发的（攒 100 毫秒一批，每人一份）：
 //   "hi": 你的座位号（刚连上那一批）
 //   "w": [[座位号, uid, 名字, 卡号 | null], …] 谁换了在看的卡（刚连上那一批是所有在看的人）；null 是不看了、走了
-//   "p": [[座位号, x, y] | [座位号], …] 动了的指针，只有座位号的是收起了
+//   "p": [[座位号, x, y, 道具?] | [座位号], …] 动了的指针（道具是 0 时不带），只有座位号的是收起了
 //   "P": 同上，是你看得见的全部指针（你换了卡以后那一批）：手上的换成这一份
 //   "e": [[座位号, 表情号], …]
 // 指针和表情只发给看得见的人：他在看的卡离指针（扔表情的人在看的卡）不超过 1 格，附近那一级 2 格，全图那一级不收。
@@ -41,15 +42,18 @@ const RATE = 15;
 const BURST = 30;
 const DROPS_MAX = 300;
 const COORD_MAX = 10_000;
+/** 指针上的道具号码最大到几（网页现在用到 4） */
+const TOOL_MAX = 15;
 
 /**
  * @typedef {{ c: number, x: number, y: number, l: 0|1|2 }} Here 在看的卡、它的格位、缩放级
  * @typedef {{ sid: string, uid: number, name: string, here: Here|null, joined: number }} Seat 一个座位（存在连接上）
  * @typedef {{ send(text: string): void, close(code?: number, reason?: string): void }} Conn
  * @typedef {{ x: number, y: number }} Slot
+ * @typedef {[number, number, number]} Point 世界坐标和手上的道具
  */
 
-const slotOf = (/** @type {[number, number]} */ [x, y]) => ({ x: Math.round(x / SLOT_PX), y: Math.round(y / SLOT_PX) });
+const slotOf = (/** @type {Point} */ [x, y]) => ({ x: Math.round(x / SLOT_PX), y: Math.round(y / SLOT_PX) });
 const isInt = (/** @type {unknown} */ value, /** @type {number} */ max) => Number.isSafeInteger(value) && Math.abs(/** @type {number} */ (value)) <= max;
 
 /** @param {unknown} value @returns {Here|null|undefined} undefined 是看不懂 */
@@ -61,13 +65,17 @@ function hereOf(value) {
   return { c, x, y, l };
 }
 
-/** @param {unknown} value @returns {[number, number]|null|undefined} */
+/** @param {unknown} value @returns {Point|null|undefined} */
 function pointOf(value) {
   if (value === null) return null;
-  if (!Array.isArray(value) || value.length !== 2) return undefined;
-  const [x, y] = value;
-  return isInt(x, COORD_MAX * SLOT_PX) && isInt(y, COORD_MAX * SLOT_PX) ? [x, y] : undefined;
+  if (!Array.isArray(value) || (value.length !== 2 && value.length !== 3)) return undefined;
+  const [x, y, tool = 0] = value;
+  if (!isInt(tool, TOOL_MAX) || tool < 0) return undefined;
+  return isInt(x, COORD_MAX * SLOT_PX) && isInt(y, COORD_MAX * SLOT_PX) ? [x, y, tool] : undefined;
 }
+
+/** 发出去的一行：道具是 0（镐子）时不带。 */
+const rowOf = (/** @type {string} */ sid, /** @type {Point} */ [x, y, tool]) => (tool ? [sid, x, y, tool] : [sid, x, y]);
 
 /** 座位号：6 个字母数字，一个红包里撞上的机会可以不管。 */
 function newSid() {
@@ -80,7 +88,7 @@ export class PresenceRoom {
   seats = new Map();
   /** @type {Map<string, Conn>} */
   bySid = new Map();
-  /** @type {Map<string, [number, number]>} 指针（只在内存里，房间睡过就没了，动一下又有） */
+  /** @type {Map<string, Point>} 指针（只在内存里，房间睡过就没了，动一下又有） */
   pointers = new Map();
   /** @type {Map<Conn, number>} 最后一次说话（心跳由平台回，另外问） */
   lastSeen = new Map();
@@ -216,7 +224,7 @@ export class PresenceRoom {
     this.schedule();
   }
 
-  /** @param {Seat} seat @param {[number, number]|null|undefined} point */
+  /** @param {Seat} seat @param {Point|null|undefined} point */
   point(seat, point) {
     if (point === undefined) return;
     if (point === null) {
@@ -227,7 +235,7 @@ export class PresenceRoom {
     // 不在看、在全图那一级的人发来的不要（网页不会发）
     if (!seat.here || seat.here.l === 0) return;
     const before = this.pointers.get(seat.sid);
-    if (before && before[0] === point[0] && before[1] === point[1]) return;
+    if (before && before[0] === point[0] && before[1] === point[1] && before[2] === point[2]) return;
     if (!this.moved.has(seat.sid)) this.moved.set(seat.sid, before ? slotOf(before) : null);
     this.pointers.set(seat.sid, point);
     this.schedule();
@@ -296,7 +304,7 @@ export class PresenceRoom {
       if (this.fresh.has(conn) || this.hello.has(conn)) {
         // 换了卡：看得见的里面挑离他那张卡最近的 FOLLOW_MAX 个
         const all = [];
-        for (const [sid, point] of this.pointers) if (uidOf(sid) !== seat.uid && near(slotOf(point))) all.push([sid, ...point]);
+        for (const [sid, point] of this.pointers) if (uidOf(sid) !== seat.uid && near(slotOf(point))) all.push(rowOf(sid, point));
         if (here && all.length > FOLLOW_MAX) {
           const cx = here.x * SLOT_PX;
           const cy = here.y * SLOT_PX;
@@ -315,14 +323,14 @@ export class PresenceRoom {
           const inside = !!point && near(slotOf(point));
           if (follow.has(sid)) {
             // 跟着的：动了就发；收起了、出了范围就说收起，空出位置
-            if (inside) moved.push([sid, .../** @type {[number, number]} */ (point)]);
+            if (inside) moved.push(rowOf(sid, /** @type {Point} */ (point)));
             else {
               follow.delete(sid);
               moved.push([sid]);
             }
           } else if (inside && follow.size < FOLLOW_MAX) {
             follow.add(sid);
-            moved.push([sid, .../** @type {[number, number]} */ (point)]);
+            moved.push(rowOf(sid, /** @type {Point} */ (point)));
           }
         }
         if (moved.length > 0) out.p = moved;

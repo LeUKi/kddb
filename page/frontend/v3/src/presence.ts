@@ -2,7 +2,8 @@
 // （game/worker/presence.mjs，消息的样子写在那里），挖格子那条不受影响。
 //
 // 发得省：在看哪张卡只在镜头停下 0.5 秒后发，两次至少隔 2 秒；指针只在电脑上、鼠标动了时发，最多 5 次/秒，
-// 停下就不发；页面到后台说一声不看了，回来再说。拿着道具时不发指针（瞄准的格子不给别人看）。
+// 停下就不发；页面到后台说一声不看了，回来再说。指针带着手上的道具（别人的指针上画那个图标）；拿着望远镜时
+// 不发（看哪一格只有自己知道）。
 import { atom } from 'jotai'
 import { gameApi, store, toast, uidAtom } from './state'
 
@@ -10,10 +11,15 @@ export interface Seat { uid: number; name: string; c: number }
 /** 别人：座位号 → 是谁、在看哪张卡（只有在看的） */
 export const seatsAtom = atom<Record<string, Seat>>({})
 export const mySidAtom = atom<string | null>(null)
-/** 别人的指针（世界坐标）：座位号 → [x, y]。游戏站只发我看得见的那些 */
-export const pointersAtom = atom<Record<string, [number, number]>>({})
-/** 正冒着的表情：uid（自己的是 'me'）→ 哪个、什么时候、冒在指针旁还是名字上 */
-export interface Bubble { n: number; at: number; onPointer: boolean }
+/** 指针：世界坐标和手上的道具（Peers.tsx 的 TOOLS） */
+export type Point = [number, number, number]
+/** 别人的指针：座位号 → 在哪、拿着什么。游戏站只发我看得见的那些 */
+export const pointersAtom = atom<Record<string, Point>>({})
+/**
+ * 正冒着的表情：uid（自己的是 'me'）→ 哪个、什么时候、冒在指针旁还是名字上。自己在地图上右键扔的带着
+ * 扔的地方（世界坐标），从那里冒；用按钮扔的从按钮上冒
+ */
+export interface Bubble { n: number; at: number; onPointer: boolean; where?: [number, number] }
 export const bubblesAtom = atom<Record<string, Bubble>>({})
 
 export interface PresenceSettings {
@@ -81,7 +87,7 @@ let watchWanted: [number, number, number, 0 | 1 | 2] | null = null
 let watchSent: string | null = null
 let watchLastAt = 0
 let watchTimer: ReturnType<typeof setTimeout> | undefined
-let pointerOf: (() => [number, number] | null) | null = null
+let pointerOf: (() => Point | null) | null = null
 let pointerSent: string | null = null
 let pointerLastAt = 0
 let pointerTimer: ReturnType<typeof setTimeout> | undefined
@@ -148,7 +154,7 @@ function flushWatch() {
  * 指针动了：where 在发的时候才算（算世界坐标要量地图的位置，鼠标每动一下都量不值得）；返回 null 是收起。
  * 最多 5 次/秒，最后一下一定发。
  */
-export function reportPointer(where: (() => [number, number] | null) | null) {
+export function reportPointer(where: (() => Point | null) | null) {
   pointerOf = where
   if (pointerTimer !== undefined) return
   const wait = pointerLastAt + POINTER_GAP_MS - Date.now()
@@ -162,7 +168,7 @@ export function reportPointer(where: (() => [number, number] | null) | null) {
 function flushPointer() {
   const allowed = visible && store.get(settingsAtom).mine && !!watchWanted && watchWanted[3] !== 0 && JSON.stringify({ w: watchWanted }) === watchSent
   const point = allowed ? pointerOf?.() ?? null : null
-  const text = JSON.stringify({ p: point ? [Math.round(point[0]), Math.round(point[1])] : null })
+  const text = JSON.stringify({ p: point ? [Math.round(point[0]), Math.round(point[1]), ...(point[2] ? [point[2]] : [])] : null })
   if (text === pointerSent) return
   if (conn?.send(text)) {
     pointerSent = text
@@ -170,9 +176,9 @@ function flushPointer() {
   }
 }
 
-/** 扔一个表情：自己这边从表情按钮上冒出来。没连上、还在冷却时不扔，返回 false。 */
+/** 扔一个表情：自己这边从扔的地方（where，世界坐标）或表情按钮上冒出来。没连上、还在冷却时不扔，返回 false。 */
 export const emoteReadyAtAtom = atom(0)
-export function sendEmote(n: number) {
+export function sendEmote(n: number, where?: [number, number]) {
   const now = Date.now()
   if (now < store.get(emoteReadyAtAtom)) return false
   if (!watchSent || watchSent === JSON.stringify({ w: null }) || !conn?.send(JSON.stringify({ e: n }))) {
@@ -180,13 +186,13 @@ export function sendEmote(n: number) {
     return false
   }
   store.set(emoteReadyAtAtom, now + EMOTE_COOL_MS)
-  showBubble('me', n, false)
+  showBubble('me', n, false, where)
   return true
 }
 
-function showBubble(who: string, n: number, onPointer: boolean) {
+function showBubble(who: string, n: number, onPointer: boolean, where?: [number, number]) {
   const at = Date.now() + Math.random()
-  store.set(bubblesAtom, value => ({ ...value, [who]: { n, at, onPointer } }))
+  store.set(bubblesAtom, value => ({ ...value, [who]: { n, at, onPointer, ...(where ? { where } : {}) } }))
   setTimeout(() => store.set(bubblesAtom, value => {
     if (value[who]?.at !== at) return value
     const next = { ...value }
@@ -208,7 +214,7 @@ export function onText(text: string) {
   if (typeof data !== 'object' || data === null) return
   const hello = typeof data.hi === 'string'
   if (hello) store.set(mySidAtom, data.hi as string)
-  let pointers: Record<string, [number, number]> | null = null
+  let pointers: Record<string, Point> | null = null
   if (Array.isArray(data.w)) {
     const seats = hello ? {} : { ...store.get(seatsAtom) }
     for (const row of data.w.filter(isRow)) {
@@ -227,8 +233,8 @@ export function onText(text: string) {
   if (moved) {
     pointers ??= { ...store.get(pointersAtom) }
     for (const row of moved.filter(isRow)) {
-      const [sid, x, y] = row as [string, number?, number?]
-      if (typeof x === 'number' && typeof y === 'number') pointers[sid] = [x, y]
+      const [sid, x, y, tool] = row as [string, number?, number?, number?]
+      if (typeof x === 'number' && typeof y === 'number') pointers[sid] = [x, y, typeof tool === 'number' ? tool : 0]
       else delete pointers[sid]
     }
   }

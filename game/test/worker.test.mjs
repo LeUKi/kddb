@@ -696,6 +696,8 @@ describe("在场：指针、谁在看、表情（docs/V3_ITEMS.md §20）", () =
     flush();
     for (const c of [a, near, far, mid, overview, twin]) take(c);
     say(room, a, { p: [10, -20] });
+    say(room, a, { p: [12, -20, 99] });
+    say(room, a, { p: [12, -20, -1] });
     say(room, a, { p: [12, -20] });
     flush();
     assert.deepEqual(take(near), [{ p: [["s1", 12, -20]] }]);
@@ -747,6 +749,23 @@ describe("在场：指针、谁在看、表情（docs/V3_ITEMS.md §20）", () =
     say(room, others[FOLLOW_MAX + 2], { p: [2, 2] }, NOW + 40);
     flush();
     assert.deepEqual(take(viewer), [{ p: [["s2"], [`s${FOLLOW_MAX + 4}`, 2, 2]] }]);
+  });
+
+  it("指针带着手上的道具：换了道具也算动了；镐子（0）不带", () => {
+    const { room, flush } = setup();
+    const [a, b] = [conn(), conn()];
+    room.join(a, { uid: 1, name: "a" }, NOW);
+    room.join(b, { uid: 2, name: "b" }, NOW);
+    say(room, a, { w: [1, 0, 0, 2] });
+    say(room, b, { w: [1, 0, 0, 2] });
+    flush();
+    take(b);
+    say(room, a, { p: [5, 5, 3] });
+    flush();
+    assert.deepEqual(take(b), [{ p: [["s1", 5, 5, 3]] }]);
+    say(room, a, { p: [5, 5, 0] });
+    flush();
+    assert.deepEqual(take(b), [{ p: [["s1", 5, 5]] }]);
   });
 
   it("换了卡给他看得见的全部指针；不在看了、到全图、走了指针都收起", () => {

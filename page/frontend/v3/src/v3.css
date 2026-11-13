@@ -802,8 +802,21 @@ button.effect-body { cursor: pointer; }
 .peer { position: absolute; left: 0; top: 0; transition: transform .24s linear; will-change: transform; }
 .peer-body { position: relative; transform: scale(var(--px, 1)); transform-origin: 0 0; }
 .peer-arrow { display: block; width: 22px; height: 32px; filter: drop-shadow(0 1px 1px #0008); }
-.peer-name { position: absolute; left: 18px; top: 26px; max-width: 120px; overflow: hidden; padding: 1px 6px; color: #10161b; background: var(--peer); border-radius: 6px; font-size: 11px; font-weight: 600; line-height: 1.5; white-space: nowrap; text-overflow: ellipsis; }
-.peer .emote-bubble { left: 22px; bottom: 30px; translate: 0 0; }
+/* 手上的道具：和自己的指针一样挂在箭头右下（cursor.ts 画好的 --tool-*，2 倍） */
+.peer-tool { position: absolute; left: 24px; top: 26px; width: 36px; height: 36px; background: no-repeat center / 100% 100%; image-rendering: pixelated; }
+.peer-name { position: absolute; left: 16px; top: 0; max-width: 120px; overflow: hidden; padding: 1px 6px; color: #10161b; background: var(--peer); border-radius: 6px; font-size: 11px; font-weight: 600; line-height: 1.5; white-space: nowrap; text-overflow: ellipsis; }
+.peer .emote-bubble { left: 30px; bottom: 34px; }
+/* 自己右键扔的：从扔的地方往上冒 */
+.peer.is-me { z-index: 6; pointer-events: none; }
+.peer.is-me .emote-bubble { left: 0; bottom: 10px; }
+
+/* 右键弹出的表情圈（Peers.tsx EmoteWheel）：圈心是点右键的地方 */
+.emote-wheel { position: absolute; z-index: 8; width: 0; height: 0; }
+.emote-wheel::before { content: ''; position: absolute; left: -5px; top: -5px; width: 10px; height: 10px; border: 2px solid #ffffffb3; border-radius: 50%; box-shadow: 0 0 0 1px #0008; }
+.emote-wheel-item { position: absolute; left: -23px; top: -23px; display: grid; place-items: center; width: 46px; height: 46px; padding: 0; background: #11171df0; border: 1px solid #ffffff33; border-radius: 50%; box-shadow: 0 4px 12px #0009; cursor: pointer; transform: translate(var(--dx), var(--dy)); animation: wheel-in .14s var(--ease-out, ease-out) both; }
+.emote-wheel-item:disabled { opacity: .45; cursor: default; }
+@media (hover: hover) { .emote-wheel-item:not(:disabled):hover { background: #2c373f; border-color: #8fe3f0; } }
+@keyframes wheel-in { from { opacity: 0; transform: translate(0, 0) scale(.4); } }
 
 .card-head-end { display: inline-flex; align-items: center; gap: 8px; min-width: 0; margin-left: auto; }
 .watchers { position: relative; display: inline-flex; align-items: center; gap: 0; padding: 0; color: var(--muted); background: none; border: 0; font: inherit; font-size: 12px; pointer-events: auto; cursor: pointer; }
@@ -846,6 +859,7 @@ button.effect-body { cursor: pointer; }
 }
 @media (prefers-reduced-motion: reduce) {
   .peer { transition: none; }
+  .emote-wheel-item { animation: none; }
   .emote-bubble { animation-name: emote-fade; }
   @keyframes emote-fade { 0%, 85% { opacity: 1; } 100% { opacity: 0; } }
 }

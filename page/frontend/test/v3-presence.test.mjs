@@ -33,16 +33,16 @@ test('刚连上换成整份名单；换卡、走了跟着改；同一个人两�
   assert.deepEqual(watchers(), { 7: ['小刚'] })
 })
 
-test('指针：P 是全部、p 是动了的，只有座位号的收起；不看了的人指针也收起', () => {
+test('指针：P 是全部、p 是动了的，只有座位号的收起；带着手上的道具（没带是镐子 0）；不看了的人指针也收起', () => {
   const { store } = state
   presence.onText(JSON.stringify({ hi: 'me', w: [['a', 2, '小明', 5], ['b', 3, '小红', 5]], P: [['a', 10, 20]] }))
-  assert.deepEqual(store.get(presence.pointersAtom), { a: [10, 20] })
-  presence.onText(JSON.stringify({ p: [['b', 1, 2], ['a']] }))
-  assert.deepEqual(store.get(presence.pointersAtom), { b: [1, 2] })
+  assert.deepEqual(store.get(presence.pointersAtom), { a: [10, 20, 0] })
+  presence.onText(JSON.stringify({ p: [['b', 1, 2, 3], ['a']] }))
+  assert.deepEqual(store.get(presence.pointersAtom), { b: [1, 2, 3] })
   presence.onText(JSON.stringify({ w: [['b', 3, '小红', null]] }))
   assert.deepEqual(store.get(presence.pointersAtom), {})
   presence.onText(JSON.stringify({ P: [['a', 3, 3]] }))
-  assert.deepEqual(store.get(presence.pointersAtom), { a: [3, 3] })
+  assert.deepEqual(store.get(presence.pointersAtom), { a: [3, 3, 0] })
 })
 
 test('表情按人记：有指针的冒在指针旁，没有的冒在“在看”的名字上；看不懂的不要', () => {
