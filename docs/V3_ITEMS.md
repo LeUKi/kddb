@@ -471,3 +471,14 @@
 - 谁在看：约 0.5～1 天。
 - 表情：挑选、气泡动画、画表情：约 1 天。
 - Stage 上用机器人压一次（100 个指针一起动），量房间的 CPU 和网页帧率：约 0.5 天。
+
+**照 Cloudflare 官方做法**（2026-11-13 对过 Rules of Durable Objects 和 WebSocket 最佳实践）
+
+- 已经这样做的，新房间照旧：一个红包一个房间，不搞全局的大房间；指针另开一个房间，也正是官方说的按职责分开。用休眠 WebSocket（`acceptWebSocket`），没人发消息时房间睡着，不收时长费。`locationHint: "apac"`。发出去的消息 100 毫秒合一批（官方建议 50～100 毫秒）。
+- 新房间要注意的：
+  - 合批的定时器只在有人动时排上，没人动就不排。`setTimeout` 会让房间一直醒着。
+  - 每条连接的状态（是谁、在看哪张卡、上次扔表情的时间）放在 `serializeAttachment`（每条最多 16 KB），房间睡醒还在；不写存储。
+  - 及时去掉合上电脑、断了网的人：浏览器发不了 ping 帧，用 `setWebSocketAutoResponse` 让运行时自己回 pong，不叫醒房间；要刷新“谁在看”时用 `getWebSocketAutoResponseTimestamp` 看最后一次心跳，超过 60 秒没有的算走了。
+  - 票据先在 Worker 里验，验过再转给房间，省一次房间请求（票据是签名的，Worker 自己能验）。现在挖格子的房间是在房间里验的，可以顺手改。
+  - 消息尽量小：坐标取整，用数组不用对象。
+- 不用的：Cloudflare 的 PartyKit（partyserver、partysocket）把上面这些包好了，还有指针的例子；我们已经有自己的推送和重连，不引入，照它的做法写。Cloudflare Realtime（WebRTC）适合语音视频或几十毫秒内的延迟，指针 100 毫秒够了。
