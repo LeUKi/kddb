@@ -6,7 +6,7 @@ import { signVoucher } from "../shared/voucher.mjs";
 import { pageFrom, SDK_URL, withSdkFrom } from "../worker/page.mjs";
 import { inScope, outOfScope } from "../worker/scope.mjs";
 import { LivePushes, PUSH_EVERY_MS } from "../worker/push.mjs";
-import { EMOTE_GAP_MS, FLUSH_MS, FOLLOW_MAX, PresenceRoom, SLOT_PX, STALE_MS } from "../worker/presence.mjs";
+import { EMOTE_GAP_MS, FLUSH_MS, FOLLOW_MAX, PresenceRoom, SLOT_PX, STALE_MS, SWEEP_MS, SWEEP_QUIET_MS } from "../worker/presence.mjs";
 import { readFileSync } from "node:fs";
 import { BOT_BASE, botKeyValid } from "../worker/bots.mjs";
 import { newCard } from "../shared/rules.mjs";
@@ -905,6 +905,26 @@ describe("在场：指针、谁在看、表情（docs/V3_ITEMS.md §20）", () =
     assert.equal(b.closed, null);
     flush();
     assert.deepEqual(take(b), [{ w: [["s1", 1, "a", null]] }]);
+  });
+
+  it("有人说话时顺手查走了的人，最多一分钟一次；睡醒后第一句就查（没人说话时靠十分钟一次的闹钟）", () => {
+    const { room } = setup();
+    const [a, b] = [conn(), conn()];
+    room.join(a, { uid: 1, name: "a" }, NOW);
+    room.join(b, { uid: 2, name: "b" }, NOW);
+    const dead = (/** @type {unknown} */ c) => (c === b ? 0 : Infinity);
+    // 睡醒的房间 sweptAt 是 0：第一句话就查，b 心跳没了 90 秒，断开
+    room.sweepSometimes(NOW + STALE_MS + 1, dead);
+    assert.equal(b.closed, 4000);
+    assert.equal(room.seats.size, 1);
+    // 刚查过：一分钟内再说话不查
+    const c = conn();
+    room.join(c, { uid: 3, name: "c" }, NOW);
+    room.sweepSometimes(NOW + STALE_MS + SWEEP_MS - 1, (x) => (x === c ? 0 : Infinity));
+    assert.equal(c.closed, null);
+    room.sweepSometimes(NOW + STALE_MS + 1 + SWEEP_MS, (x) => (x === c ? 0 : Infinity));
+    assert.equal(c.closed, 4000);
+    assert.ok(SWEEP_QUIET_MS >= 10 * SWEEP_MS);
   });
 
   it("房间睡醒：连接上存的座位找回来，接着用", () => {

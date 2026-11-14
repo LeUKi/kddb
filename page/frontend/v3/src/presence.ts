@@ -3,9 +3,10 @@
 //
 // 发得省：在看哪张卡、屏幕上看得到哪些格位在镜头起飞时就报落点（落地时那边的指针已经在了），最多 0.4 秒一次；
 // 指针只在电脑上、鼠标动了时发，最多 5 次/秒，停下就不发；房间说没人的屏幕和你重叠时也不发；页面到后台说一声
-// 不看了，回来再说。指针带着手上的道具（别人的指针上画那个图标）；拿着望远镜时
+// 不看了，满一分钟断开，回来再连、再说。指针带着手上的道具（别人的指针上画那个图标）；拿着望远镜时
 // 不发（看哪一格只有自己知道）。
 import { atom } from 'jotai'
+import type { GameApi } from './api'
 import { gameApi, store, toast, uidAtom } from './state'
 
 export interface Seat { uid: number; name: string; c: number }
@@ -94,18 +95,37 @@ let pointerSent: string | null = null
 let pointerLastAt = 0
 let pointerTimer: ReturnType<typeof setTimeout> | undefined
 
-/** 连上在场的房间（地图打开时）；关掉地图时 stopPresence。 */
-export function startPresence() {
-  const api = gameApi()
-  if (!api || conn) return
-  conn = api.presence(onText, onOpen, onClose)
+/** 页面在后台满这么久就断开在场的连接，回到前台再连：看不见的人不算在看，没人的房间也能一直睡着（不叫醒、不收时长费）。 */
+export const HIDDEN_DROP_MS = 60_000
+
+/** 地图开着（startPresence 到 stopPresence 之间） */
+let wanted: { presence: GameApi['presence'] } | null = null
+let hiddenTimer: ReturnType<typeof setTimeout> | undefined
+
+/** 连上在场的房间（地图打开时）；关掉地图时 stopPresence。api 是测试换的。 */
+export function startPresence(api: { presence: GameApi['presence'] } | null = gameApi()) {
+  if (!api || wanted) return
+  wanted = api
+  visible = document.visibilityState === 'visible'
   document.addEventListener('visibilitychange', onVisibility)
+  connect()
 }
 
 export function stopPresence() {
+  wanted = null
+  document.removeEventListener('visibilitychange', onVisibility)
+  clearTimeout(hiddenTimer)
+  disconnect()
+}
+
+function connect() {
+  if (!wanted || conn) return
+  conn = wanted.presence(onText, onOpen, onClose)
+}
+
+function disconnect() {
   conn?.close()
   conn = null
-  document.removeEventListener('visibilitychange', onVisibility)
   clearTimeout(watchTimer)
   clearTimeout(pointerTimer)
   pointerTimer = undefined
@@ -131,6 +151,12 @@ function onClose() {
 
 function onVisibility() {
   visible = document.visibilityState === 'visible'
+  clearTimeout(hiddenTimer)
+  // 到后台先说不在看了（马上从别人的“在看”里消失），满一分钟再断开；回来时断了就重连，连上会重新说在看哪张
+  if (visible) connect()
+  else hiddenTimer = setTimeout(() => {
+    if (!visible) disconnect()
+  }, HIDDEN_DROP_MS)
   flushWatch()
 }
 

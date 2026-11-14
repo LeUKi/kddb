@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { after, before, test } from 'node:test'
+import { after, before, mock, test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { createServer } from 'vite'
 
@@ -55,4 +55,38 @@ test('表情按人记：有指针的冒在指针旁，没有的冒在“在看�
   presence.onText('不是 JSON')
   presence.onText(JSON.stringify({ w: [[1, 2, 3]] }))
   assert.equal(Object.keys(store.get(presence.seatsAtom)).length, 2)
+})
+
+test('页面在后台满一分钟断开在场的连接，回到前台再连；没满一分钟就回来的不断', () => {
+  mock.timers.enable({ apis: ['setTimeout'] })
+  const listeners = {}
+  globalThis.document = { visibilityState: 'visible', addEventListener: (type, fn) => { listeners[type] = fn }, removeEventListener: type => { delete listeners[type] } }
+  let opened = 0
+  let closed = 0
+  const api = { presence: () => { opened += 1; return { send: () => true, close: () => { closed += 1 } } } }
+  const hidden = yes => {
+    document.visibilityState = yes ? 'hidden' : 'visible'
+    listeners.visibilitychange()
+  }
+  try {
+    presence.startPresence(api)
+    assert.equal(opened, 1)
+    hidden(true)
+    mock.timers.tick(presence.HIDDEN_DROP_MS - 1)
+    hidden(false)
+    mock.timers.tick(presence.HIDDEN_DROP_MS)
+    assert.deepEqual([opened, closed], [1, 0])
+    hidden(true)
+    mock.timers.tick(presence.HIDDEN_DROP_MS)
+    assert.deepEqual([opened, closed], [1, 1])
+    hidden(false)
+    assert.deepEqual([opened, closed], [2, 1])
+    presence.stopPresence()
+    assert.deepEqual([opened, closed], [2, 2])
+    assert.equal(listeners.visibilitychange, undefined)
+  } finally {
+    presence.stopPresence()
+    mock.timers.reset()
+    globalThis.document = { visibilityState: 'visible', addEventListener() {}, removeEventListener() {} }
+  }
 })

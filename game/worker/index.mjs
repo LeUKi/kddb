@@ -13,7 +13,7 @@ import { signVoucher } from "../shared/voucher.mjs";
 import { makeNonce, makeTicket, nonceValid, readTicket, TICKET_TTL_MS, verifyIdentity } from "./auth.mjs";
 import { pageFrom } from "./page.mjs";
 import { BOT_BASE, BOT_DIGS_MAX, botKeyValid } from "./bots.mjs";
-import { PresenceRoom, SWEEP_MS } from "./presence.mjs";
+import { PresenceRoom, SWEEP_QUIET_MS } from "./presence.mjs";
 import { LivePushes } from "./push.mjs";
 import { MineRoom, RoomError } from "./room.mjs";
 import { inScope, outOfScope } from "./scope.mjs";
@@ -340,8 +340,8 @@ export class MineObject extends DurableObject {
 
 /**
  * 在场的房间（docs/V3_ITEMS.md §20）：别人的指针、谁在看哪张卡、表情。逻辑在 presence.mjs；这里收发、
- * 睡醒时把连接上存的座位找回来、每分钟查一次心跳没了的人。网页的心跳 "ping" 由平台自动回 "pong"，
- * 不叫醒房间；没人说话时房间睡着，不收时长费。
+ * 睡醒时把连接上存的座位找回来、查心跳没了的人（有人说话时顺手查，最多一分钟一次；没人说话时闹钟十分钟一次）。
+ * 网页的心跳 "ping" 由平台自动回 "pong"，不叫醒房间；没人说话时房间睡着，不收时长费。
  */
 export class PresenceObject extends DurableObject {
   /** @param {DurableObjectState} ctx @param {Env} env */
@@ -364,13 +364,19 @@ export class PresenceObject extends DurableObject {
     const pair = new WebSocketPair();
     this.ctx.acceptWebSocket(pair[1]);
     this.room.join(pair[1], { uid, name }, Date.now());
-    if ((await this.ctx.storage.getAlarm()) === null) await this.ctx.storage.setAlarm(Date.now() + SWEEP_MS);
+    if ((await this.ctx.storage.getAlarm()) === null) await this.ctx.storage.setAlarm(Date.now() + SWEEP_QUIET_MS);
     return new Response(null, { status: 101, webSocket: pair[0] });
   }
 
   async webSocketMessage(/** @type {WebSocket} */ socket, /** @type {string|ArrayBuffer} */ message) {
-    this.room.message(socket, typeof message === "string" ? message : "", Date.now());
+    const now = Date.now();
+    this.room.message(socket, typeof message === "string" ? message : "", now);
+    this.room.sweepSometimes(now, this.lastAlive);
   }
+
+  /** 平台最后一次替这条连接自动回心跳的时刻（没有是 0）。 */
+  lastAlive = (/** @type {import("./presence.mjs").Conn} */ conn) =>
+    this.ctx.getWebSocketAutoResponseTimestamp(/** @type {WebSocket} */ (/** @type {unknown} */ (conn)))?.getTime() ?? 0;
 
   async webSocketClose(/** @type {WebSocket} */ socket, /** @type {number} */ code) {
     this.room.leave(socket);
@@ -385,10 +391,10 @@ export class PresenceObject extends DurableObject {
     this.room.leave(socket);
   }
 
-  /** 每分钟一次：心跳没了的人当作走了；还有人就再定一次。 */
+  /** 没人说话时的兜底（十分钟一次）：心跳没了的人当作走了；还有人就再定一次。 */
   async alarm() {
     const now = Date.now();
-    this.room.sweep(now, (conn) => this.ctx.getWebSocketAutoResponseTimestamp(/** @type {WebSocket} */ (/** @type {unknown} */ (conn)))?.getTime() ?? 0);
-    if (this.room.seats.size > 0) await this.ctx.storage.setAlarm(now + SWEEP_MS);
+    this.room.sweep(now, this.lastAlive);
+    if (this.room.seats.size > 0) await this.ctx.storage.setAlarm(now + SWEEP_QUIET_MS);
   }
 }

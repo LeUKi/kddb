@@ -30,8 +30,13 @@ export const EMOTE_GAP_MS = 2000;
 export const EMOTE_COUNT = 8;
 /** 多久没有心跳、没说话算走了（网页 25 秒一次心跳）。 */
 export const STALE_MS = 90_000;
-/** 多久查一次走了的人。 */
+/** 有人说话时，最多多久顺手查一次走了的人（不用闹钟）。 */
 export const SWEEP_MS = 60_000;
+/**
+ * 没人说话时，闹钟多久叫醒房间查一次。叫醒一次房间要醒十几秒：以前每分钟一次，开着页面没人动的房间一小时
+ * 醒一刻钟（2026-11-14 量的，夜里大半的时长费是这个）。网页在后台满一分钟会自己断开，这里只兜底断网没说再见的。
+ */
+export const SWEEP_QUIET_MS = 10 * 60_000;
 /**
  * 每人最多跟着几个指针（网页也只画这么多）：换卡时挑离他那张卡最近的，之后谁走了、出了范围再补上。
  * 100 个人挤在一张卡上时，每人收的从每秒 9 KB 降到 2 KB 以内，房间要拼的也少。
@@ -115,6 +120,8 @@ export class PresenceRoom {
   budget = new Map();
   /** @type {Map<number, number>} uid → 上一个表情的时刻 */
   lastEmote = new Map();
+  /** 上次查走了的人的时刻（房间睡过就从 0 算，醒来第一句话就查一次） */
+  sweptAt = 0;
   /** @type {Map<Conn, Set<string>>} 每人跟着的那些指针（最多 FOLLOW_MAX 个） */
   follows = new Map();
 
@@ -281,8 +288,14 @@ export class PresenceRoom {
     this.schedule();
   }
 
+  /** 有人说话时顺手查：离上次查满 SWEEP_MS 才查。 */
+  sweepSometimes(/** @type {number} */ now, /** @type {(conn: Conn) => number} */ lastAlive) {
+    if (now - this.sweptAt >= SWEEP_MS) this.sweep(now, lastAlive);
+  }
+
   /** 心跳没了的人：断开，当作走了。lastAlive(conn) 是平台上最后一次自动回心跳的时刻（没有是 0）。 */
   sweep(/** @type {number} */ now, /** @type {(conn: Conn) => number} */ lastAlive) {
+    this.sweptAt = now;
     for (const [conn, seat] of [...this.seats]) {
       const alive = Math.max(seat.joined, this.lastSeen.get(conn) ?? 0, lastAlive(conn));
       if (now - alive <= STALE_MS) continue;
