@@ -1,8 +1,10 @@
 import { cp, rm } from 'node:fs/promises'
 import { build } from 'vite'
+import { requireAssets } from '../../scripts/minecraft-assets.mjs'
 
 // v3：先构建线上那份（dist-v3/，scripts/site.mjs 把它放到游戏站的 /v3/ 下），
 // 再构建开发包那份，放进 page/（npm run page 从这里发网页）。
+requireAssets()
 await build({ configFile: new URL('./vite.v3.config.ts', import.meta.url).pathname, mode: 'site' })
 await build({ configFile: new URL('./vite.v3.config.ts', import.meta.url).pathname, mode: 'kit' })
 const kit = new URL('./dist-v3-kit/', import.meta.url)

@@ -10,10 +10,13 @@ Minecraft 主题的多人共享刮格红包，使用 lafish 红包站代码协�
 
 ```sh
 npm ci
+npm run assets
 npm --prefix page/frontend ci
 npm --prefix page/frontend run build
 node page/dev/server.mjs
 ```
+
+`npm run assets` 把网页用的 Minecraft 原版素材取回来（仓库里不带，见下面“来源与素材”），只要跑一次；音效要装 ffmpeg。
 
 打开两个标签页，分别扮演两名玩家：
 
@@ -108,7 +111,7 @@ node page/dev/verify.mjs
 | `page/index.html`、`page/assets/` | 同步生成的官方本地预览入口 |
 | `page/dev/` | 项目自有的本地多人包装与 HTTP 验证脚本 |
 | `scripts/verify-setup.mjs` | 在官方沙箱补充验证 setup 和参数交叉约束 |
-| `artifacts/` | 实际浏览器预览截图 |
+| `scripts/minecraft-assets.mjs` | 按清单取回 Minecraft 原版素材并核对散列（`npm run assets`） |
 | `runtime/`、`cli/`、SDK 类型与 schema | 官方开发包原样保留 |
 
 网页只展示公开牌面和当前玩家的私有数据。资金和权限判断都由判定器、红包站执行；提交结果未确认时先查询记录，查询失败会暂停继续挖掘和领取奖励，并显示“重新确认状态”，不会自动重提。
@@ -132,7 +135,7 @@ v2 本轮完成源码、平台测试和网页构建，尚未推送、部署或�
 
 官方第五版开发包来自 [LeUKi/hb，固定版本 ed192c1](https://github.com/LeUKi/hb/tree/ed192c1fd98de2cea12cb6e8ce3710b21ea647dd/kit)，已同步官方模拟器时钟修复。原始开发包说明保存在 [UPSTREAM_KIT_README.md](docs/UPSTREAM_KIT_README.md)，许可见 [LICENSE](LICENSE)。
 
-道具使用 Minecraft 原版贴图与原版背包图像，来源与校验见 [MINECRAFT_ASSETS.md](docs/MINECRAFT_ASSETS.md)。双铁镐是两张原版铁镐 PNG 错位叠放，洞壁背景为项目原创。本项目不是 Minecraft 官方产品。
+道具使用 Minecraft 原版贴图与原版背包图像，来源与校验见 [MINECRAFT_ASSETS.md](docs/MINECRAFT_ASSETS.md)。这些文件是 Mojang 的，仓库里不带，只有清单（`manifest.json`、两份 `provenance.json`）；`npm run assets` 从 Mojang 的官方地址和 Minecraft Wiki 取回来，逐个核对大小和散列。双铁镐是两张原版铁镐 PNG 错位叠放，洞壁背景为项目原创。本项目不是 Minecraft 官方产品。
 
 ## 新玩家与多人反馈
 

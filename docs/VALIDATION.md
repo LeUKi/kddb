@@ -1,5 +1,7 @@
 # 矿洞夺宝验证记录
 
+> 文中提到的 `artifacts/` 下的截图、日志和测量文件是当时本机留的验收证据，没有放进公开仓库。
+
 2026-11-02 仓库归档：本批 v2 源码、测试、前端构建产物与验证证据纳入本次 Git 提交，沿用下列已有验证结果。`artifacts/v2/mine-v2-production-deploy.log` 记录静态网页成功部署到 `hbweb-kddb.lafi.sh`，版本为 `6475e542-1d5e-450e-96cc-9a0022ae68dd`；本次提交操作不重新部署，也不代表红包站判定器已更新。下文“未推送、部署”为相应验证完成当时的状态。
 
 ## v2 随机规格、作者参数与紧凑布局（2026-11-01，当前）
@@ -31,7 +33,7 @@
 
 本轮体验地址为 `http://127.0.0.1:8732/?layout=multi&players=3&accept=1&open=1`；原先 8730 的旧进程和试玩状态仍保留，因此旧进程不会因磁盘上的 kit 更新自动得到新时钟。截图和报告在 `artifacts/v2/`。本轮未推送、部署或产生真实付款。
 
-可复查证据保存于 `artifacts/v2/`，交付包另有一份：[桌面](../artifacts/v2/mine-v2-desktop.png)、[手机](../artifacts/v2/mine-v2-mobile.png)、[320px](../artifacts/v2/mine-v2-320.png)、[首次练习](../artifacts/v2/mine-v2-practice.png)、[布局报告](../artifacts/v2/mine-v2-browser-report.json)、[双人联调](../artifacts/v2/mine-v2-multiplayer-report.json)、[原生参数](../artifacts/v2/mine-v2-author-params-report.json)。此轮未推送、部署或发出真实红包；要启用 v2，需发布静态网页并把配套 judge.js／tests.json 上传红包站，新版用于新红包。触摸真机、线上并发容量、真实付款、实际玩家难度与理解率仍未实测，公开 SDK 也没有准确排队人数接口。
+可复查证据保存于 `artifacts/v2/`，交付包另有一份：桌面、手机、320px、首次练习、布局报告、双人联调、原生参数。此轮未推送、部署或发出真实红包；要启用 v2，需发布静态网页并把配套 judge.js／tests.json 上传红包站，新版用于新红包。触摸真机、线上并发容量、真实付款、实际玩家难度与理解率仍未实测，公开 SDK 也没有准确排队人数接口。
 
 ## 新玩家与多人交互改进（2026-10-31，历史）
 
@@ -57,9 +59,9 @@
 
 证据：
 
-- [原地练习](../artifacts/ux-practice.png)、[练习选择状态](../artifacts/ux-practice-choice.png)
-- [机会区与作者标记](../artifacts/ux-mobile-multiplayer.png)、[最后机会](../artifacts/ux-mobile-last-chance.png)、[领取确认](../artifacts/ux-mobile-claim-confirm.png)、[末次结算](../artifacts/ux-exhaustion.png)
-- [桌面](../artifacts/ux-desktop.png)、[窄屏测量](../artifacts/ux-responsive-checks.json)
+- 原地练习、练习选择状态
+- 机会区与作者标记、最后机会、领取确认、末次结算
+- 桌面、窄屏测量
 
 发布到现有 Worker `hbweb-kddb`，自定义域名 https://hbweb-kddb.lafi.sh/ 。Cloudflare 版本：`2e850fea-5c49-451b-b2c2-9a57654f6623`。最终构建入口引用 `index-DMqjhlkw.js` 与 `index-DEHZzTG7.css`。本次发布只替换静态网页，红包站内已保存的判定器不会自动替换；新字段和入口提示需要采用仓库中的最新 `judge.js`，旧判定器仍有前端兼容。
 
@@ -124,7 +126,7 @@
 | 手机390×778 | 25 | 57.8px | 14px | 无 | 是 |
 | 手机360×715 | 25 | 54.2px | 14px | 无 | 是 |
 
-截图及DOM测量： [完整界面](../artifacts/quiet-desktop.jpg)、[390px](../artifacts/quiet-mobile-390.png)、[360px](../artifacts/quiet-mobile-360.png)、[规则弹窗](../artifacts/quiet-mobile-rules.png)、[结算](../artifacts/quiet-final-settlement.jpg)、[布局测量](../artifacts/quiet-ui-metrics.json)。先前的动态采样保留为开发证据；用户明确表示不需要录屏后停止录制，不再以录屏作为交付内容。后续内容为此前各轮验证记录。
+截图及DOM测量： 完整界面、390px、360px、规则弹窗、结算、布局测量。先前的动态采样保留为开发证据；用户明确表示不需要录屏后停止录制，不再以录屏作为交付内容。后续内容为此前各轮验证记录。
 
 ## 原版素材、矿洞环境与完整反馈序列
 
@@ -158,9 +160,9 @@
 
 证据：
 
-- [最终桌面矿洞](../artifacts/desktop-cave.jpg)、[390px](../artifacts/mobile-cave.png)、[360px](../artifacts/mobile-cave-360.png)、[结算画面](../artifacts/cave-final-settlement.jpg)
-- [钻石实际反馈](../artifacts/diamond-feedback.gif)、[盾牌挡 TNT](../artifacts/shield-block-feedback.gif)、[金苹果翻倍](../artifacts/apple-double-feedback.gif)、[珍珠换卡](../artifacts/pearl-feedback.gif)、[最后机会的图腾](../artifacts/last-chance-totem-feedback.gif)
-- [最终布局和交互测量](../artifacts/cave-ui-metrics.json)、[实际逐帧录制记录](../artifacts/motion-recordings.json)
+- 最终桌面矿洞、390px、360px、结算画面
+- 钻石实际反馈、盾牌挡 TNT、金苹果翻倍、珍珠换卡、最后机会的图腾
+- 最终布局和交互测量、实际逐帧录制记录
 
 下文保留此前的界面精简与首版验证记录。手机尺寸模拟和本地结算的边界见文末，本轮没有进行真实付款。
 
@@ -182,11 +184,11 @@
 
 新版证据：
 
-- [桌面精简版](../artifacts/desktop-simple.png)
-- [390px 手机精简版](../artifacts/mobile-simple.png)
-- [360px 手机精简版](../artifacts/mobile-simple-360.png)
-- [手机收手确认](../artifacts/mobile-simple-cashout.png)
-- [实际渲染字号与尺寸](../artifacts/ui-simplification-metrics.json)
+- 桌面精简版
+- 390px 手机精简版
+- 360px 手机精简版
+- 手机收手确认
+- 实际渲染字号与尺寸
 
 ## 已通过
 
@@ -225,9 +227,9 @@
 
 截图：
 
-- [桌面游戏](../artifacts/desktop.png)
-- [390px 手机游戏](../artifacts/mobile.png)
-- [手机收手确认](../artifacts/mobile-cashout.png)
+- 桌面游戏
+- 390px 手机游戏
+- 手机收手确认
 
 ## 验证边界
 

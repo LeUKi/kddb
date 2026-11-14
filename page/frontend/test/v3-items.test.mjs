@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { after, before, test } from 'node:test'
 import { inflateSync } from 'node:zlib'
 import { fileURLToPath } from 'node:url'
@@ -243,9 +243,11 @@ test('卡周围的说明：余量报还藏着多少钱、有哪几样宝贝，�
   assert.match(regions.regionAbout({ kind: 'trial' }, { items: 2, tntPercent: 25, loot: 1 })[1], /挖到末影珍珠也可能捡到/)
 })
 
+const ASCII_PNG = fileURLToPath(new URL('../public/assets/minecraft/1.21.4/textures/font/ascii.png', import.meta.url))
+
 /** 读 font/ascii.png 的不透明度（1 位调色板的 PNG，0 号色透明）：测试里不用画布也能量字宽。 */
 function asciiAlpha() {
-  const data = readFileSync(fileURLToPath(new URL('../public/assets/minecraft/1.21.4/textures/font/ascii.png', import.meta.url)))
+  const data = readFileSync(ASCII_PNG)
   let at = 8
   let width = 0
   const parts = []
@@ -284,7 +286,8 @@ function asciiAlpha() {
   return (x, y) => ((rows[y][x >> 3] >> (7 - (x & 7))) & 1 ? 255 : 0)
 }
 
-test('原版乱码：字宽从字图量出来，乱码只换成同样宽的字，阴影是颜色的四分之一', () => {
+// 字图是 Minecraft 的素材，仓库里不带：没跑过 npm run assets 就跳过
+test('原版乱码：字宽从字图量出来，乱码只换成同样宽的字，阴影是颜色的四分之一', { skip: !existsSync(ASCII_PNG) && '没有字图，先在仓库根目录跑 npm run assets' }, () => {
   const font = mcfont.measureFont(asciiAlpha())
   // 数字都是 5 像素宽（乱码里的个数不会忽长忽短），i 是 1，空格算 3
   assert.deepEqual([...'0123456789'].map(ch => font.glyphs.get(ch).w), Array(10).fill(5))

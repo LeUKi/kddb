@@ -6,7 +6,7 @@
 - Primary product surfaces: 矿洞夺宝，lafish 红包站代码协议第五版的多人附带网页；单一游戏页面、规则弹窗、本地多人联调页。
 - Evidence reviewed: 用户提供的真实判定记录（只保留匿名统计）、Xbox 游戏无障碍指南 103/109/115/117、Portal 作者的教学关卡复盘；依据和局限见 `docs/UX_RESEARCH.md`。同时遵循官方 `AGENTS.md`、`judge.d.ts`、`page/hb.d.ts`、`examples/scratch-card/`、`cli/lib/page.mjs`。
 - Official kit source: https://github.com/LeUKi/hb/tree/ed192c1fd98de2cea12cb6e8ce3710b21ea647dd/kit 。开发包运行时、CLI、类型与该固定上游一致，包含官方模拟器时钟修复；同步记录见 `docs/KIT_REFRESH.md`。
-- Existing design evidence: `artifacts/desktop-cave.jpg`、`artifacts/mobile-cave.png` 和已实现的游戏页。最新用户要求：原版双铁镐表示额外机会、逐把展示机会、道具数量与问号合并、可恢复的底部日志、中央放大道具演出、单页规则弹窗、对角线翻卡，以及收敛背景。
+- Existing design evidence: 当时的桌面、手机截图（本机验收留档，没有放进仓库）和已实现的游戏页。最新用户要求：原版双铁镐表示额外机会、逐把展示机会、道具数量与问号合并、可恢复的底部日志、中央放大道具演出、单页规则弹窗、对角线翻卡，以及收敛背景。
 - Design guidance: Anthropic `frontend-design` 的单一视觉重点、克制文案和截图自评；https://github.com/anthropics/skills/blob/main/skills/frontend-design/SKILL.md 。
 
 ## Brand
@@ -163,7 +163,7 @@
 - [x] v2 作者参数与紧凑布局已实现，完整规格见 `docs/AUTHORING_V2.md`。七项原生平铺字段与官方选项联动已接入；难度预设仍待真实玩家体验校准，不承诺人均收益。
 - [x] 用户已授权将网页发布至 Cloudflare Workers；正式地址 https://hbweb-kddb.lafi.sh/，Worker 为 `hbweb-kddb`，判定器 `meta.page` 已配置。只发布 `page/frontend/dist/`；身份、判定与结算继续由红包站提供。
 - [ ] 默认小奖 0.10 和卡组比例属于首版试玩值，按实际参与人数与奖池消耗再调。
-- [x] 已完成桌面、390px/360px 窄屏实际渲染检查及双人浏览器联调；截图见 artifacts/，触屏真机仍待复核。
+- [x] 已完成桌面、390px/360px 窄屏实际渲染检查及双人浏览器联调；截图是本机验收留档，触屏真机仍待复核。
 
 ## Quiet cave and confirmed event choreography (2026-10-31)
 

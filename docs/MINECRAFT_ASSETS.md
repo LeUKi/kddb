@@ -1,5 +1,7 @@
 # Minecraft 原版资源来源
 
+这些文件是 Mojang 的，公开仓库里不带。仓库只有清单：`manifest.json`（客户端 JAR 里提取的）、`inventory/provenance.json`（Minecraft Wiki 的背包渲染图）、`sounds/provenance.json`（音效）。在仓库根目录跑 `npm run assets`（`scripts/minecraft-assets.mjs`）照清单从下面这些官方地址取回来：JAR 和 Wiki 的文件逐个核对 SHA-256，和这里记的字节完全一样；Wiki 的图如果后来被人换了，按记下的 SHA-1 去它的历史版本里取。音效（OGG 转 MP3，要 ffmpeg）和附魔金苹果的静态图（GIF 第一帧，要 ImageMagick 或 ffmpeg）是转出来的，只核对来源文件，编码器版本不同时字节会不同、内容一样。`npm run assets -- --check` 只核对不下载；网页构建前缺了会停下来提示。
+
 此页面使用 Minecraft 自己的物品贴图、方块贴图和背包图标。没有重画 SVG，也没有生成替代图案。资源位于 `page/frontend/public/assets/minecraft/1.21.4/`，打包后的 URL 前缀为 `/assets/minecraft/1.21.4/`。
 
 ## 官方 Java 1.21.4 原始资源
