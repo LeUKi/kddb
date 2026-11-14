@@ -42,3 +42,34 @@ test('远处的光：末地宝藏、藏着眼的照旧，别的按越富越亮�
   assert.equal(canvas.glowOf({ ...plain, kind: 'end' }, 3), 'end')
   assert.equal(canvas.glowOf({ ...plain, kind: 'end', finished: true }, 3), null)
 })
+
+test('地图画布（docs/V3_ITEMS.md §22）：格子的位置和按坐标找格子对得上，缝里不算；火把第 1 版在角上、第 2 版在格子正中', async () => {
+  const paint = await server.ssrLoadModule('/v3/src/paint.ts')
+  for (const size of [3, 5, 6, 7]) {
+    const card = { size }
+    for (let index = 0; index < size * size; index++) {
+      const box = paint.cellBox(card, index)
+      assert.equal(paint.cellUnder(card, box.x + box.side / 2, box.y + box.side / 2), index)
+      assert.equal(paint.cellUnder(card, box.x + 0.5, box.y + 0.5), index)
+    }
+    // 第一格和第二格之间的缝
+    const first = paint.cellBox(card, 0)
+    assert.equal(paint.cellUnder(card, first.x + first.side + 2, first.y + 2), null)
+    // 卡外框、内边距上
+    assert.equal(paint.cellUnder(card, 5, 5), null)
+  }
+  const card = { size: 6 }
+  const cell = paint.cellBox(card, 14)
+  assert.deepEqual(paint.torchPoint(card, 14, true), { x: cell.x + cell.side / 2, y: cell.y + cell.side / 2 })
+  assert.deepEqual(paint.torchPoint(card, 14, false), { x: cell.x - 2, y: cell.y - 2 })
+})
+
+test('地图画布：自己挖开时格子上飘的字', async () => {
+  const paint = await server.ssrLoadModule('/v3/src/paint.ts')
+  const result = (over) => ({ kind: 'emerald', cardId: 1, index: 0, amount: 0, blocked: false, text: '', newCardId: null, ...over })
+  assert.equal(paint.floatText(result({ amount: 70 })), '+0.70')
+  assert.equal(paint.floatText(result({ kind: 'tnt', amount: -25 })), '-0.25')
+  assert.equal(paint.floatText(result({ kind: 'tnt', blocked: true })), '挡住了')
+  assert.equal(paint.floatText(result({ kind: 'pearl', loot: 'key' })), '新卡 +1 钥匙')
+  assert.equal(paint.floatText(result({ kind: 'coal', text: '煤炭已经够了' })), '够了，不算')
+})

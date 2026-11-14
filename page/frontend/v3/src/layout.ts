@@ -1,7 +1,7 @@
 import type { PublicCard, RailShape } from './types'
 
 // 区块里固定格子画成什么样（docs/V3_ITEMS.md §10）：铁轨每一格的贴图和方向、试炼密室正中的铜灯、
-// 深暗之域石头上爬着的幽匿块。纯函数，网页里的卡（CardView）和整张地图的画布（thumb.ts）共用。
+// 深暗之域石头上爬着的幽匿块。纯函数，地图画布（paint.ts）和整张地图的低清位图（thumb.ts）共用。
 
 /** 原版的 rail 是南北向的直道、rail_corner 连着南和东；顺时针转多少度得到每一种。 */
 export const RAIL_TEXTURE: Record<RailShape, { corner: boolean; turn: 0 | 90 | 180 | 270 }> = {

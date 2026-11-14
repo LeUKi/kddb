@@ -13,7 +13,7 @@ export const THUMB_PX = 112
 export const INNER_PX = CARD_PX - (PAD + CARD_BORDER) * 2
 
 const BASE = 'assets/minecraft/1.21.4/'
-const ICONS: Partial<Record<Kind | 'pickaxe', string>> = {
+export const ICONS: Partial<Record<Kind | 'pickaxe', string>> = {
   emerald: 'textures/item/emerald.png',
   diamond: 'textures/item/diamond.png',
   // 缩略图里放金苹果的静态首帧（动图在这么小的地方看不出来，还会一直重画）
@@ -44,10 +44,10 @@ const RAIL_CORNER = 'textures/block/rail_corner.png'
 const SCULK = 'textures/block/sculk.png'
 const END_STONE = 'textures/block/end_stone.png'
 /** 各区块没挖开的格子（docs/V3_ITEMS.md §2） */
-const GROUNDS: Partial<Record<NonNullable<PublicCard['kind']>, string>> = {
+export const GROUNDS: Partial<Record<NonNullable<PublicCard['kind']>, string>> = {
   end: END_STONE, trial: 'textures/block/tuff_bricks.png', nether: 'textures/block/netherrack.png', deep: 'textures/block/deepslate_tiles.png',
 }
-const FRAMES: Partial<Record<NonNullable<PublicCard['kind']>, [string, string]>> = {
+export const FRAMES: Partial<Record<NonNullable<PublicCard['kind']>, [string, string]>> = {
   end: ['#d9c27a', '#2a2637'], trial: ['#8c6a4a', '#2b2d2a'], mine: ['#8a6b45', '#2a2118'], nether: ['#8a3a2c', '#2a1214'], deep: ['#1f6a73', '#0d1418'],
 }
 /** 火把在远处只剩一个光点：绿、黄、红 */
@@ -66,7 +66,7 @@ const images = new Map<string, HTMLImageElement>()
 const waiting = new Set<() => void>()
 
 /** 贴图：第一次要时开始加载，加载好了通知画过缺图的画布重画一次。 */
-function image(path: string) {
+export function image(path: string) {
   let img = images.get(path)
   if (!img) {
     img = new Image()

@@ -202,17 +202,30 @@ button.eye-status { cursor: pointer; }
  * 清晰度重新栅格化它们，显卡忙半秒，包着网页的红包站也跟着卡；也不能一按缩小就藏（第一帧近处的卡
  * 一起变成画布上糊的那张，看着闪）
  */
-.map-view.level-0[data-small] .map-block:not(.is-focused, .is-grown) { visibility: hidden; }
-.map-blocks-canvas, .map-glow-canvas, .map-cards-canvas { position: absolute; display: block; }
-.map-glow-canvas { pointer-events: none; }
-.map-blocks-canvas { opacity: 0; transition: opacity .18s var(--ease-out); pointer-events: none; }
-.map-view.level-0[data-small] .map-blocks-canvas { opacity: 1; }
-.map-view.is-pointing .map-cards-canvas { cursor: pointer; }
-.map-hover { position: absolute; border-radius: 16px; pointer-events: none; background: #ffffff0f; box-shadow: inset 0 0 0 calc(1px * var(--px, 1)) #ffffff40; }
-.map-view.level-0 .map-hover { background: #ffffff17; box-shadow: inset 0 0 0 calc(1.5px * var(--px, 1)) #ffffff59; }
-/* 远处长出来的卡（缩略图）：整张一起翻出来 */
-.map-block.is-grown .thumb-canvas { animation: cell-in .45s var(--ease-out) var(--land, 0ms) both; }
-.map-fog { position: absolute; inset: 0; z-index: 2; pointer-events: none; box-shadow: inset 0 0 36px 18px #0d1318; }
+/*
+ * 地图画布（docs/V3_ITEMS.md §22）：整张地图（卡、格子、光、预览、四周的雾）画在这一块和地图区一样大的画布上，
+ * 闲着不画。网页里只剩当前卡上一层看不见的格子（.hit-card）和卡周围的说明、指针、表情这些小东西。
+ */
+.map-paint { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+.map-view.is-pointing .map-paint { cursor: pointer; }
+.hit-card { position: absolute; display: grid; align-content: start; box-sizing: border-box; border: 3px solid transparent; pointer-events: none; }
+.hit-cell { position: relative; display: block; width: auto; height: auto; margin: 0; padding: 0; color: transparent; background: none; border: 0; border-radius: 2px; pointer-events: auto; -webkit-tap-highlight-color: transparent; }
+.hit-cell.covered:enabled { cursor: pointer; }
+.hit-cell.covered:disabled { pointer-events: none; }
+.hit-cell.revealed.has-torch { cursor: help; }
+.hit-cell.is-aim { cursor: crosshair; }
+.hit-cell:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+.map-view.is-cooling:not(.is-aiming) .hit-cell.covered:enabled { cursor: progress; }
+@media (hover: hover) and (pointer: fine) {
+  .map-view.cur-pick .hit-cell.covered:enabled { cursor: var(--cur-pick, pointer); }
+  .map-view.cur-cool .hit-cell.covered:enabled { cursor: var(--cur-cool, progress); }
+  .map-view.cur-ench .hit-cell { cursor: var(--cur-ench, crosshair); }
+  .map-view.cur-spyglass .hit-cell { cursor: var(--cur-spyglass, crosshair); }
+  .map-view.cur-torch .hit-cell { cursor: var(--cur-torch, crosshair); }
+  .map-view.cur-key .hit-cell { cursor: var(--cur-key, crosshair); }
+}
+/* 深暗之域卡角上的噪音：放在区块的左上角 */
+.noise-anchor { position: absolute; pointer-events: none; }
 .map-banner { position: absolute; left: 50%; top: 10px; z-index: 3; max-width: calc(100% - 24px); padding: 5px 14px; color: #1b1408; font-size: 13px; font-weight: 600; text-align: center; background: linear-gradient(#f1c57f, #d79b4f); border-radius: 999px; transform: translateX(-50%); pointer-events: none; }
 .map-hint { position: absolute; left: 50%; top: 10px; z-index: 3; padding: 4px 12px; color: #d8cfbd; font-size: 13px; white-space: nowrap; background: #11171dcc; border-radius: 999px; transform: translateX(-50%); pointer-events: none; }
 
