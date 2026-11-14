@@ -5,7 +5,7 @@ import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, use
 import { CardLabels } from './CardLabels'
 import { useGesture } from '@use-gesture/react'
 import type { Camera, Direction, Level, Viewport, WheelZoom } from './camera'
-import { CARD_PX, slotsOnScreen, withToolbar, cameraAt, cardNear, cardToward, cellCenter, centerOf, edgeFacing, edgePointer, entryPoint, fullyOnScreen, nearestCard, nearestLevel, onScreen, overviewCamera, scaleOf, SLOT_PX, wheelZoom } from './camera'
+import { areaOf as viewArea, CARD_PX, slotsOnScreen, withToolbar, cameraAt, cardNear, cardToward, cellCenter, centerOf, edgeFacing, edgePointer, entryPoint, fullyOnScreen, nearestCard, nearestLevel, onScreen, overviewCamera, scaleOf, SLOT_PX, wheelZoom } from './camera'
 import type { Flight, Point } from './PearlFlight'
 import { cardAt } from './MapCanvas'
 import { MapPaint } from './MapPaint'
@@ -213,6 +213,20 @@ export function MapView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cards.length])
 
+  // 附近这一级跟着全图走（docs/V3_ITEMS.md §23）：停在这一级时地图长大了，以画面正中为中心平滑缩到新的大小；
+  // 正在拖、捏的时候不动（松手吸附时会按新的大小），差不到 3% 不动（免得每长一张卡都抖一下）
+  const nearNow = scaleOf(1, view, cards)
+  useEffect(() => {
+    if (!landed.current || level !== 1 || view.width === 0 || gesturing.current) return
+    const now = camera()
+    if (Math.abs(Math.log(nearNow / now.scale)) < 0.03) return
+    const { cx, cy } = viewArea(view)
+    const world = { x: (cx - now.x) / now.scale, y: (cy - now.y) / now.scale }
+    flyTo({ scale: nearNow, x: cx - world.x * nearNow, y: cy - world.y * nearNow })
+    // 只在附近这一级该有的大小变了时
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nearNow])
+
   // 别处请求把镜头移过去（动态、NEW 标记、自己的珍珠）
   useEffect(() => {
     if (!focusRequest) return
@@ -283,6 +297,8 @@ export function MapView() {
   // —— 拖动、捏合：交给 @use-gesture/react（多指、缩放中心、轻点和拖动的区分、指针捕获
   // 都是它处理的）；镜头只改 x、y、scale 三个 motion 值，拖动中不触发 React 渲染 ——
   const justDragged = useRef(0)
+  /** 正在拖、捏（附近这一级跟着地图变大时不打断手） */
+  const gesturing = useRef(false)
 
   /** 屏幕坐标 → 地图画布里的坐标。 */
   const toLocal = (clientX: number, clientY: number) => {
@@ -308,7 +324,10 @@ export function MapView() {
   }
 
   useGesture({
-    onDragStart: stopCamera,
+    onDragStart: () => {
+      gesturing.current = true
+      stopCamera()
+    },
     onDrag: ({ pinching, cancel, offset: [ox, oy], last }) => {
       if (pinching) return cancel()
       // 全图那一级不能拖：松手那下也不算点区块
@@ -317,11 +336,15 @@ export function MapView() {
         y.set(oy)
       }
       if (last) {
+        gesturing.current = false
         justDragged.current = performance.now()
         snap()
       }
     },
-    onPinchStart: stopCamera,
+    onPinchStart: () => {
+      gesturing.current = true
+      stopCamera()
+    },
     onPinch: ({ origin: [ox, oy], offset: [next], first, last, memo }) => {
       // 手指中点下面的那一点（世界坐标）一直跟着手指中点：两指一起挪也是平移
       const at = toLocal(ox, oy)
@@ -334,6 +357,7 @@ export function MapView() {
       x.set(at.x - anchor.x * next)
       y.set(at.y - anchor.y * next)
       if (last) {
+        gesturing.current = false
         justDragged.current = performance.now()
         const card = nearestCard(cards, camera(), view)
         if (card) goToCard(card, nearestLevel(next, view, cards))

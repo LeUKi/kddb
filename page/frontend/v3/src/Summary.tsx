@@ -2,6 +2,7 @@ import { useAtomValue } from 'jotai'
 import { motion } from 'motion/react'
 import { useEffect, useMemo, useState } from 'react'
 import { ItemIcon } from '../../src/ItemIcon'
+import { FaceIcon } from './Faces'
 import type { IconKind } from '../../src/game'
 import type { Point } from './chart'
 import { barsOf, CHART, chartOf, colorOf, legendOf, picksOf, pointAt, pointWords, statsOf } from './chart'
@@ -80,7 +81,7 @@ export function SummaryCard({ reason, onClose }: { reason: 'button' | 'end'; onC
             </p>
             {/* 一局的评语：原版“进度达成”的样子，称号 + 一句（docs/V3_ITEMS.md §12） */}
             {quip ? <div className="summary-quip" role="note">
-              <span className="quip-frame" aria-hidden="true"><ItemIcon kind={quip.icon} size={24} /></span>
+              <span className="quip-frame" aria-hidden="true">{quip.icon === 'creeper' ? <FaceIcon who="creeper" size={24} /> : <ItemIcon kind={quip.icon} size={24} />}</span>
               <strong>{quip.title}</strong>
               <span>{quip.line}</span>
             </div> : null}
@@ -187,21 +188,23 @@ function side(x: number) {
   return x > CHART.width * 0.7 ? ' is-right' : x < CHART.width * 0.3 ? ' is-left' : ''
 }
 
-/** 有图标的几样（ItemIcon）；中毒画原版的效果图标；苦力怕、监守者写字。 */
+/** 有图标的几样（ItemIcon）；中毒画原版的效果图标；苦力怕、监守者画原版的脸（Faces.tsx）。 */
 const ICON_KINDS = new Set<string>(['emerald', 'diamond', 'apple', 'debris', 'minecart', 'vault', 'pearl', 'eye', 'tnt', 'crystal', 'ender', 'totem', 'shield', 'spyglass', 'coal', 'stick', 'map', 'potion', 'key', 'cobweb', 'spawner'])
 const POISON_ICON = () => new URL('assets/minecraft/1.21.4/textures/mob_effect/poison.png', document.baseURI).href
 function pointIcon(point: Point) {
   if (point.blocked) return <ItemIcon kind="shield" size={18} />
   if (ICON_KINDS.has(point.kind)) return <ItemIcon kind={point.kind as IconKind} size={18} />
   if (point.kind === 'poison') return <img className="effect-mini" src={POISON_ICON()} alt="" />
-  return <small>{point.kind === 'creeper' ? '苦力怕' : point.kind === 'warden' ? '监守者' : ''}</small>
+  if (point.kind === 'creeper' || point.kind === 'warden') return <FaceIcon who={point.kind} size={18} />
+  return null
 }
 const LEGEND_NAMES: Record<string, string> = { blocked: '盾牌挡住', poison: '中毒', creeper: '苦力怕', warden: '监守者', ender: '存进末影箱', vault: '宝库', other: '不加不减的（煤炭、木棍、道具……）' }
 function legendIcon(key: string) {
   if (key === 'blocked') return <ItemIcon kind="shield" size={14} />
   if (ICON_KINDS.has(key)) return <ItemIcon kind={key as IconKind} size={14} />
   if (key === 'poison') return <img className="effect-mini" src={POISON_ICON()} alt="" />
-  return <small>{key === 'creeper' ? '苦力怕' : key === 'warden' ? '监守者' : '其他'}</small>
+  if (key === 'creeper' || key === 'warden') return <FaceIcon who={key} size={14} />
+  return <small>其他</small>
 }
 function lostWords(six: ReturnType<typeof statsOf>) {
   return [six.bomb ? `炸掉 ${money(six.bomb)}` : '', six.poison ? `中毒 ${money(six.poison)}` : '', six.other ? `苦力怕、监守者 ${money(six.other)}` : ''].filter(Boolean).join('，')

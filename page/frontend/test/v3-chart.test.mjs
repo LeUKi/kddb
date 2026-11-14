@@ -101,9 +101,13 @@ test('最大的一笔和扣得最多的一下（中毒、苦力怕也算）；�
   assert.equal(chart.pointWords(chart.pointAt(out, 100), money, names), '第 6 次挖 · 绿宝石 +0.10 · 待领取 0.82')
 })
 
-test('一局的评语：60 条以上，称号不长、一句不长；挑最少见的条件，同一局每次一样，数换进句子', () => {
+test('一局的评语：100 条以上，称号不长、一句不长；对得上的条件里按少见程度抽，同一局每次一样，数换进句子', () => {
   const all = Object.values(quips.QUIPS).flatMap(group => group.lines)
-  assert.ok(all.length >= 60, String(all.length))
+  assert.ok(all.length >= 100, String(all.length))
+  for (const [key, group] of Object.entries(quips.QUIPS)) {
+    assert.ok(group.lines.length >= 2, key)
+    assert.ok(quips.RARITY[key] > 0, key)
+  }
   for (const [title, line] of all) {
     assert.ok([...title].length >= 2 && [...title].length <= 6, title)
     // 换进去的数按 4 个字算
@@ -111,23 +115,35 @@ test('一局的评语：60 条以上，称号不长、一句不长；挑最少�
   }
   const money = points => (points / 100).toFixed(2)
   const summary = (trail, extra = {}) => ({ me: { name: '我', status: 'playing', points: trail.at(-1)?.p ?? 0, digs: trail.filter(step => !['poison', 'creeper', 'warden', 'ender', 'vault'].includes(step.k)).length, trail, best: 0, tnt: 0, blocked: 0, lost: 0, ...extra }, top: [], over: false })
-  // 第一下就是钻石，又有 3 颗钻石：第一下钻石更少见
+  // 第一下就是钻石，又有 3 颗钻石：两个都对得上，都会被抽到，第一下钻石更少见、抽到得多；同一局每次一样
   const diamonds = [{ k: 'diamond', a: 50, p: 50 }, { k: 'diamond', a: 50, p: 100 }, { k: 'emerald', a: 10, p: 110 }, { k: 'diamond', a: 50, p: 160 }]
   const facts = quips.factsOf(summary(diamonds), 7)
   assert.deepEqual(quips.keysOf(facts).slice(0, 2), ['firstDiamond', 'diamonds'])
+  const picked = { firstDiamond: 0, diamonds: 0 }
+  for (let n = 0; n < 400; n++) picked[quips.quipOf(facts, `hb${n}:7:4`, money).key] += 1
+  assert.ok(picked.firstDiamond > picked.diamonds && picked.diamonds > 60, JSON.stringify(picked))
   const one = quips.quipOf(facts, 'hb1:7:4', money)
-  assert.equal(one.key, 'firstDiamond')
   assert.deepEqual(quips.quipOf(facts, 'hb1:7:4', money), one)
+  // 新的几个条件：开出新卡、开宝库、存末影箱、跌下去又挖回来、连着有进账
+  const busy = [{ k: 'pearl', a: 0, p: 0 }, { k: 'emerald', a: 10, p: 10 }, { k: 'pearl', a: 0, p: 10 }, { k: 'vault', a: 30, p: 40 }, { k: 'tnt', a: -30, p: 10 }, { k: 'ender', a: -5, p: 5 }, { k: 'diamond', a: 50, p: 55 }]
+  const busyKeys = quips.keysOf(quips.factsOf(summary(busy), 7))
+  for (const key of ['pearls', 'vaults', 'ender', 'comeback']) assert.ok(busyKeys.includes(key), `${key} ${busyKeys}`)
+  const hot = Array.from({ length: 7 }, (_, n) => ({ k: 'emerald', a: 10, p: 10 * (n + 1) }))
+  assert.equal(quips.factsOf(summary(hot), 7).streak, 7)
+  assert.ok(quips.keysOf(quips.factsOf(summary(hot), 7)).includes('streak'))
   // 过山车：数换进句子
   const coaster = [{ k: 'emerald', a: 10, p: 10 }, { k: 'debris', a: 0, p: 10 }, { k: 'apple', a: 90, p: 100 }, { k: 'emerald', a: 10, p: 110 }, { k: 'tnt', a: -80, p: 30 }, { k: 'emerald', a: 10, p: 40 }]
   const ride = quips.factsOf(summary(coaster), 7)
   assert.ok(quips.keysOf(ride).includes('coaster'))
-  for (let n = 0; n < 9; n++) {
+  let rides = 0
+  for (let n = 0; n < 60; n++) {
     const text = quips.quipOf({ ...ride, debris: false }, `s${n}`, money)
-    assert.equal(text.key, 'coaster')
     assert.ok(!text.line.includes('{'), text.line)
-    assert.ok(text.line.includes('1.10') && text.line.includes('0.40'), text.line)
+    if (text.key !== 'coaster') continue
+    rides += 1
+    if (text.line.includes('{') || /最高|跌|冲|跳|起伏/.test(text.line)) assert.ok(text.line.includes('0.40'), text.line)
   }
+  assert.ok(rides > 0)
   // 挖了 12 格一分没有；全场第一；什么都没对上
   const nothing = Array.from({ length: 12 }, () => ({ k: 'spyglass', a: 0, p: 0 }))
   assert.equal(quips.quipOf(quips.factsOf(summary(nothing), 7), 'x', money).key, 'empty')

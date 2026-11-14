@@ -80,8 +80,18 @@ export function overviewScale(view: Viewport, cards: Pick<PublicCard, 'x' | 'y'>
   return Math.max(0.04, Math.min(midScale(view), fit))
 }
 
+/**
+ * 附近这一级真正用的缩放（docs/V3_ITEMS.md §23）：地图小时就是 midScale；卡多了、全图那一级缩得很小时，取全图
+ * 和挖卡两级的“中间”（按倍数算，开平方），三级之间每级差不多一样多倍，不用再加一级。343 张卡的宽屏上全图约
+ * 0.06、挖卡 1，附近就是 0.25 左右，一屏看得到五十多张卡（以前固定 0.6，从全图一下跳到只看见六七张）。
+ */
+export function nearScale(view: Viewport, cards: Pick<PublicCard, 'x' | 'y'>[]) {
+  const over = overviewScale(view, cards)
+  return Math.min(midScale(view), Math.max(over, Math.sqrt(over * digScale(view))))
+}
+
 export function scaleOf(level: Level, view: Viewport, cards: Pick<PublicCard, 'x' | 'y'>[]) {
-  return level === 2 ? digScale(view) : level === 1 ? midScale(view) : overviewScale(view, cards)
+  return level === 2 ? digScale(view) : level === 1 ? nearScale(view, cards) : overviewScale(view, cards)
 }
 
 /** 离这个缩放最近的那一级（捏合松手后吸过去）。 */

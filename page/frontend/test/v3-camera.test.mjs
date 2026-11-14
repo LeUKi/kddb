@@ -154,3 +154,20 @@ test('屏幕上看得到的格位：正中那张和露出一点的都算；放�
   assert.deepEqual(camera.slotsOnScreen(camera.cameraAt({ x: 0, y: 0 }, 0.94, phone), phone), { x0: 0, y0: -1, x1: 0, y1: 1 })
 })
 
+
+test('附近这一级跟着全图走（docs/V3_ITEMS.md §23）：地图小时照旧，卡多了取全图和挖卡两级的中间', () => {
+  const wide = { width: 892, height: 611, left: 70 }
+  const small = [{ x: 0, y: 0 }, { x: 1, y: 1 }]
+  assert.equal(camera.nearScale(wide, small), camera.midScale(wide))
+  assert.equal(camera.scaleOf(1, wide, small), camera.midScale(wide))
+  // 34×29 个格位的大地图（生产上 343 张卡那一局的大小）
+  const big = [{ x: -17, y: -14 }, { x: 17, y: 15 }]
+  const over = camera.overviewScale(wide, big)
+  const near = camera.scaleOf(1, wide, big)
+  const dig = camera.digScale(wide)
+  assert.ok(near < camera.midScale(wide) && near > over * 2)
+  // 两边差的倍数差不多
+  assert.ok(Math.abs(Math.log(near / over) - Math.log(dig / near)) < 0.01)
+  assert.equal(camera.nearestLevel(near * 1.1, wide, big), 1)
+  assert.equal(camera.nearestLevel(over * 1.2, wide, big), 0)
+})
