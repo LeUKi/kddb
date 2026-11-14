@@ -1,146 +1,134 @@
 # 矿洞夺宝
 
-Minecraft 主题的多人共享刮格红包，使用 lafish 红包站代码协议第五版。包含可独立上传的判定器 `judge.js`、平台测试 `tests.json`、React 游戏网页和真实 workerd 本地多人试玩入口。
+Minecraft 风格的多人挖宝红包，跑在 LINUX DO 社区的 [lafish 红包站](https://hb.lafi.sh) 上。发红包的人选好玩法和奖池，大家在一张越挖越大的地图上一起挖格子：挖到宝贝攒成待领取的奖励，踩到 TNT 会扣掉一部分，什么时候见好就收自己决定。
 
-网页发布地址为 **<https://hbweb-kddb.lafi.sh/>**，`judge.js` 的 `meta.page` 已配置该地址。当前仓库已实现 v2，默认「困难＋每卡随机＋配比小幅浮动」。本轮没有发布到线上；网页静态产物与红包站保存的判定器需分别更新。游戏数据、身份和提交由红包站宿主提供。
+线上的网页是 <https://hbweb-kddb.lafi.sh/v3/>，要从红包页里打开：身份和红包信息都由红包站给。
 
-## 本地试玩
+本项目不是 Minecraft 官方产品，和 Mojang、Microsoft 没有关系。
 
-需要 Node.js 22 或更新版本。在项目根目录执行：
+## 怎么玩
+
+- 地图从一张卡开始。挖到**末影珍珠**，旁边长出一张新卡（普通卡、废弃矿井或试炼密室）；挖到**末影之眼**，远处开出一个特殊区块（末地宝藏、深暗之域或下界），宝贝多，风险也大。
+- 每人能挖几下由发红包的人定，挖到双铁镐另加 3 下。绿宝石、钻石、金苹果加奖励；TNT、末影水晶扣掉一部分待领取的奖励，盾牌能挡一次。
+- 道具：望远镜看一格是什么；火把插在四格中间，颜色说这四格里有几个危险；还有藏宝图、试炼钥匙、附魔镐、末影箱。
+- 点“见好就收”随时领取；次数用完自动领取；截止前 2 分钟停止挖掘，开着页面的人自动领取。截止时还没领的奖励作废，钱退回给发红包的人。
+- 大家在同一张地图上：看得到别人挖开的格子、别人的指针、谁在看哪张卡，鼠标右键扔表情。
+- 第一次进一个红包，先看到这一局的规矩：谁发的、难度、每人几下、奖池。“怎么玩”里也一直有。
+
+格子、区块、道具的完整规则见 [docs/V3_ITEMS.md](docs/V3_ITEMS.md)。
+
+## 发红包时填什么
+
+| 参数 | 默认 | 说明 |
+| --- | --- | --- |
+| 玩法 | 标准 | 轻松、标准、刺激。选一个，下面的难度、末影之眼、苦力怕自动填好，之后还能改 |
+| 预计人数 | 20 | 1–2000。绿宝石值多少按奖池、人数和每人挖几下算，大约八成奖池能发出去 |
+| 每人挖几次 | 20 | 1–99 |
+| 难度 | 普通 | 简单、普通、困难：TNT 和末影水晶有多少，踩中扣掉待领取的多少 |
+| 挖掘间隔 | 1 秒 | 1、3、10、30 秒 |
+| 末影之眼 | 正常 | 少、正常、多：每 5、3、2 张卡藏一颗 |
+| 苦力怕 | 1 分钟 | 不开、1 分钟、3 分钟：手上有待领取的奖励、这么久没挖，苦力怕来炸掉 20% |
+
+奖池、截止时间、标题是红包站的通用字段。LDC 红包、🐟额红包和三方积分红包都能用（`meta.points`）。
+
+## 怎么做的
+
+分三块：
+
+- **判定器**（`judge.js`，在红包站上运行）：只管领取。游戏站给领取的人签一张凭证（`kd3.开放时间.用户编号.分.钥匙编号.签名`，ES256），网页用 `hb.submit` 交给判定器；判定器用写在代码里的公钥验签，按凭证上的数结算。
+- **游戏站**（`game/`，Cloudflare Worker）：每个红包一个 Durable Object，存地图、每人的分和道具，处理挖格子、用道具和领取，用 WebSocket 把变化推给所有人。指针、谁在看、表情另开一个房间，不写存储。规则是纯函数（`game/shared/rules.mjs`），Worker 和测试共用；每局的随机种子只在服务端，结果能重放。
+- **网页**（`page/frontend/v3/`，React）：作为红包的附带网页打开，用 `hb.identity()` 拿到身份令牌，去游戏站认人。
+
+钱只在领取时动一次：游戏站记的是分，红包站不知道也不管，领取时按凭证结算。设计和取舍见 [docs/V3_MAP.md](docs/V3_MAP.md)。
+
+## 本地运行
+
+需要 Node.js 22 或更新版本。音效要 ffmpeg；附魔金苹果的静态图要 ImageMagick 或 ffmpeg。
 
 ```sh
 npm ci
 npm run assets
 npm --prefix page/frontend ci
-npm --prefix page/frontend run build
-node page/dev/server.mjs
+npm --prefix page/frontend run build:v3
 ```
 
-`npm run assets` 把网页用的 Minecraft 原版素材取回来（仓库里不带，见下面“来源与素材”），只要跑一次；音效要装 ffmpeg。
+`npm run assets` 只要跑一次：照仓库里的清单，从 Mojang 的官方地址和 Minecraft Wiki 取回网页用的贴图和音效，逐个核对散列（仓库里不带这些文件，见“素材”）。
 
-打开两个标签页，分别扮演两名玩家：
-
-- 小明：<http://127.0.0.1:8740/?who=%E5%B0%8F%E6%98%8E>
-- 小红：<http://127.0.0.1:8740/?who=%E5%B0%8F%E7%BA%A2>
-
-这些页面共享一个本地判定器和奖池，各自拥有独立背包。每名玩家第一次操作时会出现本地代提交授权；顶部可以切换玩家、围观或重新开始。页面每 0.5 秒同步一次，所有金额都是模拟数据，不发生真实付款。退出服务器使用 Ctrl+C。
-
-默认占用 `8740` 和 `8741` 两个端口，后者是 iframe 游戏源，试玩应从前者进入。可以用 `node page/dev/server.mjs --port 8750` 更换端口，游戏源相应使用 `8751`。修改前端后重新构建并刷新页面；修改判定器后重启本地服务器。
-
-官方的 `npm run page` 入口也保留可用。项目的 `page/dev/` 包装层增加跨标签页同步、校准时钟和独立身份，未修改官方 SDK 或运行时。
-
-## 玩法
-
-所有玩家共用同一张卡，支持 5×5、6×6、7×7，默认每张新卡等概率抽取规格；固定规格也可由作者选择。尺寸、实际构成和牌序生成后保存，刷新或新玩家加入不重抽。卡片外框随视口适配，在同一视口保持相同大小。桌面为紧凑的棋盘与个人操作两列，手机奖励和机会在上，棋盘随后；动态记录默认折叠。
-
-默认困难有 7 次初始机会；简单为 9 次，地狱为 4 次。每次成功挖掘先扣 1 次，再触发道具；处理完仍为 0 次则立即结算。双铁镐增加 3 次，没有累计额度，最后一次挖到双铁镐也能继续。判定器内部沿用 `totem` 名称，兼容已有数据。
-
-上一位成功挖掘的玩家需要别人接棒，或者等默认 10 秒后再挖。A→B→A 可以立即接棒。抢到已开格子、旧卡指令、未等满时间都不扣机会。红包站自身的提交冷却和参与条件另外生效。
-
-以下是困难难度的固定基准数量；默认小幅浮动仅调整钻石、双铁镐、TNT、盾牌各 −1／0／+1，绿宝石补足总格数。本卡真实剩余数量以网页显示为准。
-
-| 道具 | 5×5 | 6×6 | 7×7 | 效果 |
-| --- | ---: | ---: | ---: | --- |
-| 绿宝石 | 11 | 14 | 20 | 一份小奖，默认 0.10 |
-| 钻石 | 3 | 4 | 6 | 小奖的 5 倍，默认 0.50 |
-| 附魔金苹果 | 1 | 2 | 2 | 当前待结算翻倍；余额为 0 时给一份小奖；发红包时填了“金苹果上限”，一次最多加这么多 |
-| 双铁镐 | 2 | 3 | 4 | 增加 3 次机会，无累计额度 |
-| TNT | 4 | 6 | 8 | 默认扣当前待结算的 25%，扣除金额向下取整到分 |
-| 末影珍珠 | 1 | 1 | 1 | 全体换卡，个人机会、奖励、盾牌保留 |
-| 盾牌 | 2 | 3 | 4 | 自动挡一次 TNT；已有盾牌时给小奖 |
-| 望远镜 | 1 | 3 | 4 | 仅本人看见一个未知未开格；没有新格可看时给小奖 |
-
-简单／困难／地狱的 TNT 基准分别为 3／4／6、4／6／8、8／12／17；数量改变时绿宝石补足。旧 v1 红包继续原来的 25 格、两个末影珍珠及作者原先的数字参数，前端保留兼容。
-
-加入后可以点顶部奖励右侧的「见好就收」领取奖励，不受游戏的接棒等待限制。主动领取或机会用尽都只结算一次；结算后不能再挖这个红包，零奖励也一样。TNT 只影响这个红包尚未结算的奖励；正收益按可分配奖池裁剪，待结算奖励也占用奖池。奖池占满、截止或发放者结束红包时，由红包站统一结算剩余玩家。
-
-## 红包参数
-
-七个原生字段依次平铺，由红包站生成表单：
-
-| 参数 | 默认值 | 范围或说明 |
-| --- | --- | --- |
-| `difficulty` | 困难 | 简单／困难／地狱；选档回填机会、TNT 扣除、配比 |
-| `boardSpec` | 每卡随机 | 固定 5／6／7，或每张新卡等概率抽一种 |
-| `smallReward` | 10 分（0.10） | 至少 1 分；钻石 ×5 |
-| `initialChances` | 7 | 整数 1–20 |
-| `tntPercent` | 25 | 整数 1–100 |
-| `waitSeconds` | 10 | 整数 1–60，领取不受游戏接棒等待限制 |
-| `compositionVariation` | 小幅浮动 | 固定／小幅浮动 |
-
-选择简单会回填 9 次／15%／固定，困难为 7／25%／小幅浮动，地狱为 4／75%／小幅浮动。作者随后可以手改；再次选档重新套用这三个值，规格、奖励和等待时间不受影响。恢复已有草稿保留保存值。`paramValues` 不执行联动，直接写测试或模拟时需要提供最终值。
-
-总奖池、截止时间、标题和说明使用平台字段。`check` 要求总奖池至少容纳一份完整的钻石奖励。难度影响风险和操作长度，未经玩家校准，不承诺人均收益或中奖人数。完整作者约定见 [AUTHORING_V2.md](docs/AUTHORING_V2.md)。
-
-判定器默认关闭领取前人机验证（`humanCheck: false`），并建议自动打开附带网页（`pageAutoOpen: true`）。首次浏览器练习仍可跳过、重新进入，不产生真实提交；示例奖励和 TNT 按本红包有效规则计算。
-
-## 验证
+游戏站要两把钥匙，写在 `game/.dev.vars`（不进仓库）。生成签凭证的私钥：
 
 ```sh
-# 官方 workerd 判定测试与部署检查
+node -e 'crypto.subtle.generateKey({name:"ECDSA",namedCurve:"P-256"},true,["sign","verify"]).then(k=>crypto.subtle.exportKey("jwk",k.privateKey)).then(j=>console.log(JSON.stringify(j)))'
+```
+
+```
+CLAIM_KEY='上面打印的整段 JSON'
+TICKET_KEY='一串足够长的随机字符'
+```
+
+领取时判定器用 `judge.js` 里 `PUBLIC_KEYS.k1` 验签。本地要走通领取，把这把钥匙的 `x`、`y` 临时换进去，别提交。
+
+然后开两个终端：
+
+```sh
+cd game && npm run dev
+```
+
+```sh
+npm run page
+```
+
+前一个是游戏站（`http://127.0.0.1:8787`），后一个是红包站开发包的模拟器（`http://127.0.0.1:8730`），宽屏、手机和几个人并排都能试。本地开局用固定的种子（`game/wrangler.jsonc` 的 `env.local.vars.LOCAL_SEED`），按规则算得出哪格是什么；删掉 `game/.wrangler/state` 重新开局。
+
+## 测试
+
+```sh
 npm test
 npm run check
-npm run simulate
-node scripts/verify-setup.mjs
-npm run page -- --shot
-
-# 前端不确定提交、恢复与零奖励结算的针对性测试
+npm --prefix game test
 npm --prefix page/frontend test
-npm --prefix page/frontend run typecheck
-npm --prefix page/frontend run build
-
-# 先启动本地试玩服务器，再从另一个终端运行
-node page/dev/verify.mjs
+npm --prefix page/frontend run typecheck:v3
 ```
 
-`verify.mjs` 会反复重置本地模拟，完成后保留一场全新游戏。自定义端口时传入完整基址，例如 `node page/dev/verify.mjs http://127.0.0.1:8750`。
+前两个是判定器的测试和部署检查。`tests.json` 里的凭证用线上的私钥签，签的是 v3 上线以前的开放时间，对不上任何真红包；换了钥匙要用 `scripts/voucher.mjs` 重新签。
 
-已完成的检查、浏览器操作记录和验证边界见 [VALIDATION.md](docs/VALIDATION.md)。完整玩法、数据契约与界面约定见 [DESIGN.md](DESIGN.md)。
+`node game/scripts/sim-items.mjs` 用真的规则跑几十局，看奖池能发出去多少、人和人差多少；`game/scripts/presence-bots.mjs` 用机器人压指针和表情的房间。
 
-## 代码结构
-
-| 文件或目录 | 用途 |
-| --- | --- |
-| `judge.js` | 单文件、无依赖的第五版判定器；隐藏牌面只在服务端 `state` |
-| `tests.json` | 69 个平台测试用例，合计 101 次判定 |
-| `simulate.json` | 多人模拟流程 |
-| `page/frontend/src/` | React + TypeScript，TanStack Router hash 路由、Jotai 状态、Motion 动画 |
-| `page/frontend/test/` | SDK 提交与查询恢复的针对性测试 |
-| `page/frontend/dist/` | 构建生成的完整静态发布目录，已忽略 Git 跟踪 |
-| `page/wrangler.jsonc` | Cloudflare Worker `hbweb-kddb` 与自定义域名配置，仅发布静态构建目录 |
-| `page/index.html`、`page/assets/` | 同步生成的官方本地预览入口 |
-| `page/dev/` | 项目自有的本地多人包装与 HTTP 验证脚本 |
-| `scripts/verify-setup.mjs` | 在官方沙箱补充验证 setup 和参数交叉约束 |
-| `scripts/minecraft-assets.mjs` | 按清单取回 Minecraft 原版素材并核对散列（`npm run assets`） |
-| `runtime/`、`cli/`、SDK 类型与 schema | 官方开发包原样保留 |
-
-网页只展示公开牌面和当前玩家的私有数据。资金和权限判断都由判定器、红包站执行；提交结果未确认时先查询记录，查询失败会暂停继续挖掘和领取奖励，并显示“重新确认状态”，不会自动重提。
-
-## 正式接入
-
-网页地址为 **<https://hbweb-kddb.lafi.sh/>**，Worker 名为 `hbweb-kddb`。后续更新时，在仓库根目录执行：
+## 部署
 
 ```sh
 npm --prefix page/frontend run build
-npx wrangler deploy --config page/wrangler.jsonc
+npm --prefix page/frontend run build:v3
+cd game && npm run deploy
 ```
 
-首次在其他机器部署前，先安装上述本地开发依赖并执行 `npx wrangler login`。配置只发布 **`page/frontend/dist/`**，不包含本地多人模拟服务、判定器、测试或源码；站内使用 hash 路由，缺失资源返回 404。
+`build` 是 v2 的网页，放在游戏站根路径上，开着的旧红包还在用。`npm run deploy` 先拼出 `game/dist/`（v2 在根上，v3 在 `v3/` 下）再部署；部署到 Stage 用 `node ../scripts/site.mjs && npx wrangler deploy --env staging`。线上要设 `CLAIM_KEY`、`TICKET_KEY` 两个 secret（`npx wrangler secret put`）。
 
-`judge.js` 已包含 `page: "https://hbweb-kddb.lafi.sh/"`。运行 `npm test` 和 `npm run check` 后，可到 <https://hb.lafi.sh/judges/new> 粘贴判定器及 `tests.json`，通过后用它发红包。在红包站内继续核对网页授权、登录、人机验证、平台冷却、真实结算和红包结束广播。普通静态网页直接打开时没有红包宿主，需要从红包页加载。
+自己部署一份时要改：`game/wrangler.jsonc` 里的账号、Worker 名、域名和 `HB_ORIGIN`、`PAGE_ORIGIN`、`JUDGE_ID`（判定器在红包站上的编号）；`judge.js` 里的 `meta.page` 和公钥。判定器（`judge.js` 和 `tests.json`）在红包站的“新判定器”页面发布。
 
-v2 本轮完成源码、平台测试和网页构建，尚未推送、部署或发出真实红包。更新网页后再上传配套的 `judge.js` 与 `tests.json`；仅替换其中一端不会启用完整 v2。不要对已开放的 v1 红包原地更换规则。详细本地证据及生产边界见 [VALIDATION.md](docs/VALIDATION.md)。
+## 仓库里有什么
 
-## 来源与素材
+| 路径 | 内容 |
+| --- | --- |
+| `judge.js`、`tests.json`、`simulate.json` | v3 判定器和它的测试 |
+| `game/worker/` | 游戏站：接口和认人、每个红包的房间（`room.mjs`）、指针和表情的房间（`presence.mjs`）、推送 |
+| `game/shared/` | 规则（`rules.mjs`）、区块摆法、凭证签名；游戏站和网页的测试共用 |
+| `game/test/`、`game/scripts/` | 游戏站的测试、平衡模拟、压测机器人 |
+| `page/frontend/v3/` | v3 网页（React、Jotai、Motion） |
+| `page/frontend/src/`、`page/dev/` | v2 网页和它的本地多人试玩 |
+| `page/frontend/public/assets/minecraft/` | Minecraft 素材的清单 |
+| `page/index.html`、`page/assets/` | 给开发包模拟器（`npm run page`）的 v3 构建 |
+| `scripts/` | 拼发布目录、取素材、签测试凭证 |
+| `runtime/`、`cli/`、`examples/`、`AGENTS.md`、`judge.d.ts`、`page/hb.d.ts` | 红包站的开发包 |
+| `docs/` | 设计和进度 |
 
-官方第五版开发包来自 [LeUKi/hb，固定版本 ed192c1](https://github.com/LeUKi/hb/tree/ed192c1fd98de2cea12cb6e8ce3710b21ea647dd/kit)，已同步官方模拟器时钟修复。原始开发包说明保存在 [UPSTREAM_KIT_README.md](docs/UPSTREAM_KIT_README.md)，许可见 [LICENSE](LICENSE)。
+## 旧版本
 
-道具使用 Minecraft 原版贴图与原版背包图像，来源与校验见 [MINECRAFT_ASSETS.md](docs/MINECRAFT_ASSETS.md)。这些文件是 Mojang 的，仓库里不带，只有清单（`manifest.json`、两份 `provenance.json`）；`npm run assets` 从 Mojang 的官方地址和 Minecraft Wiki 取回来，逐个核对大小和散列。双铁镐是两张原版铁镐 PNG 错位叠放，洞壁背景为项目原创。本项目不是 Minecraft 官方产品。
+v2（一次一张卡，整局在判定器里跑）的判定器在标签 `v2.1`，网页源码在 `page/frontend/src/`。说明见 [DESIGN.md](DESIGN.md)、[docs/AUTHORING_V2.md](docs/AUTHORING_V2.md)，当时的验收记录见 [docs/VALIDATION.md](docs/VALIDATION.md)。
 
-## 新玩家与多人反馈
+## 素材
 
-机会数字与全部原版铁镐位于同一个资源区，一把对应一次；末次提醒独立于接棒倒计时。首次访问提供可跳过、可在玩法里重新打开的两步演示，固定标为示例，不消耗真实机会、不调用提交接口。浏览器仅保存一个版本化的引导已读标记，不缓存玩家记录。
+方块、道具和音效用 Minecraft 1.21.4 原版的文件，版权属于 Mojang，仓库里只放清单（`page/frontend/public/assets/minecraft/1.21.4/` 下的 `manifest.json`、`inventory/provenance.json`、`sounds/provenance.json`），文件用 `npm run assets` 取。来源和校验见 [docs/MINECRAFT_ASSETS.md](docs/MINECRAFT_ASSETS.md)。
 
-中央道具演出只展示本人确认的操作；其他玩家的普通操作短暂亮起对应格子并更新持久日志。其他人触发珍珠时显示发起者并翻卡，远端快照合并处理。已开格显示挖掘者，点击查看完整姓名和道具；新版判定器为公开已开格提供可选 actorKey 以可靠标注本人。旧版判定器仍可显示作者姓名，但只有私人 lastResult 可证明的那一格能标为“你”。
+## 许可
 
-研究与单份真实记录的匿名统计见 [docs/UX_RESEARCH.md](docs/UX_RESEARCH.md)。界面部署不会自动替换红包站已保存的判定器；新文案和完整跨刷新本人标记需使用同步更新的 judge.js。
+代码用 MIT 许可（[LICENSE](LICENSE)），不包括 Minecraft 的素材。开发包的文件来自 [LeUKi/hb](https://github.com/LeUKi/hb) 的 `kit/`，也是 MIT，同步记录见 [docs/KIT_REFRESH.md](docs/KIT_REFRESH.md)。
