@@ -324,7 +324,9 @@ export function rulesOf(/** @type {Record<string, unknown>} */ params, /** @type
   const initialChances = Math.min(99, integer(params.initialChances, 20));
   const eyeEvery = params.eyeEvery == null || params.eyeEvery === "" || !Number.isSafeInteger(Number(params.eyeEvery))
     ? EYE_EVERY : Math.min(20, Math.max(0, Number(params.eyeEvery)));
-  const smallReward = params.smallReward == null
+  // 判定器第 12 版（docs/V3_ITEMS.md §24）：“自己定价”时 smallReward 是发红包的人定的价；“按奖池分”时不管它
+  // （红包站会给 null，这里再保险一次）。旧判定器写了 smallReward 就照旧用。
+  const smallReward = params.smallReward == null || params.reward === "pool"
     ? rewardFor(pool, players, initialChances, difficulty, true, eyeEvery)
     : integer(params.smallReward, 10);
   const digInterval = DIG_INTERVALS.includes(/** @type {1} */ (Number(params.interval))) ? Number(params.interval) : 1;

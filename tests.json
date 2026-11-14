@@ -24,6 +24,57 @@
       }
     },
     {
+      "name": "自己定价：按凭证结算，价只在游戏站用",
+      "hongbao": {
+        "openedAt": "2026-10-24T11:00:00+08:00"
+      },
+      "input": "kd3.1792810800000.10000.500.k1.UaP4LtFYytqC80vOTVZj4RyL7baI6a_Lfhm5IZGBvjgk8In5j2-wUQnND7SxhrUsjkgOgzTv54-3UxO07GaKsA",
+      "expect": {
+        "add": 500,
+        "settle": true,
+        "settled": 500,
+        "message": "领取 5.00",
+        "announce": "领走了 5.00",
+        "view": {
+          "summary": "1 人领取，共领走 5.00",
+          "data": {
+            "claimed": 1,
+            "amount": 500
+          }
+        }
+      },
+      "params": {
+        "reward": "price",
+        "smallReward": 100
+      }
+    },
+    {
+      "name": "按奖池分：填过的价藏起来，不算",
+      "hongbao": {
+        "openedAt": "2026-10-24T11:00:00+08:00"
+      },
+      "input": "kd3.1792810800000.10000.500.k1.UaP4LtFYytqC80vOTVZj4RyL7baI6a_Lfhm5IZGBvjgk8In5j2-wUQnND7SxhrUsjkgOgzTv54-3UxO07GaKsA",
+      "expect": {
+        "add": 500,
+        "settle": true,
+        "settled": 500,
+        "message": "领取 5.00",
+        "announce": "领走了 5.00",
+        "view": {
+          "summary": "1 人领取，共领走 5.00",
+          "data": {
+            "claimed": 1,
+            "amount": 500
+          }
+        }
+      },
+      "params": {
+        "reward": "pool",
+        "smallReward": 999999,
+        "players": 50
+      }
+    },
+    {
       "name": "三方积分红包：凭证上的数是多少个最小单位，按积分的写法说",
       "hongbao": {
         "openedAt": "2026-10-24T11:00:00+08:00",

@@ -128,6 +128,36 @@ describe("规则和金额", () => {
   });
 });
 
+describe("判定器第 12 版的价（docs/V3_ITEMS.md §24）", () => {
+  const unitOf = { unit: "LDC", step: "0.01" };
+  it("explain() 写的绿宝石的价和游戏站开局算的一样", async () => {
+    const { explain } = await import("../../judge.js");
+    for (const total of [500, 10000, 123457, 2000000])
+      for (const players of [1, 7, 20, 300, 2000])
+        for (const initialChances of [1, 20, 99])
+          for (const level of ["easy", "normal", "tough"])
+            for (const eyeEvery of ["2", "3", "5"]) {
+              const params = { reward: "pool", players, initialChances, level, eyeEvery, interval: "1", smallReward: null };
+              const rules = rulesOf(params, total);
+              const said = explain(params, { title: "t", total, count: 1, minEach: 1, points: null, ...unitOf });
+              if (said.hints?.players)
+                assert.ok(
+                  said.hints.players.startsWith(`每颗绿宝石 ${formatPoints(rules.smallReward)} LDC，`),
+                  `${JSON.stringify(params)} ${total}: ${said.hints.players} vs ${rules.smallReward}`,
+                );
+              else assert.equal(rules.smallReward, 1, `${JSON.stringify(params)} ${total}`);
+            }
+  });
+
+  it("自己定价时用发红包的人定的价，按奖池分时不管它", () => {
+    const params = { players: 20, initialChances: 20, level: "normal", eyeEvery: "3", smallReward: 37 };
+    assert.equal(rulesOf({ ...params, reward: "price" }, 10000).smallReward, 37);
+    assert.equal(rulesOf({ ...params, reward: "pool" }, 10000).smallReward, rewardFor(10000, 20, 20, "normal", true, 3));
+    // 旧判定器没有 reward：写了 smallReward 就照旧用
+    assert.equal(rulesOf(params, 10000).smallReward, 37);
+  });
+});
+
 describe("生成卡", () => {
   it("同一个种子同一副牌，换种子就不一样", () => {
     assert.deepEqual(game().cards[1].deck, game().cards[1].deck);
